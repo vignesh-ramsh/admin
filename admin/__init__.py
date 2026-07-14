@@ -1,0 +1,63 @@
+"""
+admin — ARC provider plugin: the admin backend (Architecture follow-up to
+docs/arc.MD §7's Phase 5).
+
+Deliberately self-contained, by explicit instruction: every management
+surface it needs (schema/patch builder, generic data browser, user/role/
+session/access-key management, health dashboard) is implemented ENTIRELY
+inside this plugin, calling only already-public capabilities
+(arc.relay.*, arc.psqldb.*, arc.authn.* the exported capability instance,
+arc.health.*) — zero code changes to relay/psqldb/authn/gateway. Where
+authn's own CLI (plugins/authn/authn/cli.py) has logic admin also needs
+(password hashing/strength, token/prefix generation), admin reimplements
+it directly against the same libraries (argon2-cffi, zxcvbn) and the same
+documented formats (authn's KEY_PREFIX_LEN=12, hash_token's sha256), rather
+than importing authn's internal module — the safety nets that actually
+matter (has_roles validation, cache invalidation, audit trail) are
+TABLE-level hooks/triggers authn already registered at ITS OWN boot time
+(authn/hooks/_users.py, _access_keys.py) — they fire on any
+arc.relay.save()/delete() call against those tables regardless of which
+plugin makes it, so admin gets them for free by writing through Relay,
+never through raw SQL.
+
+requires=["relay", "gateway", "authn"] — a deliberate hardening of the
+original roadmap's "optional_requires: authn (gates write-endpoints
+only)": nearly this entire plugin (user/role/session/access-key
+management, and RBAC for everything else) is meaningless without authn
+installed, so making it a hard dependency is more honest than pretending
+there's a useful authn-less mode.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+CAPABILITY = "admin"
+
+
+class AdminProvider:
+    """Deliberately thin — almost all of admin's actual logic lives in its
+    whitelisted api/ functions (loaded via relay.register_api below), which
+    call arc.relay/arc.psqldb/arc.authn directly. This class exists mainly
+    to hold the real Kernel instance register(kernel) receives, so
+    admin._paths' plugin-existence check has something authoritative to
+    call (there's no separate arc.kernel capability — the Kernel is the
+    container, not something a plugin exports, docs/arc.MD §3.1)."""
+
+    def __init__(self, kernel: Any) -> None:
+        self._kernel = kernel
+
+    def list_installed_plugins(self) -> list[str]:
+        return sorted(self._kernel.capabilities())
+
+    async def health(self) -> dict:
+        return {"ok": True}
+
+
+def register(kernel: Any) -> None:
+    provider = AdminProvider(kernel)
+    kernel.export(CAPABILITY, provider, requires=["relay", "gateway", "authn"], optional_requires=[])
+
+    relay = kernel.get("relay")
+    relay.register_api(Path(__file__).parent / "api")
