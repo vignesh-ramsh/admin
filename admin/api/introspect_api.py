@@ -26,12 +26,12 @@ def _field_to_dict(f) -> dict:
     }
 
 
-@arc.relay.whitelist(methods=["GET"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def list_plugins() -> list[str]:
     return arc.admin.list_installed_plugins()
 
 
-@arc.relay.whitelist(methods=["GET"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def list_tables(plugin: str) -> list[str]:
     require_known_plugin(plugin)
     rows = await arc.relay.sql(
@@ -40,7 +40,7 @@ async def list_tables(plugin: str) -> list[str]:
     return [r["table"] for r in rows]
 
 
-@arc.relay.whitelist(methods=["GET"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def get_table_schema(table: str) -> dict:
     try:
         schema = arc.psqldb.schema(table)

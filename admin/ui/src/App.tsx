@@ -1,27 +1,34 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import "./App.css";
+import { Navigate, Route, Routes } from "react-router-dom";
+import { useAuth } from "./auth/AuthContext";
+import { AppLayout } from "./layout/AppLayout";
+import { LoginPage } from "./pages/LoginPage";
+import { HealthPage } from "./pages/HealthPage";
+import { ComingSoon } from "./pages/ComingSoon";
 
-function App() {
-  const [count, setCount] = useState(0);
+export default function App() {
+  const { token } = useAuth();
+
+  if (!token) {
+    return (
+      <Routes>
+        <Route path="*" element={<LoginPage />} />
+      </Routes>
+    );
+  }
 
   return (
-    <>
-      <div>
-        <img src={reactLogo} className="logo react" alt="React logo" />
-      </div>
-      <h1>ARC Admin Desk</h1>
-      <div className="card">
-        <button onClick={() => setCount((c) => c + 1)}>count is {count}</button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Served by ARC Gateway at <code>/admin-desk</code>
-      </p>
-    </>
+    <Routes>
+      <Route element={<AppLayout />}>
+        <Route index element={<Navigate to="/health" replace />} />
+        <Route path="/health" element={<HealthPage />} />
+        <Route path="/data" element={<ComingSoon title="Data Browser" />} />
+        <Route path="/schema" element={<ComingSoon title="Schema Builder" />} />
+        <Route path="/users" element={<ComingSoon title="Users" />} />
+        <Route path="/roles" element={<ComingSoon title="Roles" />} />
+        <Route path="/sessions" element={<ComingSoon title="Sessions" />} />
+        <Route path="/access-keys" element={<ComingSoon title="Access Keys" />} />
+        <Route path="*" element={<Navigate to="/health" replace />} />
+      </Route>
+    </Routes>
   );
 }
-
-export default App;

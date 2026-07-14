@@ -27,7 +27,7 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-@arc.relay.whitelist(methods=["GET"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def list_users(role: str | None = None, q: str | None = None) -> list[dict]:
     users = await arc.relay.list(
         "_users",
