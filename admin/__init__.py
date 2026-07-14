@@ -35,6 +35,12 @@ from typing import Any
 
 CAPABILITY = "admin"
 
+# The route the admin SPA is served under (arc.gateway.mount_spa). Must
+# match the Vite build's `base` in admin/ui/vite.config.ts exactly, or the
+# built index.html's asset URLs (/admin-desk/assets/...) won't resolve
+# through the mount.
+UI_PREFIX = "admin-desk"
+
 
 class AdminProvider:
     """Deliberately thin — almost all of admin's actual logic lives in its
@@ -61,3 +67,22 @@ def register(kernel: Any) -> None:
 
     relay = kernel.get("relay")
     relay.register_api(Path(__file__).parent / "api")
+
+    # Serve the built admin SPA at /admin-desk, if it's been built. The
+    # dist/ directory is a build artifact (gitignored, produced by
+    # `npm run build` in admin/ui) — a fresh checkout that hasn't built the
+    # UI yet has no dist/, and mount_spa hard-errors on a missing dir by
+    # design (docs/arc.MD §3.3's boot-time-not-request-time posture). So
+    # admin checks for it first and just skips the mount (with a boot
+    # advisory) when absent, rather than refusing to boot the whole plugin
+    # — the API surface above is fully usable without the UI, and the UI is
+    # a `cd admin/ui && npm install && npm run build` away.
+    ui_dist = Path(__file__).parent / "ui" / "dist"
+    if ui_dist.is_dir():
+        kernel.get("gateway").mount_spa(ui_dist, prefix=UI_PREFIX)
+    else:
+        kernel.advise(
+            f"admin: UI not built — /{UI_PREFIX} will 404 until you run "
+            f"`cd plugins/admin/admin/ui && npm install && npm run build`. "
+            f"The admin API endpoints are unaffected."
+        )
