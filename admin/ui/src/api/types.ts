@@ -71,6 +71,43 @@ export interface AccessKey {
   revoked_at: string | null;
 }
 
+/* Editable schema/patch file content — the raw JSON shape on disk
+   (docs/arc.MD §3.9), what get_schema_file returns and save_schema_file
+   accepts. */
+export interface SchemaField {
+  id: string;
+  name: string;
+  type: string;
+  required?: boolean;
+  unique?: boolean;
+  primary_key?: boolean;
+  length?: number;
+  precision?: number;
+  scale?: number;
+  default?: unknown;
+  options?: string[];
+  target?: string;
+  target_field?: string;
+}
+
+export interface SchemaIndex {
+  key: string;
+  fields: string[];
+}
+
+export interface SchemaFileContent {
+  system?: boolean;
+  audit?: boolean;
+  child?: boolean;
+  fields: SchemaField[];
+  index?: SchemaIndex[];
+}
+
+export interface SchemaFileList {
+  schemas: string[];
+  patches: string[];
+}
+
 export interface MigrationOp {
   kind: string;
   table: string;

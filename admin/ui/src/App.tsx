@@ -3,6 +3,7 @@ import { useAuth } from "./auth/AuthContext";
 import { AppLayout } from "./layout/AppLayout";
 import { LoginPage } from "./pages/LoginPage";
 import { HealthPage } from "./pages/HealthPage";
+import { SchemaBuilderPage } from "./pages/SchemaBuilderPage";
 import { ComingSoon } from "./pages/ComingSoon";
 
 export default function App() {
@@ -22,7 +23,7 @@ export default function App() {
         <Route index element={<Navigate to="/health" replace />} />
         <Route path="/health" element={<HealthPage />} />
         <Route path="/data" element={<ComingSoon title="Data Browser" />} />
-        <Route path="/schema" element={<ComingSoon title="Schema Builder" />} />
+        <Route path="/schema" element={<SchemaBuilderPage />} />
         <Route path="/users" element={<ComingSoon title="Users" />} />
         <Route path="/roles" element={<ComingSoon title="Roles" />} />
         <Route path="/sessions" element={<ComingSoon title="Sessions" />} />
