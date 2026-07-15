@@ -15,12 +15,21 @@ import arc
 from psqldb.model import SchemaError
 from psqldb.validation import ValidationError
 
+from admin._coerce import CoercionError, coerce_filters, coerce_row, throw_coercion
+
 _PROTECTED_WRITE_TABLES = frozenset({"_users", "_roles", "_sessions", "_access_keys"})
 _READ_ERRORS = (SchemaError, ValidationError, arc.relay.QueryError)
 
 
 def _friendly(exc: Exception):
     arc.relay.throw(str(exc), status=400, code="bad_request")
+
+
+def _schema_or_throw(table: str):
+    try:
+        return arc.psqldb.schema(table)
+    except SchemaError as exc:
+        arc.relay.throw(str(exc), status=404, code="unknown_table")
 
 
 def _require_not_protected(table: str) -> None:
@@ -40,6 +49,14 @@ async def list_rows(
     limit: int = 50,
     offset: int = 0,
 ) -> list[dict]:
+    schema = _schema_or_throw(table)
+    try:
+        # Filter operands arrive as JSON (always strings from a form input)
+        # but reach asyncpg as real query parameters — a typed column needs
+        # a real Python value, same as the write path. See admin._coerce.
+        filters = coerce_filters(schema, filters)
+    except CoercionError as exc:
+        throw_coercion(exc)
     try:
         return await arc.relay.list(table, filters=filters, order_by=order_by, limit=limit, offset=offset)
     except _READ_ERRORS as exc:
@@ -60,6 +77,13 @@ async def get_row(table: str, id: str) -> dict:
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def save_row(table: str, data: dict) -> dict:
     _require_not_protected(table)
+    schema = _schema_or_throw(table)
+    try:
+        # JSON can't carry a datetime/date/Decimal — convert to what
+        # asyncpg actually needs before the write. See admin._coerce.
+        data = coerce_row(schema, data)
+    except CoercionError as exc:
+        throw_coercion(exc)
     try:
         return await arc.relay.save(table, data)
     except _READ_ERRORS as exc:
