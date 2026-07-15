@@ -1,0 +1,43 @@
+.holders {
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: help;
+  border-bottom: 1px dashed var(--border-strong);
+}
+
+.holder-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.holder-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.holder-list li:last-child {
+  border-bottom: none;
+}
+.holder-list__you {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  border-radius: 999px;
+  padding: 1px 6px;
+}

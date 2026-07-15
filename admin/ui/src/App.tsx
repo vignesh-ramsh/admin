@@ -6,6 +6,7 @@ import { HealthPage } from "./pages/HealthPage";
 import { SchemaBuilderPage } from "./pages/SchemaBuilderPage";
 import { DataBrowserPage } from "./pages/DataBrowserPage";
 import { UsersPage } from "./pages/UsersPage";
+import { RolesPage } from "./pages/RolesPage";
 import { ComingSoon } from "./pages/ComingSoon";
 
 export default function App() {
@@ -27,7 +28,7 @@ export default function App() {
         <Route path="/data" element={<DataBrowserPage />} />
         <Route path="/schema" element={<SchemaBuilderPage />} />
         <Route path="/users" element={<UsersPage />} />
-        <Route path="/roles" element={<ComingSoon title="Roles" />} />
+        <Route path="/roles" element={<RolesPage />} />
         <Route path="/sessions" element={<ComingSoon title="Sessions" />} />
         <Route path="/access-keys" element={<ComingSoon title="Access Keys" />} />
         <Route path="*" element={<Navigate to="/health" replace />} />
