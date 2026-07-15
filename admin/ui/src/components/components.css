@@ -296,6 +296,16 @@
 .modal--wide {
   max-width: 680px;
 }
+.modal--with-audit {
+  max-width: 980px;
+  height: min(720px, calc(100vh - 48px));
+}
+.modal__body:has(.row-editor__split) {
+  padding: 0;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
 .modal__header {
   display: flex;
   align-items: center;

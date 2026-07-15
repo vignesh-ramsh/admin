@@ -76,3 +76,8 @@ export const IconSearch = ({ size = 16 }: P) => (
     <path d="m21 21-4.3-4.3" />
   </svg>
 );
+export const IconChevron = ({ size = 16, direction = "right" }: P & { direction?: "left" | "right" }) => (
+  <svg {...base(size)}>
+    <path d={direction === "left" ? "m15 18-6-6 6-6" : "m9 18 6-6-6-6"} />
+  </svg>
+);

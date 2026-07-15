@@ -7,12 +7,14 @@ export function Modal({
   children,
   footer,
   wide = false,
+  className,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
+  className?: string;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -24,7 +26,10 @@ export function Modal({
 
   return (
     <div className="modal__overlay" onMouseDown={onClose}>
-      <div className={`modal ${wide ? "modal--wide" : ""}`} onMouseDown={(e) => e.stopPropagation()}>
+      <div
+        className={`modal ${wide ? "modal--wide" : ""} ${className ?? ""}`}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <div className="modal__header">
           <h3 className="modal__title">{title}</h3>
           <button className="modal__close" onClick={onClose} aria-label="Close">

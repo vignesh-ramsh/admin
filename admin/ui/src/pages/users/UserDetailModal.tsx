@@ -7,6 +7,7 @@ import { Badge } from "../../components/Badge";
 import { Field, Input, Select } from "../../components/Field";
 import { useToast } from "../../components/Toast";
 import { isLocked, statusTone } from "./userUtils";
+import { AuditHistoryPanel } from "../data/AuditHistoryPanel";
 
 /* Each section maps to its own granular endpoint (set_status / add_role /
    remove_role / set_password / update_profile) rather than one bulk save —
@@ -32,6 +33,7 @@ export function UserDetailModal({
   const [newPassword, setNewPassword] = useState("");
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [pendingLockUntil, setPendingLockUntil] = useState("");
+  const [auditCollapsed, setAuditCollapsed] = useState(false);
 
   // Profile (full_name/username/allowed_ips) form state, seeded from the
   // current record and only sent on explicit Save — unlike status/roles,
@@ -52,7 +54,6 @@ export function UserDetailModal({
   // was rejected with status=Locked even with locked_until cleared to
   // None, then accepted the instant status flipped to Active).
   const autoLocked = current.status !== "Locked" && isLocked(current);
-  const locked = isLocked(current);
   const emailFor = (id: string) => users.find((u) => u.id === id)?.email ?? id;
 
   const run = async (key: string, fn: () => Promise<void>) => {
@@ -146,12 +147,15 @@ export function UserDetailModal({
       title={current.email}
       onClose={onClose}
       wide
+      className="modal--with-audit"
       footer={
         <Button variant="secondary" onClick={onClose}>
           Close
         </Button>
       }
     >
+      <div className="row-editor__split">
+      <div className="row-editor__main">
       <div className="row-gap">
         {autoLocked && (
           <div className="danger-note">
@@ -357,7 +361,9 @@ export function UserDetailModal({
             <div className="meta__item">
               <span className="meta__label">status</span>
               <span className="meta__value">
-                <Badge tone={statusTone(current)}>{locked ? "Locked out" : current.status}</Badge>
+                <Badge tone={statusTone(current)}>
+                  {autoLocked ? "Locked out" : current.status}
+                </Badge>
               </span>
             </div>
             {current.created_by && (
@@ -374,6 +380,19 @@ export function UserDetailModal({
             )}
           </div>
         </div>
+      </div>
+      </div>
+      {/* _users always has "audit": true (authn/schemas/_users.json) — no
+          schema.audit lookup needed here, unlike the generic Data Browser's
+          RowEditorModal, which has to check because it can point at any
+          table. */}
+      <AuditHistoryPanel
+        plugin="authn"
+        table="_users"
+        rowId={current.id}
+        collapsed={auditCollapsed}
+        onToggleCollapsed={() => setAuditCollapsed((c) => !c)}
+      />
       </div>
     </Modal>
   );

@@ -11,6 +11,7 @@ import { FieldInput } from "./FieldInput";
 import { editableFields, formatCell, toInputValue } from "./format";
 import { useUserDirectory } from "../shared/useUserDirectory";
 import { validateField, validateValues, type Errors } from "./validate";
+import { AuditHistoryPanel } from "./AuditHistoryPanel";
 
 type Values = Record<string, string | boolean>;
 
@@ -33,6 +34,8 @@ export function RowEditorModal({ table, schema, rowId, readOnly, onClose, onSave
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
+  const [auditCollapsed, setAuditCollapsed] = useState(false);
+  const showAuditPanel = !!rowId && !!schema.audit;
 
   useEffect(() => {
     if (!rowId) {
@@ -103,6 +106,7 @@ export function RowEditorModal({ table, schema, rowId, readOnly, onClose, onSave
       title={!rowId ? `New row — ${table}` : `${readOnly ? "View" : "Edit"} row — ${table}`}
       onClose={onClose}
       wide
+      className={showAuditPanel ? "modal--with-audit" : undefined}
       footer={
         <>
           {rowId && !readOnly && (
@@ -121,62 +125,79 @@ export function RowEditorModal({ table, schema, rowId, readOnly, onClose, onSave
         </>
       }
     >
-      {loading ? (
-        <Loading message="Loading row…" />
-      ) : (
-        <div className="row-gap">
-          {readOnly && (
-            <div className="notice">
-              <strong>{table}</strong> is managed through its own dedicated screen — this view is
-              read-only here to avoid bypassing its validation.
-            </div>
-          )}
-
-          <div className="form-grid">
-            {fields.map((f) => (
-              <Field
-                key={f.id || f.name}
-                label={`${f.name}${f.required ? " *" : ""}`}
-                hint={hintFor(f.type, f.unique)}
-              >
-                <FieldInput
-                  field={f}
-                  value={values[f.name] ?? ""}
-                  onChange={(v) => {
-                    setValues((prev) => ({ ...prev, [f.name]: v }));
-                    setErrors((prev) => {
-                      if (!prev[f.name]) return prev;
-                      const next = { ...prev };
-                      if (!validateField(f, v)) delete next[f.name];
-                      return next;
-                    });
-                  }}
-                  disabled={readOnly}
-                />
-                {errors[f.name] && <span className="field-error">{errors[f.name]}</span>}
-              </Field>
-            ))}
-          </div>
-
-          {row && (
-            <div className="meta">
-              <div className="meta__title">Record metadata</div>
-              <div className="meta__grid">
-                <MetaItem label="id" value={String(row.id ?? "—")} mono />
-                <MetaItem label="created" value={formatCell(row.created_at)} />
-                <MetaItem label="updated" value={formatCell(row.updated_at)} />
-                <MetaItem label="state" value={String(row._state ?? "0")} />
-                {row.created_by != null && (
-                  <MetaItem label="created by" value={dir.emailFor(String(row.created_by))} />
-                )}
-                {row.updated_by != null && (
-                  <MetaItem label="updated by" value={dir.emailFor(String(row.updated_by))} />
-                )}
+      {(() => {
+        const body = loading ? (
+          <Loading message="Loading row…" />
+        ) : (
+          <div className="row-gap">
+            {readOnly && (
+              <div className="notice">
+                <strong>{table}</strong> is managed through its own dedicated screen — this view is
+                read-only here to avoid bypassing its validation.
               </div>
+            )}
+
+            <div className="form-grid">
+              {fields.map((f) => (
+                <Field
+                  key={f.id || f.name}
+                  label={`${f.name}${f.required ? " *" : ""}`}
+                  hint={hintFor(f.type, f.unique)}
+                >
+                  <FieldInput
+                    field={f}
+                    value={values[f.name] ?? ""}
+                    onChange={(v) => {
+                      setValues((prev) => ({ ...prev, [f.name]: v }));
+                      setErrors((prev) => {
+                        if (!prev[f.name]) return prev;
+                        const next = { ...prev };
+                        if (!validateField(f, v)) delete next[f.name];
+                        return next;
+                      });
+                    }}
+                    disabled={readOnly}
+                  />
+                  {errors[f.name] && <span className="field-error">{errors[f.name]}</span>}
+                </Field>
+              ))}
             </div>
-          )}
-        </div>
-      )}
+
+            {row && (
+              <div className="meta">
+                <div className="meta__title">Record metadata</div>
+                <div className="meta__grid">
+                  <MetaItem label="id" value={String(row.id ?? "—")} mono />
+                  <MetaItem label="created" value={formatCell(row.created_at)} />
+                  <MetaItem label="updated" value={formatCell(row.updated_at)} />
+                  <MetaItem label="state" value={String(row._state ?? "0")} />
+                  {row.created_by != null && (
+                    <MetaItem label="created by" value={dir.emailFor(String(row.created_by))} />
+                  )}
+                  {row.updated_by != null && (
+                    <MetaItem label="updated by" value={dir.emailFor(String(row.updated_by))} />
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+
+        if (!showAuditPanel) return body;
+
+        return (
+          <div className="row-editor__split">
+            <div className="row-editor__main">{body}</div>
+            <AuditHistoryPanel
+              plugin={schema.plugin}
+              table={table}
+              rowId={rowId as string}
+              collapsed={auditCollapsed}
+              onToggleCollapsed={() => setAuditCollapsed((c) => !c)}
+            />
+          </div>
+        );
+      })()}
     </Modal>
   );
 }

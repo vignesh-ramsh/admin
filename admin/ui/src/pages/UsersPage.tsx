@@ -10,7 +10,6 @@ import { Loading, EmptyState, ErrorState } from "../components/States";
 import { IconPlus, IconRefresh, IconSearch } from "../layout/icons";
 import { CreateUserModal } from "./users/CreateUserModal";
 import { UserDetailModal } from "./users/UserDetailModal";
-import { AuditHistoryModal } from "./data/AuditHistoryModal";
 import { formatWhen, isLocked, statusTone } from "./users/userUtils";
 import "./shared/shared.css";
 import "./users.css";
@@ -25,7 +24,6 @@ export function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<User | null>(null);
-  const [showAudit, setShowAudit] = useState(false);
 
   const handleErr = useCallback(
     (err: unknown) => {
@@ -70,9 +68,6 @@ export function UsersPage() {
           <>
             <Button variant="secondary" size="sm" onClick={load}>
               <IconRefresh /> Refresh
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => setShowAudit(true)}>
-              Audit history
             </Button>
             <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
               <IconPlus /> New user
@@ -191,9 +186,6 @@ export function UsersPage() {
         />
       )}
 
-      {showAudit && (
-        <AuditHistoryModal plugin="authn" table="_users" onClose={() => setShowAudit(false)} />
-      )}
     </>
   );
 }
