@@ -9,6 +9,7 @@ import { Loading } from "../../components/States";
 import { useToast } from "../../components/Toast";
 import { FieldInput } from "./FieldInput";
 import { editableFields, formatCell, toInputValue } from "./format";
+import { validateField, validateValues, type Errors } from "./validate";
 
 type Values = Record<string, string | boolean>;
 
@@ -29,6 +30,7 @@ export function RowEditorModal({ table, schema, rowId, readOnly, onClose, onSave
   const [loading, setLoading] = useState(!!rowId);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [errors, setErrors] = useState<Errors>({});
 
   useEffect(() => {
     if (!rowId) {
@@ -56,6 +58,14 @@ export function RowEditorModal({ table, schema, rowId, readOnly, onClose, onSave
   }, [table, rowId]);
 
   const save = async () => {
+    // Catch what the server would reject anyway, per-field, before the
+    // round trip. The server still validates — this is just earlier.
+    const found = validateValues(fields, values);
+    if (Object.keys(found).length > 0) {
+      setErrors(found);
+      toast.error("Fix the highlighted fields before saving.");
+      return;
+    }
     setSaving(true);
     try {
       // Send raw form values — admin._coerce converts them server-side.
@@ -130,9 +140,18 @@ export function RowEditorModal({ table, schema, rowId, readOnly, onClose, onSave
                 <FieldInput
                   field={f}
                   value={values[f.name] ?? ""}
-                  onChange={(v) => setValues((prev) => ({ ...prev, [f.name]: v }))}
+                  onChange={(v) => {
+                    setValues((prev) => ({ ...prev, [f.name]: v }));
+                    setErrors((prev) => {
+                      if (!prev[f.name]) return prev;
+                      const next = { ...prev };
+                      if (!validateField(f, v)) delete next[f.name];
+                      return next;
+                    });
+                  }}
                   disabled={readOnly}
                 />
+                {errors[f.name] && <span className="field-error">{errors[f.name]}</span>}
               </Field>
             ))}
           </div>

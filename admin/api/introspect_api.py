@@ -4,6 +4,7 @@ Builder's "pick a plugin, pick a table" flow. Read-only, no writes."""
 import arc
 from psqldb.model import SchemaError
 
+from admin._exclusions import filter_plugins
 from admin._paths import require_known_plugin
 
 
@@ -27,13 +28,59 @@ def _field_to_dict(f) -> dict:
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
-async def list_plugins() -> list[str]:
-    return arc.admin.list_installed_plugins()
+async def list_plugins(surface: str | None = None) -> list[str]:
+    """`surface` ("data_browser" / "schema_builder") applies that surface's
+    own exclusion list (admin._exclusions). Omitted -> every installed
+    plugin, unfiltered."""
+    return filter_plugins(arc.admin.list_installed_plugins(), surface)
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
-async def list_tables(plugin: str) -> list[str]:
+async def list_table_meta(surface: str | None = None) -> list[dict]:
+    """Every registered table with the metadata the Schema Builder's field
+    pickers need.
+
+    `name` is the schema FILE STEM ("Department") and is what a REFERENCE/
+    TABLE field's `target` must be set to — psqldb.migrate
+    .resolve_ref_targets resolves targets via `{source_path.stem: schema}`,
+    so the physical table name ("department") does NOT resolve and raises a
+    hard MigrationError on every query. `table` is the physical name, only
+    for display and for looking a schema up by table elsewhere.
+
+    Reads arc.psqldb.schemas() (what's declared in schema files) rather
+    than _field_registry (what's been migrated): when authoring a schema
+    you want to reference a table that exists on disk even if its first
+    migration hasn't run yet — and _field_registry only ever knows the
+    physical name, never the stem this needs.
+    """
+    return [
+        {
+            "name": s.source_path.stem,
+            "table": s.table,
+            "plugin": s.plugin,
+            "system": s.system,
+            "child": s.child,
+            "audit": s.audit,
+        }
+        for s in arc.psqldb.schemas()
+        if s.plugin not in _hidden(surface)
+    ]
+
+
+def _hidden(surface: str | None):
+    from admin._exclusions import excluded_for
+
+    return excluded_for(surface)
+
+
+@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+async def list_tables(plugin: str, surface: str | None = None) -> list[str]:
     require_known_plugin(plugin)
+    if plugin in _hidden(surface):
+        # Hidden for this surface — don't serve its tables even if the
+        # plugin is named directly, so the exclusion can't be sidestepped
+        # by a stale client or a hand-made request.
+        return []
     rows = await arc.relay.sql(
         'SELECT DISTINCT "table" FROM "_field_registry" WHERE plugin = $1 ORDER BY "table"', plugin
     )

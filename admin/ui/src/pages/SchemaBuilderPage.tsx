@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { call, ApiError } from "../api/client";
-import type { SchemaFileContent, SchemaFileList } from "../api/types";
+import type { SchemaFileContent, SchemaFileList, TableMeta } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { PageHeader } from "../components/PageHeader";
 import { Button } from "../components/Button";
@@ -9,14 +9,17 @@ import { Loading, EmptyState } from "../components/States";
 import { IconPlus, IconSchema } from "../layout/icons";
 import { SchemaEditor, type EditorTarget } from "./schema/SchemaEditor";
 import { MigrationPreviewModal } from "./schema/MigrationPreviewModal";
+import { clearSchemaCache } from "./schema/useTargetFields";
 import "./schema.css";
+
+const SURFACE = "schema_builder";
 
 export function SchemaBuilderPage() {
   const { onUnauthorized } = useAuth();
   const [plugins, setPlugins] = useState<string[]>([]);
   const [plugin, setPlugin] = useState<string>("");
   const [files, setFiles] = useState<SchemaFileList>({ schemas: [], patches: [] });
-  const [tables, setTables] = useState<string[]>([]);
+  const [tableMeta, setTableMeta] = useState<TableMeta[]>([]);
   const [target, setTarget] = useState<EditorTarget | null>(null);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [preview, setPreview] = useState(false);
@@ -27,7 +30,7 @@ export function SchemaBuilderPage() {
 
   // Load the plugin list once.
   useEffect(() => {
-    call<string[]>("list_plugins")
+    call<string[]>("list_plugins", { surface: SURFACE })
       .then((list) => {
         setPlugins(list);
         if (list.length && !plugin) setPlugin(list[0]);
@@ -42,11 +45,14 @@ export function SchemaBuilderPage() {
     setLoadingFiles(true);
     Promise.all([
       call<SchemaFileList>("list_schema_files", { plugin: name }),
-      call<string[]>("list_tables", { plugin: name }).catch(() => [] as string[]),
+      // Every table, not just this plugin's — a REFERENCE may legitimately
+      // point across plugins, and TABLE targets are filtered to child
+      // tables from this same list.
+      call<TableMeta[]>("list_table_meta", { surface: SURFACE }).catch(() => [] as TableMeta[]),
     ])
-      .then(([f, t]) => {
+      .then(([f, meta]) => {
         setFiles(f);
-        setTables(t);
+        setTableMeta(meta);
       })
       .catch(handleErr)
       .finally(() => setLoadingFiles(false));
@@ -86,6 +92,9 @@ export function SchemaBuilderPage() {
   };
 
   const onSaved = (_kind: "schema" | "patch", name: string) => {
+    // A save can change a table's unique fields, which the target_field
+    // picker caches — drop it so the next pick sees the new shape.
+    clearSchemaCache();
     refreshFiles(plugin);
     // Keep the editor open on the just-saved file, now an existing file.
     setTarget((t) => (t ? { ...t, name, isNew: false } : t));
@@ -146,7 +155,7 @@ export function SchemaBuilderPage() {
               key={target.openId}
               plugin={plugin}
               target={target}
-              tables={tables}
+              tableMeta={tableMeta}
               onSaved={onSaved}
               onDeleted={onDeleted}
             />

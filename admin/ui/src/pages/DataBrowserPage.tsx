@@ -12,6 +12,8 @@ import { FilterBar, type Filters } from "./data/FilterBar";
 import { formatCell, listColumns, PROTECTED_TABLES, shortId } from "./data/format";
 import "./data.css";
 
+const SURFACE = "data_browser";
+
 export function DataBrowserPage() {
   const { onUnauthorized } = useAuth();
   const [plugins, setPlugins] = useState<string[]>([]);
@@ -44,7 +46,7 @@ export function DataBrowserPage() {
   );
 
   useEffect(() => {
-    call<string[]>("list_plugins")
+    call<string[]>("list_plugins", { surface: SURFACE })
       .then((list) => {
         setPlugins(list);
         if (list.length) setPlugin((p) => p || list[0]);
@@ -58,7 +60,7 @@ export function DataBrowserPage() {
     setTable("");
     setSchema(null);
     setRows([]);
-    call<string[]>("list_tables", { plugin })
+    call<string[]>("list_tables", { plugin, surface: SURFACE })
       .then((list) => {
         setTables(list);
         setTable(list[0] ?? "");

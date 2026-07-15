@@ -1,6 +1,8 @@
-import type { SchemaField } from "../../api/types";
+import type { SchemaField, TableMeta } from "../../api/types";
 import { Button } from "../../components/Button";
+import { Combobox, type ComboOption } from "../../components/Combobox";
 import { IconPlus } from "../../layout/icons";
+import { useTargetFieldOptions } from "./useTargetFields";
 import {
   typesFor,
   usesLength,
@@ -14,11 +16,11 @@ import {
 interface Props {
   fields: SchemaField[];
   system: boolean;
-  tables: string[];
+  tableMeta: TableMeta[];
   onChange: (fields: SchemaField[]) => void;
 }
 
-export function FieldEditor({ fields, system, tables, onChange }: Props) {
+export function FieldEditor({ fields, system, tableMeta, onChange }: Props) {
   const update = (i: number, patch: Partial<SchemaField>) => {
     onChange(fields.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
   };
@@ -31,9 +33,9 @@ export function FieldEditor({ fields, system, tables, onChange }: Props) {
         <span style={{ width: 52 }}>ID</span>
         <span style={{ flex: 1 }}>Name</span>
         <span style={{ width: 130 }}>Type</span>
-        <span style={{ flex: 1.3 }}>Configuration</span>
-        <span style={{ width: 64, textAlign: "center" }}>Req</span>
-        <span style={{ width: 64, textAlign: "center" }}>Uniq</span>
+        <span style={{ flex: 1.5 }}>Configuration</span>
+        <span style={{ width: 56, textAlign: "center" }}>Req</span>
+        <span style={{ width: 56, textAlign: "center" }}>Uniq</span>
         <span style={{ width: 34 }} />
       </div>
 
@@ -57,7 +59,19 @@ export function FieldEditor({ fields, system, tables, onChange }: Props) {
             className="select"
             style={{ width: 130 }}
             value={f.type}
-            onChange={(e) => update(i, { type: e.target.value })}
+            onChange={(e) =>
+              // Changing type invalidates any type-specific config that was
+              // set for the previous type.
+              update(i, {
+                type: e.target.value,
+                target: undefined,
+                target_field: undefined,
+                options: undefined,
+                length: undefined,
+                precision: undefined,
+                scale: undefined,
+              })
+            }
           >
             {typesFor(system).map((t) => (
               <option key={t} value={t}>
@@ -67,17 +81,17 @@ export function FieldEditor({ fields, system, tables, onChange }: Props) {
           </select>
 
           <div className="fields__config">
-            <FieldConfig field={f} tables={tables} onChange={(patch) => update(i, patch)} />
+            <FieldConfig field={f} tableMeta={tableMeta} onChange={(patch) => update(i, patch)} />
           </div>
 
-          <label className="fields__check" style={{ width: 64 }}>
+          <label className="fields__check" style={{ width: 56 }}>
             <input
               type="checkbox"
               checked={!!f.required}
               onChange={(e) => update(i, { required: e.target.checked })}
             />
           </label>
-          <label className="fields__check" style={{ width: 64 }}>
+          <label className="fields__check" style={{ width: 56 }}>
             <input
               type="checkbox"
               checked={!!f.unique}
@@ -104,38 +118,43 @@ export function FieldEditor({ fields, system, tables, onChange }: Props) {
 
 function FieldConfig({
   field,
-  tables,
+  tableMeta,
   onChange,
 }: {
   field: SchemaField;
-  tables: string[];
+  tableMeta: TableMeta[];
   onChange: (patch: Partial<SchemaField>) => void;
 }) {
   const t = field.type;
 
   if (usesReference(t)) {
+    const isTableType = t === "TABLE";
+    // A TABLE field generates/points at a CHILD table — psqldb requires the
+    // target to be a "child": true schema, so only those are offered.
+    const candidates = isTableType ? tableMeta.filter((m) => m.child) : tableMeta;
+    // The VALUE is the schema file stem, never the physical table name:
+    // resolve_ref_targets looks targets up by stem, so storing "department"
+    // instead of "Department" is unresolvable and breaks every query.
+    const tableOptions: ComboOption[] = candidates.map((m) => ({
+      value: m.name,
+      label: m.name,
+      hint: [m.plugin, m.child ? "child" : m.system ? "system" : null].filter(Boolean).join(" · "),
+    }));
+
     return (
       <div className="config-inline">
-        <input
-          className="input"
-          list="admin-table-list"
-          placeholder="target table"
+        <Combobox
           value={field.target ?? ""}
-          onChange={(e) => onChange({ target: e.target.value })}
+          // Changing the target invalidates target_field — it named a
+          // column on the previous table.
+          onChange={(v) => onChange({ target: v, target_field: undefined })}
+          options={tableOptions}
+          placeholder={isTableType ? "child table…" : "target table…"}
+          emptyText={isTableType ? "No child tables defined" : "No tables"}
         />
         {t === "REFERENCE" && (
-          <input
-            className="input"
-            placeholder="target_field (default id)"
-            value={field.target_field ?? ""}
-            onChange={(e) => onChange({ target_field: e.target.value || undefined })}
-          />
+          <TargetFieldPicker field={field} tableMeta={tableMeta} onChange={onChange} />
         )}
-        <datalist id="admin-table-list">
-          {tables.map((tbl) => (
-            <option key={tbl} value={tbl} />
-          ))}
-        </datalist>
       </div>
     );
   }
@@ -205,6 +224,33 @@ function FieldConfig({
       placeholder="default (optional)"
       value={field.default != null ? String(field.default) : ""}
       onChange={(e) => onChange({ default: e.target.value || undefined })}
+    />
+  );
+}
+
+function TargetFieldPicker({
+  field,
+  tableMeta,
+  onChange,
+}: {
+  field: SchemaField;
+  tableMeta: TableMeta[];
+  onChange: (patch: Partial<SchemaField>) => void;
+}) {
+  // field.target is a schema file stem; get_table_schema takes the PHYSICAL
+  // table name — so resolve one to the other before looking up its fields.
+  const physical = tableMeta.find((m) => m.name === field.target)?.table;
+  const { options, loading } = useTargetFieldOptions(physical);
+  return (
+    <Combobox
+      value={field.target_field ?? ""}
+      onChange={(v) => onChange({ target_field: v || undefined })}
+      options={options}
+      disabled={!field.target}
+      placeholder={
+        !field.target ? "pick a table first" : loading ? "loading…" : "target field (default: id)"
+      }
+      emptyText="No unique fields on that table"
     />
   );
 }

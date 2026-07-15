@@ -108,6 +108,20 @@ export interface SchemaFileList {
   patches: string[];
 }
 
+/** One registered table's metadata (admin.list_table_meta).
+ *  `name` is the schema FILE STEM ("Department") — the ONLY valid value for
+ *  a REFERENCE/TABLE field's `target`. `table` is the physical, slugified
+ *  name ("department"), for display and schema lookups only. Setting
+ *  `target` to the physical name does not resolve and breaks every query. */
+export interface TableMeta {
+  name: string;
+  table: string;
+  plugin: string;
+  system: boolean;
+  child: boolean;
+  audit: boolean;
+}
+
 export interface MigrationOp {
   kind: string;
   table: string;

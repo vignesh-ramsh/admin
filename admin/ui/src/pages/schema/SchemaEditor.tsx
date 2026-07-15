@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { call, ApiError } from "../../api/client";
-import type { SchemaField, SchemaFileContent, SchemaIndex } from "../../api/types";
+import type { SchemaField, SchemaFileContent, SchemaIndex, TableMeta } from "../../api/types";
 import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { Input } from "../../components/Field";
@@ -20,12 +20,12 @@ export interface EditorTarget {
 interface Props {
   plugin: string;
   target: EditorTarget;
-  tables: string[];
+  tableMeta: TableMeta[];
   onSaved: (kind: "schema" | "patch", name: string) => void;
   onDeleted: (kind: "schema" | "patch", name: string) => void;
 }
 
-export function SchemaEditor({ plugin, target, tables, onSaved, onDeleted }: Props) {
+export function SchemaEditor({ plugin, target, tableMeta, onSaved, onDeleted }: Props) {
   const toast = useToast();
   const [name, setName] = useState(target.name);
   const [content, setContent] = useState<SchemaFileContent>(target.content);
@@ -129,7 +129,7 @@ export function SchemaEditor({ plugin, target, tables, onSaved, onDeleted }: Pro
 
         <div>
           <div className="section-label">Fields</div>
-          <FieldEditor fields={content.fields} system={flag("system")} tables={tables} onChange={setFields} />
+          <FieldEditor fields={content.fields} system={flag("system")} tableMeta={tableMeta} onChange={setFields} />
         </div>
 
         {!isPatch && (

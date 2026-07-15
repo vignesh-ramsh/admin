@@ -1,4 +1,5 @@
 import type { FieldMeta } from "../../api/types";
+import { ReferencePicker } from "./ReferencePicker";
 
 /* One input per canonical field type (docs/arc.MD §3.9). Values are held
    as strings (or boolean) and sent as-is — admin's own _coerce.py turns
@@ -18,6 +19,17 @@ interface Props {
 export function FieldInput({ field, value, onChange, disabled }: Props) {
   const t = field.type;
   const common = { disabled, className: "input" as const };
+
+  if (t === "REFERENCE") {
+    return (
+      <ReferencePicker
+        field={field}
+        value={String(value ?? "")}
+        onChange={onChange}
+        disabled={disabled}
+      />
+    );
+  }
 
   if (t === "BOOLEAN") {
     return (
