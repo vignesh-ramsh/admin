@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { call, ApiError } from "../api/client";
 import type { Row, TableSchema } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
@@ -16,10 +17,16 @@ const SURFACE = "data_browser";
 
 export function DataBrowserPage() {
   const { onUnauthorized } = useAuth();
+  // Selection lives in the URL (?plugin=&table=) so a refresh or a shared
+  // link lands back on the same table instead of resetting to the first.
+  const [params, setParams] = useSearchParams();
+  const plugin = params.get("plugin") ?? "";
+  const table = params.get("table") ?? "";
+  const setPlugin = (name: string) => setParams({ plugin: name }, { replace: true });
+  const setTable = (name: string) => setParams({ plugin, table: name });
+
   const [plugins, setPlugins] = useState<string[]>([]);
-  const [plugin, setPlugin] = useState("");
   const [tables, setTables] = useState<string[]>([]);
-  const [table, setTable] = useState("");
   const [schema, setSchema] = useState<TableSchema | null>(null);
 
   const [rows, setRows] = useState<Row[]>([]);
@@ -49,23 +56,31 @@ export function DataBrowserPage() {
     call<string[]>("list_plugins", { surface: SURFACE })
       .then((list) => {
         setPlugins(list);
-        if (list.length) setPlugin((p) => p || list[0]);
+        if (list.length && !plugin) setParams({ plugin: list[0] }, { replace: true });
       })
       .catch(handleErr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handleErr]);
 
-  // Plugin changed -> load its tables, reset the table selection.
+  // Plugin changed -> load its tables; keep the URL's table if it belongs
+  // to this plugin (a refresh), otherwise fall back to the first one.
   useEffect(() => {
     if (!plugin) return;
-    setTable("");
     setSchema(null);
     setRows([]);
     call<string[]>("list_tables", { plugin, surface: SURFACE })
       .then((list) => {
         setTables(list);
-        setTable(list[0] ?? "");
+        if (!list.length) {
+          if (table) setParams({ plugin }, { replace: true });
+          return;
+        }
+        if (!table || !list.includes(table)) {
+          setParams({ plugin, table: list[0] }, { replace: true });
+        }
       })
       .catch(handleErr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plugin, handleErr]);
 
   // Table changed -> load its schema, reset paging/filters.

@@ -81,16 +81,25 @@ export function ReferencePicker({ field, value, onChange, disabled }: Props) {
       return rows.map((r) => {
         const stored = field.target_field ? r[field.target_field] : r.id;
         const label = r[labelField];
-        return {
-          value: String(stored ?? ""),
-          label: String(label ?? r.id ?? ""),
-          // Show the stored value as a hint when it differs from the label,
-          // so it's obvious what actually lands in the column.
-          hint:
-            String(stored ?? "") !== String(label ?? "")
-              ? String(stored ?? "").slice(0, 8) + "…"
-              : undefined,
-        };
+        // A second, human-meaningful column (the first non-unique text
+        // field) makes rows distinguishable when the key alone is cryptic.
+        const contextField = schema?.fields.find(
+          (f) => f.is_column && !f.unique && ["STRING", "TEXT"].includes(f.type)
+        )?.name;
+        const context = contextField ? r[contextField] : null;
+        const storedStr = String(stored ?? "");
+        const labelStr = String(label ?? r.id ?? "");
+        // Eyebrow: extra context if it ADDS anything, else the raw value
+        // actually stored when it differs from the label (e.g. a UUID).
+        // Never repeat the label back — that's just noise.
+        const contextStr = context != null ? String(context) : "";
+        const sublabel =
+          contextStr && contextStr !== labelStr
+            ? contextStr
+            : storedStr !== labelStr
+              ? `${storedStr.slice(0, 8)}…`
+              : undefined;
+        return { value: storedStr, label: labelStr, sublabel };
       });
     },
     [target, labelField, field.target_field, schema]

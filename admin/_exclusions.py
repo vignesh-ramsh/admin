@@ -5,12 +5,14 @@ Which plugins are hidden from each admin surface's plugin picker.
 
 Kept here, server-side, rather than in the SPA: the UI can only ever hide
 what the API hands it, so filtering at the source means one list to edit
-and no way for a stale bundle to surface something that was meant to be
-hidden.
+and no way for a stale bundle — or a hand-made request — to surface
+something meant to be hidden.
 
-Per-surface on purpose — "don't author schemas for this plugin" and
-"don't browse this plugin's rows" are different questions. Extend the sets
-below; nothing else needs to change.
+TWO INDEPENDENT LISTS, on purpose. "Don't author schemas for this plugin"
+and "don't browse this plugin's rows" are different questions, and a shared
+base set makes them fight each other the moment they diverge. Each list
+below is complete and standalone — edit either without thinking about the
+other.
 """
 
 from __future__ import annotations
@@ -21,23 +23,46 @@ from typing import Iterable
 DATA_BROWSER = "data_browser"
 SCHEMA_BUILDER = "schema_builder"
 
-# Plugins that own no tables of their own at all — they'd only ever render
-# an empty picker. `admin` itself is included: it declares no schemas.
-_NO_TABLES = frozenset({"admin", "gateway", "redix", "relay"})
+
+# Hidden from the Data Browser's plugin picker (and its tables refused).
+#   admin/gateway/redix/relay — own no tables at all.
+#   authn                     — _users/_roles/_sessions/_access_keys have real
+#                               invariants; the Users/Roles/Sessions/Access Keys
+#                               screens own those instead of a raw row editor.
+#   psqldb                    — _trash/_field_registry/_patch_history are the
+#                               framework's own bookkeeping, not app data.
+DATA_BROWSER_EXCLUDED_PLUGINS = frozenset(
+    {
+        "admin",
+        "gateway",
+        "redix",
+        "relay",
+        "authn",
+        "psqldb",
+    }
+)
+
+# Hidden from the Schema Builder's plugin picker.
+#   admin/gateway/redix/relay — declare no schema files.
+#   authn                     — its four system tables are self-declared and
+#                               security-critical; editing them here is sharp-edged.
+#   psqldb                    — its own tables are created by raw bootstrap SQL,
+#                               not schema files, so there is nothing to author.
+SCHEMA_BUILDER_EXCLUDED_PLUGINS = frozenset(
+    {
+        "admin",
+        "gateway",
+        "redix",
+        "relay",
+        "authn",
+        "psqldb",
+    }
+)
 
 EXCLUDED_PLUGINS: dict[str, frozenset[str]] = {
-    DATA_BROWSER: _NO_TABLES,
-    # psqldb additionally: its own _trash/_field_registry/_patch_history are
-    # created by raw bootstrap SQL, not by schema files, so there is nothing
-    # for the Schema Builder to author or edit there.
-    SCHEMA_BUILDER: _NO_TABLES | {"psqldb"},
+    DATA_BROWSER: DATA_BROWSER_EXCLUDED_PLUGINS,
+    SCHEMA_BUILDER: SCHEMA_BUILDER_EXCLUDED_PLUGINS,
 }
-
-# Candidates worth considering later, deliberately NOT excluded by default:
-#   "authn"      — its four system tables are self-declared; editing them
-#                  through the builder is possible but sharp-edged.
-#   "example_hr" — the reference plugin; useful to keep visible as a live
-#                  example of every schema feature.
 
 
 def excluded_for(surface: str | None) -> frozenset[str]:

@@ -77,14 +77,20 @@ export function MigrationPreviewModal({ plugin, onClose }: { plugin: string; onC
           <div className="apply-note">
             <div className="apply-note__title">To apply these changes</div>
             <p className="muted" style={{ margin: "4px 0 10px" }}>
-              Schema edits are saved to disk. Applying them runs a real migration in a fresh
-              process (which also reloads the running app). Run this command in your project:
+              Schema edits are saved to disk; applying them is a real migration you run yourself,
+              in your project:
             </p>
             <div className="cmd">
               <code className="cmd__text mono">{cmd?.command ?? "…"}</code>
               <Button variant="secondary" size="sm" onClick={copy}>
                 {copied ? "Copied" : "Copy"}
               </Button>
+            </div>
+            <div className="warn-note" style={{ marginTop: 10 }}>
+              <strong>Restart the server afterwards.</strong> That command runs in its own
+              process — this running server loaded every schema once at boot and has no way to
+              reload them, so it keeps serving the old shape (and won’t see new columns) until
+              it is restarted.
             </div>
           </div>
         </div>

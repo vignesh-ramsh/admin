@@ -53,13 +53,13 @@ export function useTargetFieldOptions(table: string | undefined | null): {
         const declaredPk = schema.fields.find((f) => f.primary_key);
         opts.push(
           declaredPk
-            ? { value: declaredPk.name, label: declaredPk.name, hint: "primary key" }
-            : { value: "id", label: "id", hint: "primary key" }
+            ? { value: declaredPk.name, label: declaredPk.name, sublabel: "primary key" }
+            : { value: "id", label: "id", sublabel: "primary key" }
         );
 
         for (const f of schema.fields) {
           if (f.unique && f.is_column && !f.primary_key) {
-            opts.push({ value: f.name, label: f.name, hint: f.type });
+            opts.push({ value: f.name, label: f.name, sublabel: `${f.type} · unique` });
           }
         }
         setOptions(opts);

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { call, ApiError } from "../api/client";
 import type { SchemaFileContent, SchemaFileList, TableMeta } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
@@ -14,76 +15,99 @@ import "./schema.css";
 
 const SURFACE = "schema_builder";
 
+/* Selection lives in the URL (?plugin=&kind=&file=) so a refresh — or a
+   shared/bookmarked link — lands back on the same file instead of resetting
+   to the first plugin. The URL is the source of truth for plugin + open
+   file; only an unsaved NEW file is local (it has nothing to address yet). */
+
 export function SchemaBuilderPage() {
   const { onUnauthorized } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const plugin = params.get("plugin") ?? "";
+  const fileKind = (params.get("kind") as "schema" | "patch" | null) ?? null;
+  const fileName = params.get("file");
+
   const [plugins, setPlugins] = useState<string[]>([]);
-  const [plugin, setPlugin] = useState<string>("");
   const [files, setFiles] = useState<SchemaFileList>({ schemas: [], patches: [] });
   const [tableMeta, setTableMeta] = useState<TableMeta[]>([]);
   const [target, setTarget] = useState<EditorTarget | null>(null);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [preview, setPreview] = useState(false);
 
-  const handleErr = (err: unknown) => {
-    if (err instanceof ApiError && err.status === 401) onUnauthorized();
-  };
+  const handleErr = useCallback(
+    (err: unknown) => {
+      if (err instanceof ApiError && err.status === 401) onUnauthorized();
+    },
+    [onUnauthorized]
+  );
 
-  // Load the plugin list once.
+  const selectPlugin = (name: string) => setParams({ plugin: name }, { replace: true });
+  const selectFile = (kind: "schema" | "patch", name: string) =>
+    setParams({ plugin, kind, file: name });
+
+  // Plugin list; default the URL to the first plugin if it names none.
   useEffect(() => {
     call<string[]>("list_plugins", { surface: SURFACE })
       .then((list) => {
         setPlugins(list);
-        if (list.length && !plugin) setPlugin(list[0]);
+        if (list.length && !plugin) setParams({ plugin: list[0] }, { replace: true });
       })
       .catch(handleErr);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Refresh a plugin's file list + tables. Does NOT touch the open editor,
-  // so it's safe to call after a save (which just added/renamed a file).
-  const refreshFiles = (name: string) => {
-    setLoadingFiles(true);
-    Promise.all([
-      call<SchemaFileList>("list_schema_files", { plugin: name }),
-      // Every table, not just this plugin's — a REFERENCE may legitimately
-      // point across plugins, and TABLE targets are filtered to child
-      // tables from this same list.
-      call<TableMeta[]>("list_table_meta", { surface: SURFACE }).catch(() => [] as TableMeta[]),
-    ])
-      .then(([f, meta]) => {
-        setFiles(f);
-        setTableMeta(meta);
-      })
-      .catch(handleErr)
-      .finally(() => setLoadingFiles(false));
-  };
-
-  // Switching plugins clears the editor, then loads the new plugin's files.
-  const loadPlugin = (name: string) => {
-    setTarget(null);
-    refreshFiles(name);
-  };
+  const refreshFiles = useCallback(
+    (name: string) => {
+      setLoadingFiles(true);
+      Promise.all([
+        call<SchemaFileList>("list_schema_files", { plugin: name }),
+        // Every table, not just this plugin's — a REFERENCE may legitimately
+        // point across plugins, and TABLE targets are filtered to child
+        // tables from this same list.
+        call<TableMeta[]>("list_table_meta", { surface: SURFACE }).catch(() => [] as TableMeta[]),
+      ])
+        .then(([f, meta]) => {
+          setFiles(f);
+          setTableMeta(meta);
+        })
+        .catch(handleErr)
+        .finally(() => setLoadingFiles(false));
+    },
+    [handleErr]
+  );
 
   useEffect(() => {
-    if (plugin) loadPlugin(plugin);
+    if (plugin) refreshFiles(plugin);
+  }, [plugin, refreshFiles]);
+
+  // Open whatever file the URL names (also on a cold load / refresh).
+  useEffect(() => {
+    if (!plugin || !fileKind || !fileName) return;
+    if (target && !target.isNew && target.kind === fileKind && target.name === fileName) return;
+    const fn = fileKind === "schema" ? "get_schema_file" : "get_patch_file";
+    call<SchemaFileContent>(fn, { plugin, name: fileName })
+      .then((content) =>
+        setTarget({
+          openId: Date.now(),
+          kind: fileKind,
+          name: fileName,
+          isNew: false,
+          content: normalize(content),
+        })
+      )
+      .catch(handleErr);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plugin]);
+  }, [plugin, fileKind, fileName]);
 
-  const nextOpenId = () => Date.now();
-
-  const openFile = async (kind: "schema" | "patch", name: string) => {
-    try {
-      const fn = kind === "schema" ? "get_schema_file" : "get_patch_file";
-      const content = await call<SchemaFileContent>(fn, { plugin, name });
-      setTarget({ openId: nextOpenId(), kind, name, isNew: false, content: normalize(content) });
-    } catch (err) {
-      handleErr(err);
-    }
-  };
+  // Switching plugin clears any open editor (its file belongs elsewhere).
+  useEffect(() => {
+    if (!fileKind || !fileName) setTarget((t) => (t && !t.isNew ? null : t));
+  }, [fileKind, fileName]);
 
   const newFile = (kind: "schema" | "patch") => {
+    setParams({ plugin }, { replace: true }); // an unsaved file isn't addressable
     setTarget({
-      openId: nextOpenId(),
+      openId: Date.now(),
       kind,
       name: "",
       isNew: true,
@@ -91,65 +115,68 @@ export function SchemaBuilderPage() {
     });
   };
 
-  const onSaved = (_kind: "schema" | "patch", name: string) => {
+  const onSaved = (kind: "schema" | "patch", name: string) => {
     // A save can change a table's unique fields, which the target_field
     // picker caches — drop it so the next pick sees the new shape.
     clearSchemaCache();
     refreshFiles(plugin);
-    // Keep the editor open on the just-saved file, now an existing file.
     setTarget((t) => (t ? { ...t, name, isNew: false } : t));
+    selectFile(kind, name); // a saved file is addressable — put it in the URL
   };
+
   const onDeleted = () => {
     setTarget(null);
+    setParams({ plugin }, { replace: true });
     refreshFiles(plugin);
   };
 
   return (
-    <>
-      <PageHeader
-        title="Schema Builder"
-        subtitle="Author tables and patches, then apply them with a migration."
-        actions={
-          plugin ? (
-            <Button variant="secondary" onClick={() => setPreview(true)}>
-              Preview migration
-            </Button>
-          ) : null
-        }
-      />
-
-      <div className="schema-toolbar">
-        <label className="schema-toolbar__label">Plugin</label>
-        <Select value={plugin} onChange={(e) => setPlugin(e.target.value)} style={{ width: 220 }}>
-          {plugins.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </Select>
-      </div>
-
-      <div className="schema-layout">
-        <aside className="schema-files card">
+    <div className="schema-shell">
+      <aside className="schema-files">
+        <div className="schema-files__plugin">
+          <label className="schema-files__label">Plugin</label>
+          <Select value={plugin} onChange={(e) => selectPlugin(e.target.value)}>
+            {plugins.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div className="schema-files__lists">
           <FileGroup
             title="Schemas"
             names={files.schemas}
-            activeName={target?.kind === "schema" ? target.name : null}
-            onOpen={(n) => openFile("schema", n)}
+            activeName={target?.kind === "schema" && !target.isNew ? target.name : null}
+            onOpen={(n) => selectFile("schema", n)}
             onNew={() => newFile("schema")}
             loading={loadingFiles}
           />
           <FileGroup
             title="Patches"
             names={files.patches}
-            activeName={target?.kind === "patch" ? target.name : null}
-            onOpen={(n) => openFile("patch", n)}
+            activeName={target?.kind === "patch" && !target.isNew ? target.name : null}
+            onOpen={(n) => selectFile("patch", n)}
             onNew={() => newFile("patch")}
             loading={loadingFiles}
           />
-        </aside>
+        </div>
+      </aside>
 
-        <section className="schema-main">
+      <section className="schema-work">
+        <div className="schema-work__inner">
+          <PageHeader
+            title="Schema Builder"
+            subtitle="Author tables and patches, then apply them with a migration."
+            actions={
+              plugin ? (
+                <Button variant="secondary" onClick={() => setPreview(true)}>
+                  Preview migration
+                </Button>
+              ) : null
+            }
+          />
+
           {target ? (
             <SchemaEditor
               key={target.openId}
@@ -177,11 +204,11 @@ export function SchemaBuilderPage() {
               />
             </div>
           )}
-        </section>
-      </div>
+        </div>
+      </section>
 
       {preview && <MigrationPreviewModal plugin={plugin} onClose={() => setPreview(false)} />}
-    </>
+    </div>
   );
 }
 

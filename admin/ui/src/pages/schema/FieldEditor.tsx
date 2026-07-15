@@ -138,7 +138,10 @@ function FieldConfig({
     const tableOptions: ComboOption[] = candidates.map((m) => ({
       value: m.name,
       label: m.name,
-      hint: [m.plugin, m.child ? "child" : m.system ? "system" : null].filter(Boolean).join(" · "),
+      // Plugin (plus any table trait) as the small eyebrow under the name.
+      sublabel: [m.plugin, m.child ? "child" : m.system ? "system" : null]
+        .filter(Boolean)
+        .join(" · "),
     }));
 
     return (

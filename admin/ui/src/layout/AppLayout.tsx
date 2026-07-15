@@ -58,6 +58,10 @@ export function AppLayout() {
   const title =
     Object.entries(TITLES).find(([path]) => location.pathname.startsWith(path))?.[1] ?? "Admin";
   const initials = (email ?? "?").slice(0, 2);
+  // The Schema Builder manages its own layout: its file list sits flush
+  // against the nav drawer as a second panel, so the page must not be
+  // padded or width-capped by the standard content wrapper.
+  const flush = location.pathname.startsWith("/schema");
 
   return (
     <div className="shell">
@@ -102,10 +106,14 @@ export function AppLayout() {
             </button>
           </div>
         </header>
-        <main className="content">
-          <div className="content__inner">
+        <main className={`content ${flush ? "content--flush" : ""}`}>
+          {flush ? (
             <Outlet />
-          </div>
+          ) : (
+            <div className="content__inner">
+              <Outlet />
+            </div>
+          )}
         </main>
       </div>
     </div>
