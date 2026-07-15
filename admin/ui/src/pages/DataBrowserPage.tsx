@@ -10,6 +10,7 @@ import { Loading, EmptyState, ErrorState } from "../components/States";
 import { IconPlus, IconRefresh } from "../layout/icons";
 import { RowEditorModal, TableFlags } from "./data/RowEditorModal";
 import { FilterBar, type Filters } from "./data/FilterBar";
+import { AuditHistoryModal } from "./data/AuditHistoryModal";
 import { formatCell, listColumns, PROTECTED_TABLES, shortId } from "./data/format";
 import "./data.css";
 
@@ -38,6 +39,7 @@ export function DataBrowserPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ id: string | null } | null>(null);
+  const [showAudit, setShowAudit] = useState(false);
 
   const readOnly = PROTECTED_TABLES.has(table);
 
@@ -136,6 +138,11 @@ export function DataBrowserPage() {
             <Button variant="secondary" size="sm" onClick={loadRows} disabled={!table}>
               <IconRefresh /> Refresh
             </Button>
+            {schema?.audit && (
+              <Button variant="secondary" size="sm" onClick={() => setShowAudit(true)}>
+                Audit history
+              </Button>
+            )}
             {!readOnly && (
               <Button variant="primary" size="sm" onClick={() => setEditing({ id: null })} disabled={!schema}>
                 <IconPlus /> New row
@@ -286,6 +293,10 @@ export function DataBrowserPage() {
             loadRows();
           }}
         />
+      )}
+
+      {showAudit && schema && (
+        <AuditHistoryModal plugin={schema.plugin} table={table} onClose={() => setShowAudit(false)} />
       )}
     </>
   );

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+from typing import Any
 
 # Must match authn/authn/__init__.py's KEY_PREFIX_LEN exactly — that's what
 # _resolve_api_key's own parsing (`prefix = raw[:KEY_PREFIX_LEN]`) expects
@@ -64,3 +65,15 @@ def new_access_key() -> tuple[str, str, str]:
 
 def has_roles_subset(candidate: list[str] | None, allowed: list[str] | None) -> bool:
     return set(candidate or []) <= set(allowed or [])
+
+
+def by_of(identity: Any) -> str | None:
+    """identity.user_id (authn/authn/__init__.py's Identity, a plain str)
+    straight through as arc.relay.save/delete's `by` — verified against a
+    real write that asyncpg's uuid codec accepts a well-formed UUID string
+    directly, no uuid.UUID(...) cast needed. Every whitelisted function
+    that wants created_by/updated_by actually populated must declare an
+    `identity` parameter (wants_identity, docs/arc.MD §3.11) and pass
+    `by=by_of(identity)` through to its arc.relay call — nothing does this
+    today, so every admin-driven write has always left them NULL."""
+    return identity.user_id if identity is not None else None

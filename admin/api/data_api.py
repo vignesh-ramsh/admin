@@ -16,8 +16,11 @@ from psqldb.model import SchemaError
 from psqldb.validation import ValidationError
 
 from admin._coerce import CoercionError, coerce_filters, coerce_row, throw_coercion
+from admin._security import by_of
 
-_PROTECTED_WRITE_TABLES = frozenset({"_users", "_roles", "_sessions", "_access_keys"})
+_PROTECTED_WRITE_TABLES = frozenset(
+    {"_users", "_roles", "_sessions", "_access_keys", "_trash", "_field_registry", "_patch_history"}
+)
 _READ_ERRORS = (SchemaError, ValidationError, arc.relay.QueryError)
 
 
@@ -37,6 +40,15 @@ def _require_not_protected(table: str) -> None:
         arc.relay.throw(
             f"'{table}' is managed through its own dedicated endpoints "
             f"(users/roles/sessions/access-keys) — not the generic data browser",
+            status=409, code="protected_table",
+        )
+    if table.startswith("_audit_"):
+        # Integrity bookkeeping (docs/arc.MD §3.9's audit trigger writes
+        # these), not application data — hand-editing a historical audit
+        # row defeats the point of it existing. Browsable, never editable,
+        # same posture as the protected tables above.
+        arc.relay.throw(
+            f"'{table}' is an audit trail, written only by its table's trigger — read-only here",
             status=409, code="protected_table",
         )
 
@@ -75,7 +87,7 @@ async def get_row(table: str, id: str) -> dict:
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
-async def save_row(table: str, data: dict) -> dict:
+async def save_row(table: str, data: dict, identity=None) -> dict:
     _require_not_protected(table)
     schema = _schema_or_throw(table)
     try:
@@ -85,16 +97,16 @@ async def save_row(table: str, data: dict) -> dict:
     except CoercionError as exc:
         throw_coercion(exc)
     try:
-        return await arc.relay.save(table, data)
+        return await arc.relay.save(table, data, by=by_of(identity))
     except _READ_ERRORS as exc:
         _friendly(exc)
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
-async def delete_row(table: str, id: str) -> dict:
+async def delete_row(table: str, id: str, identity=None) -> dict:
     _require_not_protected(table)
     try:
-        await arc.relay.delete(table, id)
+        await arc.relay.delete(table, id, by=by_of(identity))
     except _READ_ERRORS as exc:
         _friendly(exc)
     return {"ok": True}

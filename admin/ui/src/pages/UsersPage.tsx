@@ -10,6 +10,7 @@ import { Loading, EmptyState, ErrorState } from "../components/States";
 import { IconPlus, IconRefresh, IconSearch } from "../layout/icons";
 import { CreateUserModal } from "./users/CreateUserModal";
 import { UserDetailModal } from "./users/UserDetailModal";
+import { AuditHistoryModal } from "./data/AuditHistoryModal";
 import { formatWhen, isLocked, statusTone } from "./users/userUtils";
 import "./shared/shared.css";
 import "./users.css";
@@ -24,6 +25,7 @@ export function UsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState<User | null>(null);
+  const [showAudit, setShowAudit] = useState(false);
 
   const handleErr = useCallback(
     (err: unknown) => {
@@ -69,6 +71,9 @@ export function UsersPage() {
             <Button variant="secondary" size="sm" onClick={load}>
               <IconRefresh /> Refresh
             </Button>
+            <Button variant="secondary" size="sm" onClick={() => setShowAudit(true)}>
+              Audit history
+            </Button>
             <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
               <IconPlus /> New user
             </Button>
@@ -112,6 +117,7 @@ export function UsersPage() {
               <thead>
                 <tr>
                   <th>Email</th>
+                  <th style={{ width: 160 }}>Name / username</th>
                   <th style={{ width: 130 }}>Status</th>
                   <th>Roles</th>
                   <th style={{ width: 110 }}>Sessions</th>
@@ -123,6 +129,14 @@ export function UsersPage() {
                 {users.map((u) => (
                   <tr key={u.id} className="row-clickable" onClick={() => setSelected(u)}>
                     <td>{u.email}</td>
+                    <td>
+                      {u.full_name && <div>{u.full_name}</div>}
+                      {u.username ? (
+                        <div className="mono muted" style={{ fontSize: 12 }}>@{u.username}</div>
+                      ) : (
+                        !u.full_name && <span className="muted">—</span>
+                      )}
+                    </td>
                     <td>
                       <Badge tone={statusTone(u)} dot>
                         {isLocked(u) ? "Locked out" : u.status}
@@ -171,9 +185,14 @@ export function UsersPage() {
         <UserDetailModal
           user={selected}
           roles={roles}
+          users={users}
           onClose={() => setSelected(null)}
           onChanged={load}
         />
+      )}
+
+      {showAudit && (
+        <AuditHistoryModal plugin="authn" table="_users" onClose={() => setShowAudit(false)} />
       )}
     </>
   );

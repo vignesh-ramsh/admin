@@ -9,6 +9,8 @@ from datetime import datetime, timedelta, timezone
 
 import arc
 
+from admin._security import by_of
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -38,18 +40,18 @@ async def list_sessions(email: str | None = None) -> list[dict]:
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
-async def revoke_session(session_id: str) -> dict:
+async def revoke_session(session_id: str, identity=None) -> dict:
     row = await arc.relay.get("_sessions", session_id)
     if row is None:
         arc.relay.throw("no such session", status=404, code="not_found")
     if row["revoked_at"] is None:
-        await arc.relay.save("_sessions", {"id": row["id"], "revoked_at": _utcnow()})
+        await arc.relay.save("_sessions", {"id": row["id"], "revoked_at": _utcnow()}, by=by_of(identity))
         await arc.authn.invalidate_session_cache(row["token_hash"])
     return {"ok": True}
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
-async def clear_sessions(email: str | None = None, all_users: bool = False) -> dict:
+async def clear_sessions(email: str | None = None, all_users: bool = False, identity=None) -> dict:
     """Never runs unscoped — same rule `arc psqldb clear` and the CLI's own
     clear-sessions already enforce."""
     if not email and not all_users:
@@ -60,9 +62,10 @@ async def clear_sessions(email: str | None = None, all_users: bool = False) -> d
         if user is None:
             arc.relay.throw("no such user", status=404, code="not_found")
         filters["user"] = user["id"]
+    by = by_of(identity)
     rows = await arc.relay.list("_sessions", filters=filters, fields=["id", "token_hash"])
     for r in rows:
-        await arc.relay.save("_sessions", {"id": r["id"], "revoked_at": _utcnow()})
+        await arc.relay.save("_sessions", {"id": r["id"], "revoked_at": _utcnow()}, by=by)
         await arc.authn.invalidate_session_cache(r["token_hash"])
     return {"ok": True, "revoked": len(rows)}
 

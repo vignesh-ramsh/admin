@@ -23,6 +23,8 @@ export function CreateUserModal({
 }) {
   const toast = useToast();
   const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [generate, setGenerate] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
@@ -44,6 +46,8 @@ export function CreateUserModal({
     try {
       const res = await call<CreateResult>("create_user", {
         email: email.trim(),
+        full_name: fullName.trim() || null,
+        username: username.trim() || null,
         password: generate ? null : password,
         roles: selected,
         superuser,
@@ -134,6 +138,17 @@ export function CreateUserModal({
             onChange={(e) => setEmail(e.target.value)}
             autoFocus
           />
+        </Field>
+
+        <Field label="Full name" hint="Optional.">
+          <Input placeholder="Jane Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+        </Field>
+
+        <Field
+          label="Username"
+          hint="Optional — can also be used to log in. 'admin'/'administrator'/'guest' are reserved."
+        >
+          <Input placeholder="Optional" value={username} onChange={(e) => setUsername(e.target.value)} />
         </Field>
 
         <label className="check-line">

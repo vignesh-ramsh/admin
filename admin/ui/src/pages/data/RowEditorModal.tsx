@@ -9,6 +9,7 @@ import { Loading } from "../../components/States";
 import { useToast } from "../../components/Toast";
 import { FieldInput } from "./FieldInput";
 import { editableFields, formatCell, toInputValue } from "./format";
+import { useUserDirectory } from "../shared/useUserDirectory";
 import { validateField, validateValues, type Errors } from "./validate";
 
 type Values = Record<string, string | boolean>;
@@ -25,6 +26,7 @@ interface Props {
 export function RowEditorModal({ table, schema, rowId, readOnly, onClose, onSaved }: Props) {
   const toast = useToast();
   const fields = editableFields(schema);
+  const dir = useUserDirectory();
   const [values, setValues] = useState<Values>({});
   const [row, setRow] = useState<Row | null>(null);
   const [loading, setLoading] = useState(!!rowId);
@@ -164,6 +166,12 @@ export function RowEditorModal({ table, schema, rowId, readOnly, onClose, onSave
                 <MetaItem label="created" value={formatCell(row.created_at)} />
                 <MetaItem label="updated" value={formatCell(row.updated_at)} />
                 <MetaItem label="state" value={String(row._state ?? "0")} />
+                {row.created_by != null && (
+                  <MetaItem label="created by" value={dir.emailFor(String(row.created_by))} />
+                )}
+                {row.updated_by != null && (
+                  <MetaItem label="updated by" value={dir.emailFor(String(row.updated_by))} />
+                )}
               </div>
             </div>
           )}

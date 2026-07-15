@@ -9,8 +9,9 @@ able to carry the full-role bypass a session can."""
 from datetime import datetime, timedelta, timezone
 
 import arc
+from psqldb.validation import ValidationError
 
-from admin._security import has_roles_subset, new_access_key
+from admin._security import by_of, has_roles_subset, new_access_key
 
 
 def _utcnow() -> datetime:
@@ -47,6 +48,7 @@ async def create_access_key(
     scopes: list[str] | None = None,
     label: str | None = None,
     expires_in_days: int | None = None,
+    identity=None,
 ) -> dict:
     user = await arc.relay.get("_users", {"email": email.strip().lower()})
     if user is None:
@@ -60,30 +62,37 @@ async def create_access_key(
 
     raw_key, prefix, key_hash = new_access_key()
     expires_at = _utcnow() + timedelta(days=expires_in_days) if expires_in_days else None
-    row = await arc.relay.save(
-        "_access_keys",
-        {
-            "user": user["id"], "key_prefix": prefix, "key_hash": key_hash,
-            "label": label, "scopes": scopes, "expires_at": expires_at,
-        },
-    )
+    try:
+        row = await arc.relay.save(
+            "_access_keys",
+            {
+                "user": user["id"], "key_prefix": prefix, "key_hash": key_hash,
+                "label": label, "scopes": scopes, "expires_at": expires_at,
+            },
+            by=by_of(identity),
+        )
+    except ValidationError as exc:
+        # key_prefix/key_hash are both unique, generated from 32 random
+        # bytes — a collision is astronomically unlikely, but if it ever
+        # happens the caller should get a clean "try again", not a raw 500.
+        arc.relay.throw(str(exc), status=409, code="key_collision")
     # Shown exactly once — only the hash is ever persisted or logged again.
     return {"key": raw_key, "key_prefix": prefix, "id": str(row["id"])}
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
-async def revoke_access_key(key_prefix: str) -> dict:
+async def revoke_access_key(key_prefix: str, identity=None) -> dict:
     row = await arc.relay.get("_access_keys", {"key_prefix": key_prefix})
     if row is None:
         arc.relay.throw("no such access key", status=404, code="not_found")
     if row["revoked_at"] is None:
-        await arc.relay.save("_access_keys", {"id": row["id"], "revoked_at": _utcnow()})
+        await arc.relay.save("_access_keys", {"id": row["id"], "revoked_at": _utcnow()}, by=by_of(identity))
         await arc.authn.invalidate_access_key_cache(row["key_prefix"])
     return {"ok": True}
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
-async def clear_access_keys(email: str | None = None, all_users: bool = False) -> dict:
+async def clear_access_keys(email: str | None = None, all_users: bool = False, identity=None) -> dict:
     if not email and not all_users:
         arc.relay.throw("must specify either email or all_users=true", code="scope_required")
     filters = {"revoked_at": {"is_null": True}}
@@ -92,9 +101,10 @@ async def clear_access_keys(email: str | None = None, all_users: bool = False) -
         if user is None:
             arc.relay.throw("no such user", status=404, code="not_found")
         filters["user"] = user["id"]
+    by = by_of(identity)
     rows = await arc.relay.list("_access_keys", filters=filters, fields=["id", "key_prefix"])
     for r in rows:
-        await arc.relay.save("_access_keys", {"id": r["id"], "revoked_at": _utcnow()})
+        await arc.relay.save("_access_keys", {"id": r["id"], "revoked_at": _utcnow()}, by=by)
         await arc.authn.invalidate_access_key_cache(r["key_prefix"])
     return {"ok": True, "revoked": len(rows)}
 

@@ -14,6 +14,7 @@ import { ClearScopeModal } from "./shared/ClearScopeModal";
 import { PruneModal } from "./shared/PruneModal";
 import { lifecycleOf, lifecycleTone, lifecycleLabel } from "./shared/lifecycle";
 import { CreateAccessKeyModal } from "./access-keys/CreateAccessKeyModal";
+import { AuditHistoryModal } from "./data/AuditHistoryModal";
 import { formatWhen } from "./users/userUtils";
 import "./shared/shared.css";
 import "./access-keys.css";
@@ -31,6 +32,7 @@ export function AccessKeysPage() {
   const [creating, setCreating] = useState(false);
   const [showClear, setShowClear] = useState(false);
   const [showPrune, setShowPrune] = useState(false);
+  const [showAudit, setShowAudit] = useState(false);
 
   const handleErr = useCallback(
     (err: unknown) => {
@@ -79,6 +81,9 @@ export function AccessKeysPage() {
           <>
             <Button variant="secondary" size="sm" onClick={load}>
               <IconRefresh /> Refresh
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setShowAudit(true)}>
+              Audit history
             </Button>
             <Button variant="secondary" size="sm" onClick={() => setShowPrune(true)}>
               Prune…
@@ -212,6 +217,10 @@ export function AccessKeysPage() {
             load();
           }}
         />
+      )}
+
+      {showAudit && (
+        <AuditHistoryModal plugin="authn" table="_access_keys" onClose={() => setShowAudit(false)} />
       )}
     </>
   );

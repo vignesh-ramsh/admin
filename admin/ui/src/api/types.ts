@@ -43,11 +43,16 @@ export interface Role {
 export interface User {
   id: string;
   email: string;
+  username: string | null;
+  full_name: string | null;
   status: "Active" | "Inactive" | "Locked";
   has_roles: string[] | null;
   max_sessions: number | null;
+  allowed_ips: string[] | null;
   locked_until: string | null;
   last_login_at: string | null;
+  created_by: string | null;
+  updated_by: string | null;
 }
 
 export interface Session {
@@ -120,6 +125,15 @@ export interface TableMeta {
   system: boolean;
   child: boolean;
   audit: boolean;
+}
+
+export interface AuditEntry {
+  id: string;
+  table: string;
+  row_id: string;
+  changes: { before: Record<string, unknown> | null; after: Record<string, unknown> | null };
+  changed_by: string | null;
+  changed_at: string;
 }
 
 export interface MigrationOp {
