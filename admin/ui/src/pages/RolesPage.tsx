@@ -9,6 +9,7 @@ import { Loading, EmptyState, ErrorState } from "../components/States";
 import { IconPlus, IconRefresh } from "../layout/icons";
 import { CreateRoleModal } from "./roles/CreateRoleModal";
 import { DeleteRoleModal } from "./roles/DeleteRoleModal";
+import "./shared/shared.css";
 import "./roles.css";
 
 export function RolesPage() {

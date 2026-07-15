@@ -11,6 +11,7 @@ import { IconPlus, IconRefresh, IconSearch } from "../layout/icons";
 import { CreateUserModal } from "./users/CreateUserModal";
 import { UserDetailModal } from "./users/UserDetailModal";
 import { formatWhen, isLocked, statusTone } from "./users/userUtils";
+import "./shared/shared.css";
 import "./users.css";
 
 export function UsersPage() {

@@ -11,6 +11,7 @@ import { IconPlus, IconSchema } from "../layout/icons";
 import { SchemaEditor, type EditorTarget } from "./schema/SchemaEditor";
 import { MigrationPreviewModal } from "./schema/MigrationPreviewModal";
 import { clearSchemaCache } from "./schema/useTargetFields";
+import "./shared/shared.css";
 import "./schema.css";
 
 const SURFACE = "schema_builder";
