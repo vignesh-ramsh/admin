@@ -54,7 +54,6 @@ SCHEMA_BUILDER_EXCLUDED_PLUGINS = frozenset(
         "gateway",
         "redix",
         "relay",
-        "authn",
         "psqldb",
     }
 )
