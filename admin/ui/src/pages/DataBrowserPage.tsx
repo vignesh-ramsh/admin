@@ -11,6 +11,7 @@ import { IconPlus, IconRefresh } from "../layout/icons";
 import { RowEditorModal, TableFlags } from "./data/RowEditorModal";
 import { FilterBar, type Filters } from "./data/FilterBar";
 import { formatCell, listColumns, PROTECTED_TABLES, shortId } from "./data/format";
+import "./shared/shared.css";
 import "./data.css";
 
 const SURFACE = "data_browser";

@@ -9,6 +9,8 @@ import { UsersPage } from "./pages/UsersPage";
 import { RolesPage } from "./pages/RolesPage";
 import { SessionsPage } from "./pages/SessionsPage";
 import { AccessKeysPage } from "./pages/AccessKeysPage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { JobsPage } from "./pages/JobsPage";
 
 export default function App() {
   const { token } = useAuth();
@@ -32,6 +34,8 @@ export default function App() {
         <Route path="/roles" element={<RolesPage />} />
         <Route path="/sessions" element={<SessionsPage />} />
         <Route path="/access-keys" element={<AccessKeysPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/jobs" element={<JobsPage />} />
         <Route path="*" element={<Navigate to="/health" replace />} />
       </Route>
     </Routes>

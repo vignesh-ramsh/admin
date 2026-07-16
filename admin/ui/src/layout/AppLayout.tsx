@@ -9,6 +9,8 @@ import {
   IconSessions,
   IconKeys,
   IconSchema,
+  IconSettings,
+  IconJobs,
   IconLogout,
 } from "./icons";
 import "./layout.css";
@@ -40,6 +42,13 @@ const NAV: { section: string; items: NavEntry[] }[] = [
       { to: "/access-keys", label: "Access Keys", icon: IconKeys },
     ],
   },
+  {
+    section: "System",
+    items: [
+      { to: "/jobs", label: "Jobs", icon: IconJobs },
+      { to: "/settings", label: "Settings & Secrets", icon: IconSettings },
+    ],
+  },
 ];
 
 const TITLES: Record<string, string> = {
@@ -50,6 +59,8 @@ const TITLES: Record<string, string> = {
   "/roles": "Roles",
   "/sessions": "Sessions",
   "/access-keys": "Access Keys",
+  "/settings": "Settings & Secrets",
+  "/jobs": "Jobs",
 };
 
 export function AppLayout() {

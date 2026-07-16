@@ -1,39 +1,12 @@
-/* ---- Toolbar ---- */
+/* ---- Toolbar ----
+   .search/.search__input moved to shared/shared.css (SettingsPage needs
+   the identical thing) — kept here only as .users-toolbar, this page's
+   own layout wrapper. */
 .users-toolbar {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 16px;
-}
-.search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 36px;
-  padding: 0 11px;
-  background: var(--surface);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  flex: 1;
-  max-width: 340px;
-  transition: border-color 0.12s, box-shadow 0.12s;
-}
-.search:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-.search__input {
-  flex: 1;
-  border: none;
-  outline: none;
-  background: transparent;
-  font-size: 13.5px;
-  font-family: inherit;
-  color: var(--text);
-}
-.search__input::placeholder {
-  color: var(--text-muted);
 }
 
 /* ---- List ---- */

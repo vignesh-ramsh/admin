@@ -150,3 +150,37 @@ export interface MigrationPlan {
   ops: MigrationOp[];
   warnings: string[];
 }
+
+/** admin.list_settings() — value is always null for a "secret" row; a
+ *  real value is only ever fetched on demand via admin.reveal_secret(). */
+export interface SettingEntry {
+  key: string;
+  kind: "setting" | "secret";
+  value: string | null;
+}
+
+/** admin.list_scheduled_jobs() — live config (arc.lineup.scheduled_tasks())
+ *  paired with the most recent Scheduler-triggered row from _job_log, if any. */
+export interface ScheduledJob {
+  task_name: string;
+  queue: string;
+  cron: string;
+  last_run_at: string | null;
+  last_status: "success" | "failed" | null;
+}
+
+/** admin.list_job_log() — one row per execution, regardless of whether it
+ *  ran via relay's in-process fallback or a real lineup worker/scheduler. */
+export interface JobLogEntry {
+  id: string;
+  task_name: string;
+  queue: string;
+  executor: "relay" | "lineup";
+  job_type: "Scheduler" | "Task";
+  queued_by: string | null;
+  status: "success" | "failed";
+  error: string | null;
+  started_at: string;
+  finished_at: string;
+  duration_ms: number;
+}

@@ -52,15 +52,7 @@
   color: var(--text-secondary);
 }
 
-/* ---- Pager ---- */
-.pager {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
-}
+/* ---- Pager: moved to shared/shared.css (JobsPage needs it too) ---- */
 
 /* ---- Row editor ---- */
 .form-grid {

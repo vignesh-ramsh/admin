@@ -399,6 +399,36 @@
   }
 }
 
+/* ---- Tabs ---- */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+.tabs__item {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 10px 4px;
+  margin-right: 20px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+.tabs__item:hover {
+  color: var(--text-secondary);
+}
+.tabs__item--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
 /* ---- Misc utility ---- */
 .row-gap {
   display: flex;
@@ -424,4 +454,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }

@@ -25,7 +25,9 @@ SCHEMA_BUILDER = "schema_builder"
 
 
 # Hidden from the Data Browser's plugin picker (and its tables refused).
-#   admin/gateway/redix/relay — own no tables at all.
+#   admin/gateway/redix       — own no tables at all.
+#   relay                     — its own _job_log (§3.11/§3.15) has a dedicated
+#                               Jobs page instead of a raw row editor.
 #   authn                     — _users/_roles/_sessions/_access_keys have real
 #                               invariants; the Users/Roles/Sessions/Access Keys
 #                               screens own those instead of a raw row editor.
