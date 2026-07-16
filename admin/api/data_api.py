@@ -110,3 +110,13 @@ async def delete_row(table: str, id: str, identity=None) -> dict:
     except _READ_ERRORS as exc:
         _friendly(exc)
     return {"ok": True}
+
+
+@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+async def delete_rows(table: str, ids: list[str], identity=None) -> dict:
+    _require_not_protected(table)
+    try:
+        await arc.relay.delete_many(table, ids, by=by_of(identity))
+    except _READ_ERRORS as exc:
+        _friendly(exc)
+    return {"ok": True, "count": len(ids)}

@@ -12,12 +12,20 @@ const OPERATORS = [
   { value: "ne", label: "not equals" },
   { value: "contains", label: "contains" },
   { value: "startswith", label: "starts with" },
+  { value: "endswith", label: "ends with" },
+  { value: "like", label: "like (% _ wildcards)" },
+  { value: "ilike", label: "ilike (case-insensitive)" },
   { value: "gt", label: ">" },
   { value: "gte", label: "≥" },
   { value: "lt", label: "<" },
   { value: "lte", label: "≤" },
+  { value: "in", label: "in (comma-separated)" },
+  { value: "not_in", label: "not in (comma-separated)" },
+  { value: "range", label: "range (between)" },
   { value: "is_null", label: "is empty" },
 ];
+
+const LIST_OPS = new Set(["in", "not_in"]);
 
 export type Filters = Record<string, unknown> | null;
 
@@ -35,11 +43,29 @@ export function FilterBar({
   const [field, setField] = useState(columns[0]?.name ?? "");
   const [op, setOp] = useState("eq");
   const [value, setValue] = useState("");
+  const [rangeMax, setRangeMax] = useState("");
 
   const apply = () => {
     if (!field) return;
     if (op === "is_null") {
       onApply({ [field]: { is_null: true } });
+      return;
+    }
+    if (op === "range") {
+      if (value === "" || rangeMax === "") {
+        onApply(null);
+        return;
+      }
+      onApply({ [field]: { range: [value, rangeMax] } });
+      return;
+    }
+    if (LIST_OPS.has(op)) {
+      const list = value.split(",").map((s) => s.trim()).filter(Boolean);
+      if (list.length === 0) {
+        onApply(null);
+        return;
+      }
+      onApply({ [field]: { [op]: list } });
       return;
     }
     if (value === "") {
@@ -51,6 +77,7 @@ export function FilterBar({
 
   const clear = () => {
     setValue("");
+    setRangeMax("");
     onApply(null);
   };
 
@@ -63,22 +90,43 @@ export function FilterBar({
           </option>
         ))}
       </select>
-      <select className="select" style={{ width: 140 }} value={op} onChange={(e) => setOp(e.target.value)}>
+      <select className="select" style={{ width: 190 }} value={op} onChange={(e) => setOp(e.target.value)}>
         {OPERATORS.map((o) => (
           <option key={o.value} value={o.value}>
             {o.label}
           </option>
         ))}
       </select>
-      <input
-        className="input"
-        style={{ flex: 1, minWidth: 120 }}
-        placeholder={op === "is_null" ? "—" : "value"}
-        value={value}
-        disabled={op === "is_null"}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && apply()}
-      />
+      {op === "range" ? (
+        <>
+          <input
+            className="input"
+            style={{ width: 110 }}
+            placeholder="min"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && apply()}
+          />
+          <input
+            className="input"
+            style={{ width: 110 }}
+            placeholder="max"
+            value={rangeMax}
+            onChange={(e) => setRangeMax(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && apply()}
+          />
+        </>
+      ) : (
+        <input
+          className="input"
+          style={{ flex: 1, minWidth: 120 }}
+          placeholder={op === "is_null" ? "—" : LIST_OPS.has(op) ? "value1, value2, …" : "value"}
+          value={value}
+          disabled={op === "is_null"}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && apply()}
+        />
+      )}
       <Button variant="secondary" size="sm" onClick={apply}>
         <IconSearch /> Apply
       </Button>

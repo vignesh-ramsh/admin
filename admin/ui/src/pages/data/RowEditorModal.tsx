@@ -147,6 +147,7 @@ export function RowEditorModal({ table, schema, rowId, readOnly, onClose, onSave
                   <FieldInput
                     field={f}
                     value={values[f.name] ?? ""}
+                    parentTable={schema.parent_table}
                     onChange={(v) => {
                       setValues((prev) => ({ ...prev, [f.name]: v }));
                       setErrors((prev) => {

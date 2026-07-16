@@ -8,6 +8,21 @@ from admin._exclusions import filter_plugins
 from admin._paths import require_known_plugin
 
 
+def _parent_tables_by_stem() -> dict[str, str]:
+    """A child schema never declares its own parent — only the parent's
+    TABLE-typed field names the child (via `target` = the child's file
+    stem). So for every child table, its parent is resolved by scanning
+    every OTHER schema's fields for a TABLE field whose target matches
+    that stem. Shared by list_table_meta and get_table_schema so both
+    surfaces agree."""
+    by_stem: dict[str, str] = {}
+    for s in arc.psqldb.schemas():
+        for f in s.fields:
+            if f.type == "TABLE" and f.target:
+                by_stem[f.target] = s.table
+    return by_stem
+
+
 def _field_to_dict(f) -> dict:
     return {
         "id": f.id,
@@ -53,6 +68,9 @@ async def list_table_meta(surface: str | None = None) -> list[dict]:
     migration hasn't run yet — and _field_registry only ever knows the
     physical name, never the stem this needs.
     """
+    schemas = list(arc.psqldb.schemas())
+    parent_by_stem = _parent_tables_by_stem()
+
     return [
         {
             "name": s.source_path.stem,
@@ -61,8 +79,9 @@ async def list_table_meta(surface: str | None = None) -> list[dict]:
             "system": s.system,
             "child": s.child,
             "audit": s.audit,
+            "parent_table": parent_by_stem.get(s.source_path.stem) if s.child else None,
         }
-        for s in arc.psqldb.schemas()
+        for s in schemas
         if s.plugin not in _hidden(surface)
     ]
 
@@ -93,12 +112,16 @@ async def get_table_schema(table: str) -> dict:
         schema = arc.psqldb.schema(table)
     except SchemaError as exc:
         arc.relay.throw(str(exc), status=404, code="unknown_table")
+    parent_table = (
+        _parent_tables_by_stem().get(schema.source_path.stem) if schema.child else None
+    )
     return {
         "table": schema.table,
         "plugin": schema.plugin,
         "system": schema.system,
         "audit": schema.audit,
         "child": schema.child,
+        "parent_table": parent_table,
         "fields": [_field_to_dict(f) for f in schema.fields],
         "system_fields": [_field_to_dict(f) for f in schema.system_fields],
         "indexes": schema.indexes,

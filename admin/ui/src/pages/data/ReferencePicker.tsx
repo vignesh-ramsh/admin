@@ -29,23 +29,37 @@ interface Props {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  /** Overrides field.target's stem->physical resolution with an already-
+   *  known physical table name. Used for a child table's `parent` field
+   *  (type REFERENCE_UUID): psqldb fills that field's FK target in at
+   *  migration/DDL time and never writes it back to the client-visible
+   *  Field, so field.target is always null there — the caller resolves it
+   *  instead via TableMeta/TableSchema's `parent_table` and passes it in. */
+  targetTable?: string | null;
 }
 
-export function ReferencePicker({ field, value, onChange, disabled }: Props) {
+export function ReferencePicker({ field, value, onChange, disabled, targetTable }: Props) {
   const [schema, setSchema] = useState<TableSchema | null>(null);
-  // The physical table behind field.target's stem — null until resolved.
+  // The physical table this picker searches — null until resolved.
   const [target, setTarget] = useState<string | null>(null);
   const stem = field.target;
 
   useEffect(() => {
-    if (!stem) return;
     let cancelled = false;
-    loadTableMeta()
-      .then((meta) => {
+    const resolve = targetTable
+      ? Promise.resolve(targetTable)
+      : stem
+        ? loadTableMeta().then(
+            (meta) =>
+              // Fall back to the stem itself: for a system table the stem
+              // and the physical name are identical (e.g. "_users").
+              meta.find((m) => m.name === stem)?.table ?? stem
+          )
+        : null;
+    if (!resolve) return;
+    resolve
+      .then((physical) => {
         if (cancelled) return;
-        // Fall back to the stem itself: for a system table the stem and the
-        // physical name are identical (e.g. "_users").
-        const physical = meta.find((m) => m.name === stem)?.table ?? stem;
         setTarget(physical);
         return call<TableSchema>("get_table_schema", { table: physical });
       })
@@ -58,13 +72,41 @@ export function ReferencePicker({ field, value, onChange, disabled }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [stem]);
+  }, [stem, targetTable]);
 
   // The column to search and display against.
   const labelField =
     field.target_field ||
     schema?.fields.find((f) => f.unique && f.is_column)?.name ||
     "id";
+
+  // When target_field is set, the stored value IS the natural key already
+  // (human-readable) — nothing to resolve. Otherwise the stored value is
+  // the target row's raw `id`, which is meaningless to show as-is; look up
+  // that one row so the closed input can show its labelField instead of a
+  // bare UUID. Without this, an already-set reference only ever showed its
+  // real label once the dropdown was reopened and the row happened to
+  // surface in the unfiltered/searched list.
+  const [resolvedLabel, setResolvedLabel] = useState<string | null>(null);
+  useEffect(() => {
+    if (!value || !target || field.target_field) {
+      setResolvedLabel(null);
+      return;
+    }
+    let cancelled = false;
+    call<Row[]>("list_rows", { table: target, filters: { id: { eq: value } }, limit: 1 })
+      .then((rows) => {
+        if (cancelled) return;
+        const label = rows[0]?.[labelField];
+        setResolvedLabel(label != null ? String(label) : null);
+      })
+      .catch(() => {
+        if (!cancelled) setResolvedLabel(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [value, target, labelField, field.target_field]);
 
   const search = useCallback(
     async (query: string): Promise<ComboOption[]> => {
@@ -105,14 +147,16 @@ export function ReferencePicker({ field, value, onChange, disabled }: Props) {
     [target, labelField, field.target_field, schema]
   );
 
+  const label = stem ?? target ?? "target";
   return (
     <Combobox
       value={value}
+      displayValue={resolvedLabel ?? undefined}
       onChange={onChange}
       onSearch={search}
-      disabled={disabled || !stem}
-      placeholder={stem ? `Search ${stem}…` : "no target table"}
-      emptyText={`No matching rows in ${stem}`}
+      disabled={disabled || (!stem && !targetTable)}
+      placeholder={stem || targetTable ? `Search ${label}…` : "no target table"}
+      emptyText={`No matching rows in ${label}`}
     />
   );
 }

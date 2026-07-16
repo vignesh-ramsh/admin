@@ -17,6 +17,22 @@
   color: var(--text-secondary);
 }
 
+/* ---- Bulk selection bar ---- */
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+.bulk-bar > span:first-child {
+  color: var(--text-secondary);
+  margin-right: auto;
+}
+
 /* ---- Filter bar ---- */
 .filterbar {
   display: flex;

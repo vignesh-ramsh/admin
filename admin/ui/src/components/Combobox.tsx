@@ -33,6 +33,9 @@ interface Props {
   placeholder?: string;
   emptyText?: string;
   disabled?: boolean;
+  /** Closed-state text to show instead of the raw `value` — for callers
+   *  whose stored value (e.g. a UUID) isn't human-readable on its own. */
+  displayValue?: string;
 }
 
 const MENU_MAX_H = 280;
@@ -52,6 +55,7 @@ export function Combobox({
   placeholder,
   emptyText = "No matches",
   disabled,
+  displayValue,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -218,7 +222,7 @@ export function Combobox({
       <input
         ref={inputRef}
         className="input combo__input"
-        value={open ? query : value}
+        value={open ? query : (displayValue ?? value)}
         placeholder={placeholder}
         disabled={disabled}
         onChange={(e) => {

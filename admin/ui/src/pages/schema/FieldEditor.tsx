@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { SchemaField, TableMeta } from "../../api/types";
 import { Button } from "../../components/Button";
 import { Combobox, type ComboOption } from "../../components/Combobox";
@@ -163,21 +164,7 @@ function FieldConfig({
   }
 
   if (usesOptions(t)) {
-    return (
-      <input
-        className="input"
-        placeholder="option1, option2, …"
-        value={(field.options ?? []).join(", ")}
-        onChange={(e) =>
-          onChange({
-            options: e.target.value
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean),
-          })
-        }
-      />
-    );
+    return <OptionsInput field={field} onChange={onChange} />;
   }
 
   if (usesDecimal(t)) {
@@ -227,6 +214,44 @@ function FieldConfig({
       placeholder="default (optional)"
       value={field.default != null ? String(field.default) : ""}
       onChange={(e) => onChange({ default: e.target.value || undefined })}
+    />
+  );
+}
+
+/* A SELECT/etc. field's `options` array, edited as one comma-separated
+   text input. The input's own displayed value must be its OWN local
+   typed text, never re-derived from the parsed-then-rejoined `options`
+   array — binding value={(field.options ?? []).join(", ")} meant every
+   keystroke immediately round-tripped through split(",") -> filter
+   (Boolean) -> join(", "), which silently drops a just-typed trailing
+   comma (it parses to a trailing empty segment, filtered out) and snaps
+   the input back to its pre-comma text on the very next render. Visibly:
+   typing "," appeared to do nothing at all. Local state breaks that
+   loop — the field only ever sees the fully-parsed array via onChange,
+   never bounces back into what's on screen. */
+function OptionsInput({
+  field,
+  onChange,
+}: {
+  field: SchemaField;
+  onChange: (patch: Partial<SchemaField>) => void;
+}) {
+  const [text, setText] = useState((field.options ?? []).join(", "));
+
+  return (
+    <input
+      className="input"
+      placeholder="option1, option2, …"
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        onChange({
+          options: e.target.value
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        });
+      }}
     />
   );
 }

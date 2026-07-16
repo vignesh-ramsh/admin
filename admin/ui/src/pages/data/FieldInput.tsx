@@ -14,19 +14,28 @@ interface Props {
   value: string | boolean;
   onChange: (value: string | boolean) => void;
   disabled?: boolean;
+  /** The current table's parent table (TableSchema.parent_table), needed
+   *  only for a REFERENCE_UUID field — that's the child's auto-injected
+   *  `parent` system field, whose FK target psqldb fills in at migration
+   *  time and never exposes on the Field itself. */
+  parentTable?: string | null;
 }
 
-export function FieldInput({ field, value, onChange, disabled }: Props) {
+export function FieldInput({ field, value, onChange, disabled, parentTable }: Props) {
   const t = field.type;
   const common = { disabled, className: "input" as const };
 
-  if (t === "REFERENCE") {
+  // REFERENCE_UUID is a child table's `parent` system field — same picker
+  // as REFERENCE, just resolved via parentTable instead of field.target
+  // (which is always null on this field type).
+  if (t === "REFERENCE" || t === "REFERENCE_UUID") {
     return (
       <ReferencePicker
         field={field}
         value={String(value ?? "")}
         onChange={onChange}
         disabled={disabled}
+        targetTable={t === "REFERENCE_UUID" ? parentTable : undefined}
       />
     );
   }

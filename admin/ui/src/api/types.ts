@@ -27,6 +27,9 @@ export interface TableSchema {
   system: boolean;
   audit: boolean;
   child: boolean;
+  /** Physical table name of the parent that owns this child table, or null
+   *  when `child` is false (or, in principle, an orphaned child schema). */
+  parent_table: string | null;
   fields: FieldMeta[];
   system_fields: FieldMeta[];
   indexes: Array<Record<string, unknown>>;
@@ -125,6 +128,9 @@ export interface TableMeta {
   system: boolean;
   child: boolean;
   audit: boolean;
+  /** For a child table, the physical table name of the parent that owns it
+   *  (resolved server-side from the parent's TABLE field). Null otherwise. */
+  parent_table: string | null;
 }
 
 export interface AuditEntry {
