@@ -2,6 +2,8 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { AppLayout } from "./layout/AppLayout";
 import { LoginPage } from "./pages/LoginPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { HealthPage } from "./pages/HealthPage";
 import { SchemaBuilderPage } from "./pages/SchemaBuilderPage";
 import { DataBrowserPage } from "./pages/DataBrowserPage";
@@ -18,6 +20,8 @@ export default function App() {
   if (!token) {
     return (
       <Routes>
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="*" element={<LoginPage />} />
       </Routes>
     );

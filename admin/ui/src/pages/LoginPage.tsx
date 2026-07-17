@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Button } from "../components/Button";
 import { Field, Input } from "../components/Field";
@@ -71,6 +72,9 @@ export function LoginPage() {
           <Button type="submit" variant="primary" block loading={busy}>
             Sign in
           </Button>
+          <Link className="login__link" to="/forgot-password">
+            Forgot password?
+          </Link>
         </form>
       </div>
       <div className="login__footnote">ARC — capability-based platform</div>

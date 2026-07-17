@@ -23,6 +23,8 @@ export default defineConfig({
       "/api": apiTarget,
       "/login": apiTarget,
       "/logout": apiTarget,
+      "/forgot-password": apiTarget,
+      "/reset-password": apiTarget,
     },
   },
 });

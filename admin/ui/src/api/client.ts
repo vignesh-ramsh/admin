@@ -75,6 +75,34 @@ export async function login(
   return result;
 }
 
+/** POST /forgot-password — same-origin custom path, not the /api/method/
+ *  admin.* RPC convention, matching login()/logout() above (authn's own
+ *  whitelisted functions use explicit path= overrides, not the auto-derived
+ *  one). Always resolves with the same generic message on the server side
+ *  regardless of whether the email has an account — this call surfaces
+ *  that message as-is, it doesn't add its own interpretation. */
+export async function requestPasswordReset(email: string): Promise<{ ok: boolean; message: string }> {
+  const res = await fetch("/forgot-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) throw await parseError(res);
+  return res.json();
+}
+
+/** POST /reset-password — consumes a token minted by requestPasswordReset's
+ *  emailed link. */
+export async function resetPassword(token: string, newPassword: string): Promise<{ ok: boolean }> {
+  const res = await fetch("/reset-password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+  if (!res.ok) throw await parseError(res);
+  return res.json();
+}
+
 export async function logout(): Promise<void> {
   const token = getToken();
   clearToken();
