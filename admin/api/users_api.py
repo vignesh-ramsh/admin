@@ -18,6 +18,7 @@ migrated with the created_by/updated_by columns added in this same
 change (schemas/_users.json etc.) — every write here will raise a raw
 UndefinedColumnError until `arc psqldb migrate -p authn` has been run."""
 
+import asyncio
 import ipaddress
 import secrets
 from datetime import datetime, timezone
@@ -112,16 +113,22 @@ async def create_user(
 
     raw_password = password or secrets.token_urlsafe(16)
     try:
-        check_password_strength(raw_password, min_score=arc.authn.min_password_score(), user_inputs=[email])
+        # to_thread: zxcvbn scoring and (below) Argon2 hashing are real CPU
+        # — running them on the event loop stalls every in-flight request.
+        await asyncio.to_thread(
+            check_password_strength, raw_password,
+            min_score=arc.authn.min_password_score(), user_inputs=[email],
+        )
     except ValueError as exc:
         arc.relay.throw(str(exc), status=400, code="weak_password")
 
+    password_hash = await asyncio.to_thread(hash_password, raw_password)
     try:
         user = await arc.relay.save(
             "_users",
             {
                 "email": email,
-                "password_hash": hash_password(raw_password),
+                "password_hash": password_hash,
                 "status": "Active",
                 "has_roles": roles,
                 "max_sessions": max_sessions,
@@ -242,14 +249,18 @@ async def set_password(email: str, password: str, identity=None) -> dict:
     if user is None:
         arc.relay.throw("no such user", status=404, code="not_found")
     try:
-        check_password_strength(password, min_score=arc.authn.min_password_score(), user_inputs=[email])
+        await asyncio.to_thread(
+            check_password_strength, password,
+            min_score=arc.authn.min_password_score(), user_inputs=[email],
+        )
     except ValueError as exc:
         arc.relay.throw(str(exc), status=400, code="weak_password")
 
     by = by_of(identity)
+    password_hash = await asyncio.to_thread(hash_password, password)
     await arc.relay.save(
         "_users",
-        {"id": user["id"], "password_hash": hash_password(password), "failed_login_count": 0, "locked_until": None},
+        {"id": user["id"], "password_hash": password_hash, "failed_login_count": 0, "locked_until": None},
         by=by,
     )
 

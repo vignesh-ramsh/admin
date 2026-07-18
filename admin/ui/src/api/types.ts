@@ -157,6 +157,21 @@ export interface MigrationPlan {
   warnings: string[];
 }
 
+/* apply_schema_file / apply_patch_file — table-scoped "Apply Now" (2026-07-17).
+   confirm=false returns this as a dry preview (applied is always false);
+   confirm=true either applies for real (applied: true, migration_file +
+   process_warning set) or, if the DB already matched, applies nothing. */
+export interface ApplySchemaResult {
+  ok: boolean;
+  table: string;
+  empty: boolean;
+  applied: boolean;
+  ops: MigrationOp[];
+  warnings: string[];
+  migration_file: string | null;
+  process_warning: string | null;
+}
+
 /** admin.list_settings() — value is always null for a "secret" row; a
  *  real value is only ever fetched on demand via admin.reveal_secret(). */
 export interface SettingEntry {

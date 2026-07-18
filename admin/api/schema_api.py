@@ -7,17 +7,21 @@ Two distinct steps, deliberately never blurred together:
   developer would hand-edit — and validates it (via psqldb's own
   load_schema_file/load_patch_file, already public) before committing.
   Never touches the database.
-- APPLY is never run inline by admin. psqldb caches each plugin's schema
-  in a private, in-memory list populated once at boot (register_model/
-  register_patches) with no public "reload" method — so admin running
-  migrate.apply_plan() itself would leave the CURRENTLY RUNNING process's
-  own schema cache stale (the exact problem a live in-process apply would
-  hit). Instead, admin hands back the real `arc psqldb migrate` command
-  for the operator to run themselves, in a fresh process — which is what
-  actually and correctly refreshes everything, the same way it already
-  does today with no admin involved at all. preview_migration_plan() is
-  provided so the operator can see what that command WOULD do first,
-  entirely read-only (build_plan never mutates the database).
+- APPLY NOW (`apply_schema_file`/`apply_patch_file`, below) runs a real,
+  TABLE-SCOPED migration for just the one file being edited, immediately,
+  against the live database — then reloads THAT ONE table's shape into
+  this process's own in-memory psqldb registry (`arc.psqldb.
+  reload_schema_file`) so the very next read/write in this process sees
+  it, no restart needed here. Explicitly narrower than `arc psqldb
+  migrate`: it never touches any other table, and — this phase's one
+  deliberate, flagged limitation (2026-07-17) — it only reloads THIS
+  server process; any other already-running Gateway worker, or a `arc
+  lineup worker`/`scheduler` process, still serves the old shape until it
+  is itself restarted (see reload_schema_file's own docstring). The
+  original whole-plugin, "hand back the CLI command, restart everything"
+  path (preview_migration_plan/get_migrate_command) is unchanged and
+  still the only way to apply every pending change across every table/
+  plugin at once, or to refresh other processes.
 """
 
 import json
@@ -28,7 +32,7 @@ import arc
 from psqldb import migrate as psqldb_migrate
 from psqldb.model import FieldError, SchemaError, load_patch_file, load_patches_dir, load_schema_file, load_schemas_dir
 
-from admin._paths import patches_dir, require_plugin_dir, schemas_dir
+from admin._paths import PLUGINS_ROOT, patches_dir, require_plugin_dir, schemas_dir
 
 
 def _read_json_files(directory) -> list[str]:
@@ -302,6 +306,117 @@ async def preview_migration_plan(plugin: str | None = None, table: str | None = 
         "ops": [_serialize_op(op) for op in plan.ops],
         "warnings": plan.warnings,
     }
+
+
+# --------------------------------------------------------------------- #
+# Apply Now — table-scoped live apply (Frappe's "reload doctype", not a
+# whole-system migrate). One function per file kind, matching every other
+# verb pair in this module (save_schema_file/save_patch_file, ...); both
+# funnel through _apply_or_preview, which does the actual work.
+#
+# `confirm` mirrors `arc psqldb migrate`'s own CLI posture exactly
+# (docs/arc.MD §3.9's CLI table: "Always shows the plan first (even with
+# --yes), single y/N confirm — no separate destructive-only gate"): a
+# confirm=false call ALWAYS returns the plan without applying anything,
+# regardless of whether it contains a destructive op; the caller is
+# expected to render that plan (same shape preview_migration_plan already
+# returns) and re-call with confirm=true only once a human has looked at
+# it. The plan is rebuilt from disk + the live database on EVERY call,
+# including the confirm=true one — never reused from an earlier response
+# — so a file edited (or a concurrent apply on the same table) between the
+# preview and the real apply can't silently apply stale ops.
+# --------------------------------------------------------------------- #
+async def _apply_or_preview(path: Path, plugin: str, loader, *, is_patch: bool, confirm: bool) -> dict:
+    kind = "patch" if is_patch else "schema"
+    if not path.is_file():
+        arc.relay.throw(f"no {kind} file '{path.stem}.json' for plugin '{plugin}'", status=404, code="not_found")
+    try:
+        candidate = loader(path, plugin=plugin)
+    except (SchemaError, FieldError) as exc:
+        arc.relay.throw(str(exc), status=400, code="invalid_schema")
+
+    table = candidate.table
+    # Serializes concurrent Apply Now calls against the SAME table — a real
+    # guarantee across processes when redix is installed, the same weaker
+    # in-process-only fallback otherwise (arc.relay.lock's own documented
+    # tradeoff), same primitive save()'s own upsert race already uses.
+    async with arc.relay.lock(f"schema_apply:{table}"):
+        # Reloaded fresh from disk, every installed plugin — a REFERENCE on
+        # this table may target another plugin's table, and vice versa;
+        # same "read everything, diff scoped to one table" shape
+        # preview_migration_plan already uses, via build_plan's own
+        # only_table parameter (the exact mechanism `arc psqldb migrate -t`
+        # already relies on — reused here, not reinvented).
+        all_schemas, all_patches = _schemas_on_disk(), _patches_on_disk()
+        async with arc.psqldb.acquire() as conn:
+            plan = await psqldb_migrate.build_plan(conn, all_schemas, all_patches, only_table=table)
+
+        result = {
+            "ok": True,
+            "table": table,
+            "empty": plan.is_empty(),
+            "applied": False,
+            "ops": [_serialize_op(op) for op in plan.ops],
+            "warnings": plan.warnings,
+            "migration_file": None,
+            "process_warning": None,
+        }
+        if plan.is_empty() or not confirm:
+            return result
+
+        reference = psqldb_migrate.migration_reference()
+        async with arc.psqldb.acquire() as conn:
+            await psqldb_migrate.apply_plan(conn, plan, reference=reference)
+
+        # Same audit-trail file `arc psqldb migrate` itself writes — plan.ops
+        # here is already scoped to this one table (plus universal bootstrap
+        # ops), so this never claims another table's pending changes as
+        # applied (the class of bug the CLI's own `-p` scoping had, before
+        # being fixed — only_table never had it, since _diff_table already
+        # excludes anything not matching `table` at the source).
+        migration_path = psqldb_migrate.write_migration_file(PLUGINS_ROOT / plugin, plugin, plan, reference)
+
+        # THE live reload — this process's own arc.psqldb registry now
+        # reflects the new shape for THIS table, immediately. See
+        # reload_schema_file's own docstring for exactly what this does and
+        # doesn't cover (in-process only, this phase).
+        arc.psqldb.reload_schema_file(path, plugin=plugin, is_patch=is_patch)
+
+        result["applied"] = True
+        result["migration_file"] = str(migration_path)
+        # Other processes notice on their own: every bridge-running ARC
+        # process (gateway workers, lineup worker/scheduler) polls psqldb's
+        # reload stamp — max(applied_at) in _patch_history, which this
+        # apply just moved — and reconciles from disk within seconds
+        # (arc.events' process bridge). `arc reload` pushes it instantly;
+        # `arc ps` shows who's registered. Only a process running WITHOUT
+        # the bridge (older code, or a bare script) still needs a restart.
+        result["process_warning"] = (
+            "Applied and reloaded here immediately. Other running ARC processes "
+            "(gateway workers, lineup worker/scheduler) auto-reconcile within a few "
+            "seconds via the schema-version watcher — run `arc reload` to push it "
+            "instantly, or `arc ps` to see registered processes. Only processes "
+            "running without the reload bridge need a restart."
+        )
+        return result
+
+
+@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+async def apply_schema_file(plugin: str, name: str, confirm: bool = False) -> dict:
+    """Apply Now for a schema file — see this module's own docstring and
+    _apply_or_preview for the full design. `confirm=False` (the default)
+    is a dry preview: builds and returns the plan, applies nothing."""
+    directory = require_plugin_dir(plugin)
+    path = directory / "schemas" / f"{name}.json"
+    return await _apply_or_preview(path, plugin, load_schema_file, is_patch=False, confirm=confirm)
+
+
+@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+async def apply_patch_file(plugin: str, name: str, confirm: bool = False) -> dict:
+    """Apply Now for a patch file — identical shape to apply_schema_file."""
+    directory = require_plugin_dir(plugin)
+    path = directory / "patches" / f"{name}.json"
+    return await _apply_or_preview(path, plugin, load_patch_file, is_patch=True, confirm=confirm)
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])

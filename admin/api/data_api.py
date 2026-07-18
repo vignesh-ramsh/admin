@@ -16,7 +16,7 @@ from psqldb.model import SchemaError
 from psqldb.validation import ValidationError
 
 from admin._coerce import CoercionError, coerce_filters, coerce_row, throw_coercion
-from admin._security import by_of
+from admin._security import by_of, redact_row
 
 _PROTECTED_WRITE_TABLES = frozenset(
     {"_users", "_roles", "_sessions", "_access_keys", "_trash", "_field_registry", "_patch_history"}
@@ -70,9 +70,13 @@ async def list_rows(
     except CoercionError as exc:
         throw_coercion(exc)
     try:
-        return await arc.relay.list(table, filters=filters, order_by=order_by, limit=limit, offset=offset)
+        rows = await arc.relay.list(table, filters=filters, order_by=order_by, limit=limit, offset=offset)
     except _READ_ERRORS as exc:
         _friendly(exc)
+    # Reads on protected tables are open by design, but hash material never
+    # leaves the server — same posture (and same field set) audit_api
+    # already enforces; the browse path used to leak these raw.
+    return [redact_row(r) for r in rows]
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
@@ -83,7 +87,7 @@ async def get_row(table: str, id: str) -> dict:
         _friendly(exc)
     if row is None:
         arc.relay.throw("no such row", status=404, code="not_found")
-    return row
+    return redact_row(row)
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])

@@ -131,6 +131,15 @@ export function SchemaBuilderPage() {
     refreshFiles(plugin);
   };
 
+  // A live Apply Now can change a table's columns (including its unique
+  // fields, which the target_field picker caches) without the file itself
+  // changing name — same cache-drop + table-meta refresh onSaved already
+  // does, minus the "select this file" part (nothing was renamed/created).
+  const onApplied = () => {
+    clearSchemaCache();
+    refreshFiles(plugin);
+  };
+
   return (
     <div className="schema-shell">
       <aside className="schema-files">
@@ -186,6 +195,7 @@ export function SchemaBuilderPage() {
               tableMeta={tableMeta}
               onSaved={onSaved}
               onDeleted={onDeleted}
+              onApplied={onApplied}
             />
           ) : (
             <div className="card">

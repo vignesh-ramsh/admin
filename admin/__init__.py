@@ -55,7 +55,11 @@ class AdminProvider:
         self._kernel = kernel
 
     def list_installed_plugins(self) -> list[str]:
-        return sorted(self._kernel.capabilities())
+        """PLUGIN names, not capability names — the two are equal for every
+        in-tree plugin today, but plugin.toml allows them to differ, and
+        everything admin does with this list (audit tables `_audit_{plugin}`,
+        `plugins/<name>/<name>/` schema paths) is keyed by plugin name."""
+        return sorted({cap.plugin for cap in self._kernel.capabilities().values()})
 
     async def health(self) -> dict:
         return {"ok": True}

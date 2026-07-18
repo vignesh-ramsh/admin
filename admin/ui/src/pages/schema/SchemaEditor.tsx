@@ -5,6 +5,7 @@ import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { Input } from "../../components/Field";
 import { FieldEditor } from "./FieldEditor";
+import { ApplyNowModal } from "./ApplyNowModal";
 import { useToast } from "../../components/Toast";
 import { IconPlus } from "../../layout/icons";
 
@@ -23,14 +24,16 @@ interface Props {
   tableMeta: TableMeta[];
   onSaved: (kind: "schema" | "patch", name: string) => void;
   onDeleted: (kind: "schema" | "patch", name: string) => void;
+  onApplied: () => void;
 }
 
-export function SchemaEditor({ plugin, target, tableMeta, onSaved, onDeleted }: Props) {
+export function SchemaEditor({ plugin, target, tableMeta, onSaved, onDeleted, onApplied }: Props) {
   const toast = useToast();
   const [name, setName] = useState(target.name);
   const [content, setContent] = useState<SchemaFileContent>(target.content);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showApply, setShowApply] = useState(false);
 
   const isPatch = target.kind === "patch";
   const flag = (k: "system" | "audit" | "child") => !!content[k];
@@ -108,15 +111,32 @@ export function SchemaEditor({ plugin, target, tableMeta, onSaved, onDeleted }: 
         </div>
         <div className="inline">
           {!target.isNew && (
-            <Button variant="ghost" size="sm" onClick={del} loading={deleting}>
-              Delete
-            </Button>
+            <>
+              <Button variant="ghost" size="sm" onClick={del} loading={deleting}>
+                Delete
+              </Button>
+              {/* Reads the FILE on disk, so only meaningful once one exists
+                  — a brand-new, unsaved file has nothing to apply yet. */}
+              <Button variant="secondary" size="sm" onClick={() => setShowApply(true)}>
+                Apply Now
+              </Button>
+            </>
           )}
           <Button variant="primary" size="sm" onClick={save} loading={saving}>
             Save
           </Button>
         </div>
       </div>
+
+      {showApply && (
+        <ApplyNowModal
+          plugin={plugin}
+          kind={target.kind}
+          name={name}
+          onClose={() => setShowApply(false)}
+          onApplied={onApplied}
+        />
+      )}
 
       <div className="card__body row-gap">
         {!isPatch && (

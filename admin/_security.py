@@ -29,6 +29,19 @@ from typing import Any
 # when a key minted here is later presented on a real request.
 ACCESS_KEY_PREFIX_LEN = 12
 
+# Hash/secret material that must never leave ANY admin endpoint — one shared
+# set, applied by both the audit history (audit_api) and the generic Data
+# Browser's read path (data_api). Redacted before a response is built, not a
+# display-layer concern: password_hash is offline-crackable, and the token/
+# key hashes are verification material with no business meaning to show.
+REDACTED_FIELDS = frozenset({"password_hash", "key_hash", "token_hash"})
+
+
+def redact_row(row: dict | None) -> dict | None:
+    if not row:
+        return row
+    return {k: ("(hidden)" if k in REDACTED_FIELDS else v) for k, v in row.items()}
+
 
 def hash_password(password: str) -> str:
     from argon2 import PasswordHasher
@@ -68,12 +81,10 @@ def has_roles_subset(candidate: list[str] | None, allowed: list[str] | None) -> 
 
 
 def by_of(identity: Any) -> str | None:
-    """identity.user_id (authn/authn/__init__.py's Identity, a plain str)
-    straight through as arc.relay.save/delete's `by` — verified against a
-    real write that asyncpg's uuid codec accepts a well-formed UUID string
-    directly, no uuid.UUID(...) cast needed. Every whitelisted function
-    that wants created_by/updated_by actually populated must declare an
-    `identity` parameter (wants_identity, docs/arc.MD §3.11) and pass
-    `by=by_of(identity)` through to its arc.relay call — nothing does this
-    today, so every admin-driven write has always left them NULL."""
-    return identity.user_id if identity is not None else None
+    """identity.email (authn/authn/__init__.py's Identity) as
+    arc.relay.save/delete's `by` — created_by/updated_by columns store the
+    acting user's EMAIL (system-level decision, 2026-07-17), so a row's
+    provenance is readable without joining any users table. Every admin
+    whitelisted function passes `by=by_of(identity)` through to its
+    arc.relay call."""
+    return identity.email if identity is not None else None

@@ -13,18 +13,11 @@ job (useUserDirectory), not duplicated server-side per endpoint."""
 import arc
 
 from admin._paths import require_known_plugin
-
-# Hash/secret material that must never leave this endpoint, redacted
-# before the response is even built — not a display-layer concern. Found
-# by testing this endpoint against a real _users write and seeing a real
-# Argon2id hash come back over the wire in plain JSON.
-_REDACTED_FIELDS = frozenset({"password_hash", "key_hash", "token_hash"})
-
-
-def _redact(snapshot: dict | None) -> dict | None:
-    if not snapshot:
-        return snapshot
-    return {k: ("(hidden)" if k in _REDACTED_FIELDS else v) for k, v in snapshot.items()}
+# One shared redaction set/helper for every admin endpoint that can return
+# rows off authn's tables — the Data Browser's read path (data_api) applies
+# the identical treatment. Found originally by testing this endpoint against
+# a real _users write and seeing a real Argon2id hash come back in plain JSON.
+from admin._security import redact_row as _redact
 
 
 def _audit_table(plugin: str) -> str:

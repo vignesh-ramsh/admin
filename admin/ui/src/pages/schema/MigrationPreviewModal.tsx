@@ -75,10 +75,12 @@ export function MigrationPreviewModal({ plugin, onClose }: { plugin: string; onC
           )}
 
           <div className="apply-note">
-            <div className="apply-note__title">To apply these changes</div>
+            <div className="apply-note__title">To apply every pending change at once</div>
             <p className="muted" style={{ margin: "4px 0 10px" }}>
-              Schema edits are saved to disk; applying them is a real migration you run yourself,
-              in your project:
+              For a single table, use the <strong>Apply Now</strong> button in that table's editor
+              instead — it applies immediately and takes effect in this server process with no
+              restart. To apply everything pending across every table/plugin in one pass, run the
+              real migration yourself:
             </p>
             <div className="cmd">
               <code className="cmd__text mono">{cmd?.command ?? "…"}</code>
@@ -87,10 +89,12 @@ export function MigrationPreviewModal({ plugin, onClose }: { plugin: string; onC
               </Button>
             </div>
             <div className="warn-note" style={{ marginTop: 10 }}>
-              <strong>Restart the server afterwards.</strong> That command runs in its own
-              process — this running server loaded every schema once at boot and has no way to
-              reload them, so it keeps serving the old shape (and won’t see new columns) until
-              it is restarted.
+              Running ARC processes (this server, other Gateway workers, lineup
+              worker/scheduler) notice the applied changes on their own within a few seconds —
+              the schema-version watcher reconciles them automatically. <code>arc reload</code>{" "}
+              pushes it instantly; <code>arc ps</code> lists the registered processes. Only a
+              process running without the reload bridge (older code, plain scripts) needs a
+              restart — and <em>code</em> changes always do (<code>arc restart</code>).
             </div>
           </div>
         </div>
