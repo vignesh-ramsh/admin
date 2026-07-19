@@ -245,9 +245,7 @@ export function Combobox({
           tabIndex={-1}
           aria-label="Clear"
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
+          <i className="ph ph-x" style={{ fontSize: 13 }} />
         </button>
       )}
       {menu}

@@ -101,9 +101,7 @@ export function FieldEditor({ fields, system, tableMeta, onChange }: Props) {
           </label>
 
           <button className="fields__remove" onClick={() => remove(i)} title="Remove field" aria-label="Remove field">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-            </svg>
+            <i className="ph ph-trash" style={{ fontSize: 16 }} />
           </button>
         </div>
       ))}

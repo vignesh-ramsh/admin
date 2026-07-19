@@ -156,6 +156,7 @@ export function SchemaBuilderPage() {
         <div className="schema-files__lists">
           <FileGroup
             title="Schemas"
+            singular="schema"
             names={files.schemas}
             activeName={target?.kind === "schema" && !target.isNew ? target.name : null}
             onOpen={(n) => selectFile("schema", n)}
@@ -164,6 +165,7 @@ export function SchemaBuilderPage() {
           />
           <FileGroup
             title="Patches"
+            singular="patch"
             names={files.patches}
             activeName={target?.kind === "patch" && !target.isNew ? target.name : null}
             onOpen={(n) => selectFile("patch", n)}
@@ -225,6 +227,7 @@ export function SchemaBuilderPage() {
 
 function FileGroup({
   title,
+  singular,
   names,
   activeName,
   onOpen,
@@ -232,6 +235,7 @@ function FileGroup({
   loading,
 }: {
   title: string;
+  singular: string;
   names: string[];
   activeName: string | null;
   onOpen: (name: string) => void;
@@ -242,7 +246,7 @@ function FileGroup({
     <div className="file-group">
       <div className="file-group__head">
         <span className="file-group__title">{title}</span>
-        <button className="file-group__add" onClick={onNew} title={`New ${title.slice(0, -1).toLowerCase()}`}>
+        <button className="file-group__add" onClick={onNew} title={`New ${singular}`}>
           <IconPlus size={15} />
         </button>
       </div>
