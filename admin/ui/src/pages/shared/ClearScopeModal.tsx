@@ -3,6 +3,9 @@ import { call, ApiError } from "../../api/client";
 import type { User } from "../../api/types";
 import { Modal } from "../../components/Modal";
 import { Button } from "../../components/Button";
+import { Banner } from "../../components/agni/feedback/Banner";
+import { Select } from "../../components/Field";
+import { RadioGroup } from "../../components/agni/forms/Radio";
 import { useToast } from "../../components/Toast";
 
 /* Shared by Sessions and Access Keys: both clear_sessions/clear_access_keys
@@ -69,31 +72,30 @@ export function ClearScopeModal({
           record can still be pruned later, but never used again.
         </p>
 
-        <div className="scope-choice">
-          <label className={`scope-option ${mode === "user" ? "scope-option--on" : ""}`}>
-            <input type="radio" checked={mode === "user"} onChange={() => setMode("user")} />
-            <span>One user</span>
-          </label>
-          <label className={`scope-option ${mode === "all" ? "scope-option--on" : ""}`}>
-            <input type="radio" checked={mode === "all"} onChange={() => setMode("all")} />
-            <span>Every user</span>
-          </label>
-        </div>
+        <RadioGroup
+          value={mode}
+          onChange={(v) => setMode(v as "user" | "all")}
+          direction="row"
+          options={[
+            { value: "user", label: "One user" },
+            { value: "all", label: "Every user" },
+          ]}
+        />
 
         {mode === "user" ? (
-          <select className="select" value={email} onChange={(e) => setEmail(e.target.value)}>
+          <Select value={email} onChange={(e) => setEmail(e.target.value)}>
             <option value="">Pick a user…</option>
             {users.map((u) => (
               <option key={u.id} value={u.email}>
                 {u.email}
               </option>
             ))}
-          </select>
+          </Select>
         ) : (
-          <div className="danger-note">
+          <Banner tone="error">
             This revokes {resource} for <strong>every user in the system</strong>, including your
             own. Anyone currently signed in will need to log in again.
-          </div>
+          </Banner>
         )}
       </div>
     </Modal>

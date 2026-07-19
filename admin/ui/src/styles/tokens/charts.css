@@ -1,0 +1,69 @@
+/* ============================================================================
+   AgniUI · Chart / data-viz palette
+   ----------------------------------------------------------------------------
+   A categorical series palette (--chart-1 … --chart-6) plus axis / grid / track
+   roles, tuned to stay legible on BOTH the light page (#F6F7F6 / #FFF) and the
+   dark launch-sky navy (#0A1245 / #0C1340).
+
+   • Light values are saturated mid-tones that hold contrast on white cards.
+   • Dark values are lifted (higher lightness, slightly desaturated) so each
+     series pops against navy without vibrating.
+   • Hue order is maximally distinct (green → blue → amber → violet → teal →
+     rose) so adjacent series never read as the same colour.
+   • These are LITERAL hues (not chained to semantics) so they are safe to
+     re-declare per theme — no recompute trap.
+
+   Components consume them by index: data points without an explicit colour fall
+   back to var(--chart-N), N = (index mod 6) + 1.
+   ========================================================================== */
+:root {
+  --chart-1: #3F7343;   /* forest green (brand-aligned) */
+  --chart-2: #1570EF;   /* blue */
+  --chart-3: #DC6803;   /* amber */
+  --chart-4: #6938EF;   /* violet */
+  --chart-5: #0E9384;   /* teal */
+  --chart-6: #E31B54;   /* rose */
+  --chart-7: #BA24D5;   /* magenta */
+  --chart-8: #B54708;   /* rust */
+
+  /* Soft fills (area charts, hover wash) — translucent so they layer on cards */
+  --chart-1-soft: rgba(63, 115, 67, 0.16);
+  --chart-2-soft: rgba(21, 112, 239, 0.16);
+  --chart-3-soft: rgba(220, 104, 3, 0.16);
+  --chart-4-soft: rgba(105, 56, 239, 0.16);
+  --chart-5-soft: rgba(14, 147, 132, 0.16);
+  --chart-6-soft: rgba(227, 27, 84, 0.16);
+
+  /* Structural roles */
+  --chart-grid:  var(--border-subtle);    /* gridlines */
+  --chart-axis:  var(--text-tertiary);    /* axis tick + category labels */
+  --chart-track: var(--surface-sunken);   /* empty bar / progress track */
+
+  /* Tooltip + legend surfaces (interactive chrome) */
+  --chart-tooltip-bg:   var(--surface-card);
+  --chart-tooltip-bdr:  var(--border-default);
+  --chart-legend-fg:    var(--text-secondary);
+  --chart-mark-stroke:  var(--surface-card);   /* ring around line marks / pie gaps */
+}
+
+[data-theme="dark"] {
+  --chart-1: #6FDDA0;   /* light green */
+  --chart-2: #6BB0FF;   /* light blue */
+  --chart-3: #F5A65B;   /* light amber */
+  --chart-4: #A48AFB;   /* light violet */
+  --chart-5: #5FD4C4;   /* light teal */
+  --chart-6: #FF7A99;   /* light rose */
+  --chart-7: #E478FA;   /* light magenta */
+  --chart-8: #F38744;   /* light rust */
+
+  --chart-1-soft: rgba(111, 221, 160, 0.18);
+  --chart-2-soft: rgba(107, 176, 255, 0.18);
+  --chart-3-soft: rgba(245, 166, 91, 0.18);
+  --chart-4-soft: rgba(164, 138, 251, 0.18);
+  --chart-5-soft: rgba(95, 212, 196, 0.18);
+  --chart-6-soft: rgba(255, 122, 153, 0.18);
+
+  --chart-track: rgba(255, 255, 255, 0.06);
+  --chart-tooltip-bg:  #131C52;            /* lifted navy so it floats above cards */
+  --chart-tooltip-bdr: var(--border-strong);
+}

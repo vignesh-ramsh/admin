@@ -8,9 +8,12 @@ import { Button } from "../components/Button";
 import { Select } from "../components/Field";
 import { Combobox, type ComboOption } from "../components/Combobox";
 import { Loading, EmptyState, ErrorState } from "../components/States";
+import { DataTable, type DataColumn } from "../components/agni/data/DataTable";
+import { Pagination } from "../components/agni/data/Pagination";
 import { IconPlus, IconRefresh } from "../layout/icons";
 import { RowEditorModal, TableFlags } from "./data/RowEditorModal";
 import { FilterBar, type Filters } from "./data/FilterBar";
+import { ConfirmModal } from "./shared/ConfirmModal";
 import { formatCell, listColumns, PROTECTED_TABLES, shortId } from "./data/format";
 import "./shared/shared.css";
 import "./data.css";
@@ -45,6 +48,7 @@ export function DataBrowserPage() {
   const [editing, setEditing] = useState<{ id: string | null } | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false);
 
   const readOnly = PROTECTED_TABLES.has(table);
 
@@ -126,22 +130,9 @@ export function DataBrowserPage() {
     setOrderBy((cur) => (cur === name ? `-${name}` : cur === `-${name}` ? null : name));
   };
 
-  const toggleRow = (id: string) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-
-  const toggleAll = () =>
-    setSelected((prev) =>
-      prev.size === rows.length ? new Set() : new Set(rows.map((r) => String(r.id)))
-    );
-
   const bulkDelete = async () => {
     if (selected.size === 0) return;
-    if (!confirm(`Delete ${selected.size} row${selected.size === 1 ? "" : "s"}? Soft-deleted, recoverable from _trash.`)) return;
+    setConfirmingBulkDelete(false);
     setBulkDeleting(true);
     try {
       await call("delete_rows", { table, ids: Array.from(selected) });
@@ -220,7 +211,7 @@ export function DataBrowserPage() {
               <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>
                 Clear
               </Button>
-              <Button variant="danger" size="sm" onClick={bulkDelete} loading={bulkDeleting}>
+              <Button variant="danger" size="sm" onClick={() => setConfirmingBulkDelete(true)} loading={bulkDeleting}>
                 Delete selected
               </Button>
             </div>
@@ -236,67 +227,54 @@ export function DataBrowserPage() {
               message={filters ? "No rows match this filter." : "This table has no rows yet."}
             />
           ) : (
-            <div className="table-wrap">
-              <table className="table">
-                <thead>
-                  <tr>
-                    {!readOnly && (
-                      <th style={{ width: 32 }}>
-                        <input
-                          type="checkbox"
-                          checked={rows.length > 0 && selected.size === rows.length}
-                          onChange={toggleAll}
-                          aria-label="Select all rows"
-                        />
-                      </th>
-                    )}
-                    <th style={{ width: 96 }}>ID</th>
-                    {columns.map((c) => (
-                      <th key={c.name}>
-                        <button className="th-sort" onClick={() => toggleSort(c.name)}>
-                          {c.name}
-                          {orderBy === c.name && " ↑"}
-                          {orderBy === `-${c.name}` && " ↓"}
-                        </button>
-                      </th>
-                    ))}
-                    <th style={{ width: 70 }} />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r, i) => {
-                    const id = String(r.id ?? i);
-                    return (
-                      <tr key={id} className="row-clickable" onClick={() => setEditing({ id: String(r.id) })}>
-                        {!readOnly && (
-                          <td onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="checkbox"
-                              checked={selected.has(id)}
-                              onChange={() => toggleRow(id)}
-                              aria-label={`Select row ${id}`}
-                            />
-                          </td>
-                        )}
-                        <td className="mono muted">{shortId(r.id)}</td>
-                        {columns.map((c) => (
-                          <td key={c.name}>
-                            <span className="truncate" title={formatCell(r[c.name])}>
-                              {formatCell(r[c.name])}
-                            </span>
-                          </td>
-                        ))}
-                        <td>
-                          <div className="table__actions">
-                            <span className="row-open">{readOnly ? "View" : "Edit"}</span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <DataTable
+              rowKey="id"
+              rows={rows}
+              selectable={!readOnly}
+              selected={selected}
+              onSelect={(next) => setSelected(next as Set<string>)}
+              onRowClick={(r: Row) => setEditing({ id: String(r.id) })}
+              columns={[
+                {
+                  key: "id",
+                  label: "ID",
+                  width: 96,
+                  sortable: false,
+                  render: (v: unknown) => <span className="mono muted">{shortId(v)}</span>,
+                },
+                ...columns.map(
+                  (c): DataColumn => ({
+                    key: c.name,
+                    // DataTable's own click-to-sort only re-sorts the current
+                    // PAGE client-side — wrong here, since sorting has to
+                    // drive the server-side order_by (this table can be far
+                    // bigger than one page). sortable: false disables that,
+                    // and the label itself is the same click-to-sort button
+                    // this page already had, unchanged.
+                    sortable: false,
+                    label: (
+                      <button className="th-sort" onClick={() => toggleSort(c.name)}>
+                        {c.name}
+                        {orderBy === c.name && " ↑"}
+                        {orderBy === `-${c.name}` && " ↓"}
+                      </button>
+                    ),
+                    render: (v: unknown) => (
+                      <span className="truncate" title={formatCell(v)}>
+                        {formatCell(v)}
+                      </span>
+                    ),
+                  })
+                ),
+                {
+                  key: "_actions",
+                  label: "",
+                  width: 70,
+                  sortable: false,
+                  render: () => <span className="row-open">{readOnly ? "View" : "Edit"}</span>,
+                },
+              ]}
+            />
           )}
 
           <div className="pager">
@@ -317,22 +295,12 @@ export function DataBrowserPage() {
                 ))}
               </Select>
             </div>
-            <div className="inline">
-              <span className="muted" style={{ fontSize: 12.5 }}>
-                {rows.length === 0 ? "0" : `${offset + 1}–${offset + rows.length}`}
-              </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={offset === 0}
-                onClick={() => setOffset(Math.max(0, offset - limit))}
-              >
-                Previous
-              </Button>
-              <Button variant="secondary" size="sm" disabled={!hasMore} onClick={() => setOffset(offset + limit)}>
-                Next
-              </Button>
-            </div>
+            <Pagination
+              page={Math.floor(offset / limit) + 1}
+              pageCount={hasMore ? Math.floor(offset / limit) + 2 : Math.floor(offset / limit) + 1}
+              onChange={(p) => setOffset((p - 1) * limit)}
+              totalLabel={rows.length === 0 ? "0" : `${offset + 1}–${offset + rows.length}`}
+            />
           </div>
         </div>
       )}
@@ -348,6 +316,15 @@ export function DataBrowserPage() {
             setEditing(null);
             loadRows();
           }}
+        />
+      )}
+
+      {confirmingBulkDelete && (
+        <ConfirmModal
+          title="Delete rows"
+          message={`Delete ${selected.size} row${selected.size === 1 ? "" : "s"}? Soft-deleted, recoverable from _trash.`}
+          onConfirm={bulkDelete}
+          onCancel={() => setConfirmingBulkDelete(false)}
         />
       )}
     </>

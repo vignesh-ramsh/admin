@@ -11,8 +11,8 @@
 .login__card {
   width: 100%;
   max-width: 400px;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   padding: 32px;
@@ -26,11 +26,11 @@
 .login__title {
   font-size: 17px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-primary);
 }
 .login__subtitle {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   margin-top: 1px;
 }
 .login__form {
@@ -50,27 +50,27 @@
 .login__remember input {
   width: 15px;
   height: 15px;
-  accent-color: var(--accent);
+  accent-color: var(--action-brand);
 }
 .login__error {
   font-size: 13px;
-  color: var(--danger);
-  background: var(--danger-soft);
-  border: 1px solid var(--danger-border);
+  color: var(--status-error);
+  background: var(--status-error-soft);
+  border: 1px solid var(--status-error);
   border-radius: var(--radius-sm);
   padding: 9px 12px;
 }
 .login__success {
   font-size: 13px;
-  color: var(--success);
-  background: var(--success-soft);
-  border: 1px solid var(--success-border);
+  color: var(--status-success);
+  background: var(--status-success-soft);
+  border: 1px solid var(--status-success);
   border-radius: var(--radius-sm);
   padding: 9px 12px;
 }
 .login__link {
   font-size: 13px;
-  color: var(--accent);
+  color: var(--action-brand);
   text-align: center;
   text-decoration: none;
 }
@@ -79,5 +79,5 @@
 }
 .login__footnote {
   font-size: 12px;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
 }

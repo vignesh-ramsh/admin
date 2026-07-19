@@ -6,6 +6,8 @@ import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { Select } from "../../components/Field";
 import { Loading, EmptyState, ErrorState } from "../../components/States";
+import { DataTable } from "../../components/agni/data/DataTable";
+import { Pagination } from "../../components/agni/data/Pagination";
 import { IconRefresh, IconSearch } from "../../layout/icons";
 
 function formatWhen(iso: string): string {
@@ -123,57 +125,21 @@ export function ExecutionLogTab() {
         ) : rows.length === 0 ? (
           <EmptyState title="No matching runs" message="Nothing has executed yet, or nothing matches these filters." />
         ) : (
-          <div className="table-wrap">
-            <table className="table" style={{ tableLayout: "fixed" }}>
-              <colgroup>
-                <col style={{ width: "22%" }} />
-                <col style={{ width: 90 }} />
-                <col style={{ width: 100 }} />
-                <col style={{ width: 90 }} />
-                <col style={{ width: 110 }} />
-                <col style={{ width: 90 }} />
-                <col style={{ width: 160 }} />
-                <col style={{ width: 80 }} />
-                <col />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th>Task</th>
-                  <th>Queue</th>
-                  <th>Job type</th>
-                  <th>Executor</th>
-                  <th>Queued by</th>
-                  <th>Status</th>
-                  <th>Finished</th>
-                  <th className="num">Duration</th>
-                  <th>Error</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id}>
-                    <td className="mono truncate" title={r.task_name}>
-                      {r.task_name}
-                    </td>
-                    <td className="mono">{r.queue}</td>
-                    <td>
-                      <Badge tone={r.job_type === "Scheduler" ? "accent" : "neutral"}>{r.job_type}</Badge>
-                    </td>
-                    <td className="mono muted">{r.executor}</td>
-                    <td className="mono muted">{r.queued_by ?? "—"}</td>
-                    <td>
-                      <Badge tone={r.status === "success" ? "success" : "danger"}>{r.status}</Badge>
-                    </td>
-                    <td className="muted">{formatWhen(r.finished_at)}</td>
-                    <td className="mono muted num">{r.duration_ms} ms</td>
-                    <td className="truncate" title={r.error ?? undefined}>
-                      {r.error ?? "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            rowKey="id"
+            rows={rows}
+            columns={[
+              { key: "task_name", label: "Task", width: "22%", render: (v: string) => <span className="mono truncate" title={v}>{v}</span> },
+              { key: "queue", label: "Queue", width: 90, render: (v: string) => <span className="mono">{v}</span> },
+              { key: "job_type", label: "Job type", width: 100, render: (v: string) => <Badge tone={v === "Scheduler" ? "accent" : "neutral"}>{v}</Badge> },
+              { key: "executor", label: "Executor", width: 90, render: (v: string) => <span className="mono muted">{v}</span> },
+              { key: "queued_by", label: "Queued by", width: 110, render: (v: string | null) => <span className="mono muted">{v ?? "—"}</span> },
+              { key: "status", label: "Status", width: 90, render: (v: string) => <Badge tone={v === "success" ? "success" : "danger"}>{v}</Badge> },
+              { key: "finished_at", label: "Finished", width: 160, render: (v: string) => <span className="muted">{formatWhen(v)}</span> },
+              { key: "duration_ms", label: "Duration", width: 80, align: "right", render: (v: number) => <span className="mono muted">{v} ms</span> },
+              { key: "error", label: "Error", render: (v: string | null) => <span className="truncate" title={v ?? undefined}>{v ?? "—"}</span> },
+            ]}
+          />
         )}
 
         <div className="pager">
@@ -196,17 +162,12 @@ export function ExecutionLogTab() {
               ))}
             </Select>
           </div>
-          <div className="inline">
-            <span className="muted" style={{ fontSize: 12.5 }}>
-              {rows.length === 0 ? "0" : `${offset + 1}–${offset + rows.length}`}
-            </span>
-            <Button variant="secondary" size="sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
-              Previous
-            </Button>
-            <Button variant="secondary" size="sm" disabled={!hasMore} onClick={() => setOffset(offset + limit)}>
-              Next
-            </Button>
-          </div>
+          <Pagination
+            page={Math.floor(offset / limit) + 1}
+            pageCount={hasMore ? Math.floor(offset / limit) + 2 : Math.floor(offset / limit) + 1}
+            onChange={(p) => setOffset((p - 1) * limit)}
+            totalLabel={rows.length === 0 ? "0" : `${offset + 1}–${offset + rows.length}`}
+          />
         </div>
       </div>
     </>

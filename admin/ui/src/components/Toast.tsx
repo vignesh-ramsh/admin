@@ -1,5 +1,13 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { Toast as AgniToast } from "./agni/feedback/Toast";
 
+/**
+ * Keeps this app's existing ToastProvider/useToast API (context, auto-
+ * dismiss stack) — AgniUI's own Toast component is stateless/presentational
+ * by design ("drive visibility from your own store"), so the stack/timer
+ * logic here is unchanged, only each toast's own rendering now comes from
+ * the copied AgniUI component instead of the old hand-rolled markup.
+ */
 type ToastKind = "success" | "error" | "info";
 interface Toast {
   id: number;
@@ -51,12 +59,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="toast-stack">
         {toasts.map((t) => (
-          <div key={t.id} className={`toast toast--${t.kind}`} onClick={() => remove(t.id)}>
-            <div className="toast__body">
-              {t.title && <div className="toast__title">{t.title}</div>}
-              {t.message}
-            </div>
-          </div>
+          <AgniToast key={t.id} tone={t.kind} title={t.title} message={t.message} onClose={() => remove(t.id)} />
         ))}
       </div>
     </ToastContext.Provider>

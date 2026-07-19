@@ -8,6 +8,7 @@ import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { Select } from "../components/Field";
 import { Loading, EmptyState, ErrorState } from "../components/States";
+import { DataTable } from "../components/agni/data/DataTable";
 import { IconRefresh } from "../layout/icons";
 import { useUserDirectory } from "./shared/useUserDirectory";
 import { ClearScopeModal } from "./shared/ClearScopeModal";
@@ -115,53 +116,51 @@ export function SessionsPage() {
             message={emailFilter ? "This user has no sessions." : "No sessions exist yet."}
           />
         ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th style={{ width: 90 }}>Type</th>
-                  <th style={{ width: 110 }}>Status</th>
-                  <th>IP address</th>
-                  <th style={{ width: 150 }}>Last seen</th>
-                  <th style={{ width: 150 }}>Expires</th>
-                  <th style={{ width: 90 }} />
-                </tr>
-              </thead>
-              <tbody>
-                {sessions.map((s) => {
+          <DataTable
+            rowKey="id"
+            rows={sessions}
+            columns={[
+              { key: "user", label: "User", render: (v: string) => <span className="mono" style={{ fontSize: 12.5 }}>{dir.emailFor(v)}</span> },
+              { key: "session_type", label: "Type", width: 90 },
+              {
+                key: "_status",
+                label: "Status",
+                width: 110,
+                sortable: false,
+                render: (_v: unknown, s: Session) => {
                   const state = lifecycleOf(s);
                   return (
-                    <tr key={s.id}>
-                      <td className="mono" style={{ fontSize: 12.5 }}>{dir.emailFor(s.user)}</td>
-                      <td>{s.session_type}</td>
-                      <td>
-                        <Badge tone={lifecycleTone(state)} dot>
-                          {lifecycleLabel(state)}
-                        </Badge>
-                      </td>
-                      <td className="muted">{s.ip_address ?? "—"}</td>
-                      <td className="muted">{formatWhen(s.last_seen_at)}</td>
-                      <td className="muted">{formatWhen(s.expires_at)}</td>
-                      <td>
-                        <div className="table__actions">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={state !== "active"}
-                            loading={revokingId === s.id}
-                            onClick={() => revoke(s.id)}
-                          >
-                            Revoke
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
+                    <Badge tone={lifecycleTone(state)} dot>
+                      {lifecycleLabel(state)}
+                    </Badge>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
+                },
+              },
+              { key: "ip_address", label: "IP address", render: (v: string | null) => v ?? <span className="muted">—</span> },
+              { key: "last_seen_at", label: "Last seen", width: 150, render: (v: string) => <span className="muted">{formatWhen(v)}</span> },
+              { key: "expires_at", label: "Expires", width: 150, render: (v: string) => <span className="muted">{formatWhen(v)}</span> },
+              {
+                key: "_actions",
+                label: "",
+                width: 90,
+                sortable: false,
+                render: (_v: unknown, s: Session) => {
+                  const state = lifecycleOf(s);
+                  return (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={state !== "active"}
+                      loading={revokingId === s.id}
+                      onClick={() => revoke(s.id)}
+                    >
+                      Revoke
+                    </Button>
+                  );
+                },
+              },
+            ]}
+          />
         )}
       </div>
 

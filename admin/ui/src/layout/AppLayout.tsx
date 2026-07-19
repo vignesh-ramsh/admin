@@ -1,6 +1,8 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Logo } from "../components/Logo";
+import { Switch } from "../components/agni/forms/Switch";
+import { useTheme } from "../theme/ThemeContext";
 import {
   IconHealth,
   IconData,
@@ -65,6 +67,7 @@ const TITLES: Record<string, string> = {
 
 export function AppLayout() {
   const { email, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const location = useLocation();
   const title =
     Object.entries(TITLES).find(([path]) => location.pathname.startsWith(path))?.[1] ?? "Admin";
@@ -107,6 +110,10 @@ export function AppLayout() {
         <header className="topbar">
           <div className="topbar__title">{title}</div>
           <div className="topbar__right">
+            <label className="theme-toggle" title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+              <i className={theme === "dark" ? "ph ph-moon-stars" : "ph ph-sun"} style={{ fontSize: 16, color: "var(--text-secondary)" }} />
+              <Switch checked={theme === "dark"} onChange={toggleTheme} size="sm" />
+            </label>
             <div className="user-chip">
               <span className="user-chip__avatar">{initials}</span>
               <span>{email}</span>

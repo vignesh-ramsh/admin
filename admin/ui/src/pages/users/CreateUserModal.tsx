@@ -3,7 +3,9 @@ import { call, ApiError } from "../../api/client";
 import type { Role, User } from "../../api/types";
 import { Modal } from "../../components/Modal";
 import { Button } from "../../components/Button";
+import { Banner } from "../../components/agni/feedback/Banner";
 import { Field, Input } from "../../components/Field";
+import { Checkbox } from "../../components/agni/forms/Checkbox";
 import { useToast } from "../../components/Toast";
 
 interface CreateResult {
@@ -151,10 +153,7 @@ export function CreateUserModal({
           <Input placeholder="Optional" value={username} onChange={(e) => setUsername(e.target.value)} />
         </Field>
 
-        <label className="check-line">
-          <input type="checkbox" checked={generate} onChange={(e) => setGenerate(e.target.checked)} />
-          Generate a random password
-        </label>
+        <Checkbox checked={generate} onChange={setGenerate} label="Generate a random password" />
 
         {!generate && (
           <Field label="Password" hint="Scored by zxcvbn — weak passwords are rejected by the server.">
@@ -197,15 +196,12 @@ export function CreateUserModal({
           />
         </Field>
 
-        <label className="check-line">
-          <input type="checkbox" checked={superuser} onChange={(e) => setSuperuser(e.target.checked)} />
-          Make this user a <strong>Superuser</strong>
-        </label>
+        <Checkbox checked={superuser} onChange={setSuperuser} label={<>Make this user a <strong>Superuser</strong></>} />
         {superuser && (
-          <div className="danger-note">
+          <Banner tone="error">
             A Superuser bypasses every role check on every endpoint. The Superuser role is created
             automatically if it doesn’t exist yet.
-          </div>
+          </Banner>
         )}
       </div>
     </Modal>

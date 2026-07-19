@@ -42,13 +42,13 @@
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   border-radius: 50%;
   cursor: pointer;
 }
 .role-tag__x:hover:not(:disabled) {
-  background: var(--danger-soft);
-  color: var(--danger);
+  background: var(--status-error-soft);
+  color: var(--status-error);
 }
 .role-tag__x:disabled {
   opacity: 0.4;

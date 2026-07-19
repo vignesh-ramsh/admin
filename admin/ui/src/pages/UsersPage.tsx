@@ -7,6 +7,7 @@ import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { Select } from "../components/Field";
 import { Loading, EmptyState, ErrorState } from "../components/States";
+import { DataTable } from "../components/agni/data/DataTable";
 import { IconPlus, IconRefresh, IconSearch } from "../layout/icons";
 import { CreateUserModal } from "./users/CreateUserModal";
 import { UserDetailModal } from "./users/UserDetailModal";
@@ -107,61 +108,60 @@ export function UsersPage() {
             message={q || roleFilter ? "No users match this search." : "Create the first user to get started."}
           />
         ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Email</th>
-                  <th style={{ width: 160 }}>Name / username</th>
-                  <th style={{ width: 130 }}>Status</th>
-                  <th>Roles</th>
-                  <th style={{ width: 110 }}>Sessions</th>
-                  <th style={{ width: 150 }}>Last login</th>
-                  <th style={{ width: 70 }} />
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => (
-                  <tr key={u.id} className="row-clickable" onClick={() => setSelected(u)}>
-                    <td>{u.email}</td>
-                    <td>
-                      {u.full_name && <div>{u.full_name}</div>}
-                      {u.username ? (
-                        <div className="mono muted" style={{ fontSize: 12 }}>@{u.username}</div>
-                      ) : (
-                        !u.full_name && <span className="muted">—</span>
-                      )}
-                    </td>
-                    <td>
-                      <Badge tone={statusTone(u)} dot>
-                        {isLocked(u) ? "Locked out" : u.status}
-                      </Badge>
-                    </td>
-                    <td>
-                      <div className="role-cell">
-                        {(u.has_roles ?? []).length === 0 ? (
-                          <span className="muted">—</span>
-                        ) : (
-                          (u.has_roles ?? []).map((r) => (
-                            <Badge key={r} tone={r === "Superuser" ? "danger" : "neutral"}>
-                              {r}
-                            </Badge>
-                          ))
-                        )}
-                      </div>
-                    </td>
-                    <td className="muted">{u.max_sessions ?? "unlimited"}</td>
-                    <td className="muted">{formatWhen(u.last_login_at)}</td>
-                    <td>
-                      <div className="table__actions">
-                        <span className="row-open">Manage</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            rowKey="id"
+            rows={users}
+            onRowClick={(u: User) => setSelected(u)}
+            columns={[
+              { key: "email", label: "Email" },
+              {
+                key: "full_name",
+                label: "Name / username",
+                width: 160,
+                render: (_v: unknown, u: User) => (
+                  <>
+                    {u.full_name && <div>{u.full_name}</div>}
+                    {u.username ? (
+                      <div className="mono muted" style={{ fontSize: 12 }}>@{u.username}</div>
+                    ) : (
+                      !u.full_name && <span className="muted">—</span>
+                    )}
+                  </>
+                ),
+              },
+              {
+                key: "status",
+                label: "Status",
+                width: 130,
+                render: (_v: unknown, u: User) => (
+                  <Badge tone={statusTone(u)} dot>
+                    {isLocked(u) ? "Locked out" : u.status}
+                  </Badge>
+                ),
+              },
+              {
+                key: "has_roles",
+                label: "Roles",
+                sortable: false,
+                render: (v: string[]) => (
+                  <div className="role-cell">
+                    {(v ?? []).length === 0 ? (
+                      <span className="muted">—</span>
+                    ) : (
+                      (v ?? []).map((r) => (
+                        <Badge key={r} tone={r === "Superuser" ? "danger" : "neutral"}>
+                          {r}
+                        </Badge>
+                      ))
+                    )}
+                  </div>
+                ),
+              },
+              { key: "max_sessions", label: "Sessions", width: 110, render: (v: number | null) => <span className="muted">{v ?? "unlimited"}</span> },
+              { key: "last_login_at", label: "Last login", width: 150, render: (v: string) => <span className="muted">{formatWhen(v)}</span> },
+              { key: "_actions", label: "", width: 70, sortable: false, render: () => <span className="row-open">Manage</span> },
+            ]}
+          />
         )}
       </div>
 

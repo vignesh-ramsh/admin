@@ -3,7 +3,9 @@ import { call, ApiError } from "../../api/client";
 import type { SettingEntry } from "../../api/types";
 import { Modal } from "../../components/Modal";
 import { Button } from "../../components/Button";
+import { Banner } from "../../components/agni/feedback/Banner";
 import { Field, Input } from "../../components/Field";
+import { Checkbox } from "../../components/agni/forms/Checkbox";
 import { useToast } from "../../components/Toast";
 
 /* `existing === null` means "add a new key" — key/secret are freely
@@ -91,30 +93,24 @@ export function SetSettingModal({
           />
         </Field>
 
-        <label className="check-line">
-          <input
-            type="checkbox"
-            checked={secret}
-            disabled={isEditing}
-            onChange={(e) => {
-              setSecret(e.target.checked);
-              setConfirmed(false);
-            }}
-          />
-          This is a secret — value hidden by default, stored encrypted
-        </label>
+        <Checkbox
+          checked={secret}
+          disabled={isEditing}
+          onChange={(v) => {
+            setSecret(v);
+            setConfirmed(false);
+          }}
+          label="This is a secret — value hidden by default, stored encrypted"
+        />
 
         {secret && (
           <>
-            <div className="danger-note">
+            <Banner tone="error">
               <strong>You're changing a secret.</strong> Most plugins read a setting once at boot —
               a new value here typically won't take effect until the relevant process (Gateway,
               a worker, etc.) restarts.
-            </div>
-            <label className="check-line">
-              <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
-              I understand, save it anyway
-            </label>
+            </Banner>
+            <Checkbox checked={confirmed} onChange={setConfirmed} label="I understand, save it anyway" />
           </>
         )}
       </div>

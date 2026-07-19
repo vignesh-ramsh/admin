@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { Button } from "../components/Button";
 import { Field, Input } from "../components/Field";
+import { Checkbox } from "../components/agni/forms/Checkbox";
 import { ApiError } from "../api/client";
 import { Logo } from "../components/Logo";
 import "./login.css";
@@ -62,10 +63,11 @@ export function LoginPage() {
             />
           </Field>
 
-          <label className="login__remember">
-            <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-            Keep me signed in (extended session)
-          </label>
+          <Checkbox
+            checked={remember}
+            onChange={setRemember}
+            label="Keep me signed in (extended session)"
+          />
 
           {error && <div className="login__error">{error}</div>}
 

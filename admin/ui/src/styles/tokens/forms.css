@@ -1,0 +1,49 @@
+/* ============================================================================
+   AgniUI · Form & Sheet layout tokens
+   ----------------------------------------------------------------------------
+   The form grid system. A request/record form is laid out as a single-column
+   field stack inside a centred Sheet; dense forms may use a 2-up field grid
+   that collapses to 1-up below --bp-tablet. These tokens encode that rhythm so
+   every form across the suite shares one vertical cadence and one breakpoint.
+
+     SHEET            the slide-up form shell
+     --sheet-max-w    capped width of the form sheet (centred)
+     --sheet-radius   top corners rounded (it rises from the bottom)
+     --sheet-pad-x/y  body padding
+
+     FIELD GRID       label → control rhythm
+     --field-gap          vertical gap between sibling fields (single column)
+     --field-col-gap      horizontal gap in a 2-up field grid
+     --field-label-gap    gap from a field label to its control
+     --field-section-gap  gap between titled form sections
+     --field-min         min column width before a 2-up grid wraps to 1-up
+
+     --required-mark      colour of the mandatory-field asterisk (semantic error)
+   ========================================================================== */
+:root {
+  --sheet-max-w:      880px;
+  --sheet-radius:     var(--radius-xl);
+  --sheet-pad-x:      24px;
+  --sheet-pad-y:      20px;
+  --sheet-header-h:   60px;
+  --sheet-footer-h:   68px;
+
+  --field-gap:          20px;   /* between stacked fields */
+  --field-col-gap:      20px;   /* between columns in a 2-up grid */
+  --field-label-gap:    7px;    /* label → control */
+  --field-section-gap:  28px;   /* between titled sections */
+  --field-min:          260px;  /* min field width before 2-up wraps to 1-up */
+
+  --required-mark:    var(--status-error);
+}
+
+/* Compact desks tighten the form cadence to match --density-cell-pad. */
+[data-density="compact"] {
+  --field-gap:         16px;
+  --field-section-gap: 24px;
+  --sheet-pad-y:       16px;
+}
+[data-density="spacious"] {
+  --field-gap:         24px;
+  --field-section-gap: 36px;
+}

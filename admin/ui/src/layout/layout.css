@@ -6,8 +6,8 @@
 
 /* ---- Sidebar ---- */
 .sidebar {
-  background: var(--surface);
-  border-right: 1px solid var(--border);
+  background: var(--surface-card);
+  border-right: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -19,13 +19,13 @@
   gap: 10px;
   height: var(--topbar-h);
   padding: 0 18px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
 }
 .sidebar__brand-text {
   font-size: 15px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-primary);
 }
 .sidebar__nav {
   flex: 1;
@@ -40,7 +40,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   padding: 14px 12px 6px;
 }
 .nav-item {
@@ -56,16 +56,16 @@
   transition: background 0.1s, color 0.1s;
 }
 .nav-item:hover {
-  background: var(--surface-2);
-  color: var(--text);
+  background: var(--surface-soft);
+  color: var(--text-primary);
 }
 .nav-item--active {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--surface-brand-soft);
+  color: var(--action-brand);
 }
 .nav-item--active:hover {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--surface-brand-soft);
+  color: var(--action-brand);
 }
 .nav-item svg {
   flex-shrink: 0;
@@ -84,8 +84,8 @@
   justify-content: space-between;
   height: var(--topbar-h);
   padding: 0 24px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: var(--surface-card);
+  border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
 }
 .topbar__title {
@@ -108,7 +108,7 @@
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--action-brand);
   color: #fff;
   display: flex;
   align-items: center;
@@ -147,6 +147,13 @@
 }
 .page-head__subtitle {
   font-size: 13.5px;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   margin-top: 3px;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
 }

@@ -4,6 +4,7 @@ import { useAsync } from "../hooks/useAsync";
 import { PageHeader } from "../components/PageHeader";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
+import { Card } from "../components/agni/core/Card";
 import { Loading, ErrorState } from "../components/States";
 import { IconRefresh } from "../layout/icons";
 import "./health.css";
@@ -37,13 +38,15 @@ export function HealthPage() {
 
           <div className="health-grid">
             {Object.entries(data).map(([name, report]) => (
-              <div key={name} className="card health-card">
-                <div className="health-card__top">
-                  <span className="health-card__name">{name}</span>
+              <Card
+                key={name}
+                title={name}
+                actions={
                   <Badge tone={report.ok ? "success" : "danger"} dot>
                     {report.ok ? "Healthy" : "Down"}
                   </Badge>
-                </div>
+                }
+              >
                 <dl className="health-card__meta">
                   {Object.entries(report)
                     .filter(([k]) => k !== "ok")
@@ -54,7 +57,7 @@ export function HealthPage() {
                       </div>
                     ))}
                 </dl>
-              </div>
+              </Card>
             ))}
           </div>
         </>

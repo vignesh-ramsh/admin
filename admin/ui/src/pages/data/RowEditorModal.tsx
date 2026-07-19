@@ -12,6 +12,7 @@ import { editableFields, formatCell, toInputValue } from "./format";
 import { useUserDirectory } from "../shared/useUserDirectory";
 import { validateField, validateValues, type Errors } from "./validate";
 import { AuditHistoryPanel } from "./AuditHistoryPanel";
+import { ConfirmModal } from "../shared/ConfirmModal";
 
 type Values = Record<string, string | boolean>;
 
@@ -35,6 +36,7 @@ export function RowEditorModal({ table, schema, rowId, readOnly, onClose, onSave
   const [deleting, setDeleting] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [auditCollapsed, setAuditCollapsed] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const showAuditPanel = !!rowId && !!schema.audit;
 
   useEffect(() => {
@@ -88,7 +90,7 @@ export function RowEditorModal({ table, schema, rowId, readOnly, onClose, onSave
 
   const del = async () => {
     if (!rowId) return;
-    if (!confirm("Delete this row? It is soft-deleted and recoverable from _trash.")) return;
+    setConfirmingDelete(false);
     setDeleting(true);
     try {
       await call("delete_row", { table, id: rowId });
@@ -102,15 +104,16 @@ export function RowEditorModal({ table, schema, rowId, readOnly, onClose, onSave
   };
 
   return (
+    <>
     <Modal
       title={!rowId ? `New row — ${table}` : `${readOnly ? "View" : "Edit"} row — ${table}`}
       onClose={onClose}
       wide
-      className={showAuditPanel ? "modal--with-audit" : undefined}
+      style={showAuditPanel ? { maxWidth: 980, height: "min(720px, calc(100vh - 48px))" } : undefined}
       footer={
         <>
           {rowId && !readOnly && (
-            <Button variant="ghost" onClick={del} loading={deleting} style={{ marginRight: "auto" }}>
+            <Button variant="ghost" onClick={() => setConfirmingDelete(true)} loading={deleting} style={{ marginRight: "auto" }}>
               Delete
             </Button>
           )}
@@ -200,6 +203,15 @@ export function RowEditorModal({ table, schema, rowId, readOnly, onClose, onSave
         );
       })()}
     </Modal>
+    {confirmingDelete && (
+      <ConfirmModal
+        title="Delete row"
+        message="Delete this row? It is soft-deleted and recoverable from _trash."
+        onConfirm={del}
+        onCancel={() => setConfirmingDelete(false)}
+      />
+    )}
+    </>
   );
 }
 

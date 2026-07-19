@@ -1,0 +1,29 @@
+/* ============================================================================
+   AgniUI · Brand tokens — LAYER 1 of 3 (Section 7)
+   Raw values an admin may change to re-skin the whole system. Nothing in the
+   UI should reference a literal hex; semantic tokens (colors.css) reference
+   THESE, and component tokens (components.css) reference the semantics.
+   Change --brand-primary and every dependent surface/action/link re-themes.
+   ========================================================================== */
+:root {
+  /* Primary brand — Agnikul forest-green flame */
+  --brand-primary:        #3F7343;
+  --brand-primary-tint:   #5C8A58;   /* lighter — brand on dark surfaces */
+  --brand-primary-shade:  #335C36;   /* darker — hover/press */
+  --brand-primary-wash:   #EEF4EC;   /* lightest — soft fills (light mode) */
+
+  /* Secondary brand — launch-sky navy (dark surfaces, brand secondary) */
+  --brand-navy:           #060B2E;
+  --brand-navy-raised:    #0C1340;
+
+  /* Accent — mint flame (the brand mark reads as this on dark) */
+  --brand-accent:         #7ED4A4;
+
+  /* Neutral anchor (the ink the neutral scale is built toward) */
+  --brand-ink:            #16191D;
+}
+
+/* A configured dark theme may re-point brand tints; defaults inherit. */
+[data-theme="dark"] {
+  --brand-primary-wash:   rgba(126, 212, 164, 0.12);
+}

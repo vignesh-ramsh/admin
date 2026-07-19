@@ -3,6 +3,7 @@ import { call, ApiError } from "../../api/client";
 import type { Role, User } from "../../api/types";
 import { Modal } from "../../components/Modal";
 import { Button } from "../../components/Button";
+import { Banner } from "../../components/agni/feedback/Banner";
 import { useToast } from "../../components/Toast";
 import { useAuth } from "../../auth/AuthContext";
 
@@ -65,18 +66,18 @@ export function DeleteRoleModal({
     >
       <div className="row-gap">
         {locksMeOut && (
-          <div className="danger-note">
+          <Banner tone="error">
             <strong>This will lock you out.</strong> You ({myEmail}) hold this role, and every screen
             in this admin requires Superuser. Deleting it now will end your own access — you would
             need CLI server access (<code>arc authn create-user --superuser</code>) to recover.
-          </div>
+          </Banner>
         )}
 
         {isSuperuser && !locksMeOut && (
-          <div className="danger-note">
+          <Banner tone="error">
             <strong>Superuser is the full-bypass role.</strong> Deleting it removes admin access from
             everyone who holds it.
-          </div>
+          </Banner>
         )}
 
         {holders.length === 0 ? (

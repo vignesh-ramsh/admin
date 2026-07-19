@@ -5,7 +5,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 12px 16px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-default);
 }
 
 /* ---- List toolbar + search (was users.css-only; SettingsPage needs the
@@ -22,17 +22,17 @@
   gap: 8px;
   height: 36px;
   padding: 0 11px;
-  background: var(--surface);
+  background: var(--surface-card);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   flex: 1;
   max-width: 340px;
   transition: border-color 0.12s, box-shadow 0.12s;
 }
 .search:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--action-brand);
+  box-shadow: 0 0 0 3px var(--surface-brand-soft);
 }
 .search__input {
   flex: 1;
@@ -41,10 +41,10 @@
   background: transparent;
   font-size: 13.5px;
   font-family: inherit;
-  color: var(--text);
+  color: var(--text-primary);
 }
 .search__input::placeholder {
-  color: var(--text-muted);
+  color: var(--text-tertiary);
 }
 
 .scope-choice {
@@ -58,7 +58,7 @@
   gap: 8px;
   padding: 10px 13px;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   font-size: 13px;
   color: var(--text-secondary);
   cursor: pointer;
@@ -67,12 +67,12 @@
 .scope-option input {
   width: 15px;
   height: 15px;
-  accent-color: var(--accent);
+  accent-color: var(--action-brand);
 }
 .scope-option--on {
-  border-color: var(--accent-border);
-  background: var(--accent-soft);
-  color: var(--text);
+  border-color: var(--border-brand);
+  background: var(--surface-brand-soft);
+  color: var(--text-primary);
 }
 
 .user-cell {
@@ -85,7 +85,7 @@
 }
 .user-cell__id {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
 }
 
 /* ---- Create form ---- */
@@ -101,7 +101,7 @@
 .check-line input {
   width: 15px;
   height: 15px;
-  accent-color: var(--accent);
+  accent-color: var(--action-brand);
 }
 .role-picker {
   display: flex;
@@ -123,37 +123,37 @@
 .role-chip input {
   width: 14px;
   height: 14px;
-  accent-color: var(--accent);
+  accent-color: var(--action-brand);
 }
 .role-chip--on {
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
-  color: var(--accent);
+  background: var(--surface-brand-soft);
+  border-color: var(--border-brand);
+  color: var(--action-brand);
 }
 
 /* ---- Notes ---- */
 .danger-note {
   font-size: 12.5px;
-  color: var(--danger);
-  background: var(--danger-soft);
-  border: 1px solid var(--danger-border);
+  color: var(--status-error);
+  background: var(--status-error-soft);
+  border: 1px solid var(--status-error);
   border-radius: var(--radius-sm);
   padding: 9px 12px;
 }
 .warn-note {
   font-size: 12.5px;
-  color: var(--warning);
-  background: var(--warning-soft);
-  border: 1px solid var(--warning-border);
+  color: var(--status-warning);
+  background: var(--status-warning-soft);
+  border: 1px solid var(--status-warning);
   border-radius: var(--radius-sm);
   padding: 9px 12px;
 }
 
 /* ---- One-time secret reveal ---- */
 .secret {
-  border: 1px solid var(--accent-border);
-  background: var(--accent-soft);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-brand);
+  background: var(--surface-brand-soft);
+  border-radius: var(--radius-md);
   padding: 12px 14px;
 }
 .secret__label {
@@ -161,7 +161,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--accent);
+  color: var(--action-brand);
   margin-bottom: 8px;
 }
 .secret__row {
@@ -171,12 +171,12 @@
 }
 .secret__value {
   flex: 1;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
   border-radius: var(--radius-sm);
   padding: 8px 10px;
   font-size: 13px;
-  color: var(--text);
+  color: var(--text-primary);
   overflow-x: auto;
   white-space: nowrap;
 }

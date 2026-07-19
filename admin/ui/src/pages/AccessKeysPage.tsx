@@ -8,6 +8,7 @@ import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { Select } from "../components/Field";
 import { Loading, EmptyState, ErrorState } from "../components/States";
+import { DataTable } from "../components/agni/data/DataTable";
 import { IconPlus, IconRefresh } from "../layout/icons";
 import { useUserDirectory } from "./shared/useUserDirectory";
 import { ClearScopeModal } from "./shared/ClearScopeModal";
@@ -120,63 +121,61 @@ export function AccessKeysPage() {
             message={emailFilter ? "This user has no access keys." : "No access keys exist yet."}
           />
         ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th style={{ width: 110 }}>Prefix</th>
-                  <th>Label</th>
-                  <th>Scopes</th>
-                  <th style={{ width: 110 }}>Status</th>
-                  <th style={{ width: 150 }}>Last used</th>
-                  <th style={{ width: 150 }}>Expires</th>
-                  <th style={{ width: 90 }} />
-                </tr>
-              </thead>
-              <tbody>
-                {keys.map((k) => {
+          <DataTable
+            rowKey="id"
+            rows={keys}
+            columns={[
+              { key: "user", label: "User", render: (v: string) => <span className="mono" style={{ fontSize: 12.5 }}>{dir.emailFor(v)}</span> },
+              { key: "key_prefix", label: "Prefix", width: 110, render: (v: string) => <span className="mono">{v}</span> },
+              { key: "label", label: "Label", render: (v: string) => v || <span className="muted">—</span> },
+              {
+                key: "scopes",
+                label: "Scopes",
+                sortable: false,
+                render: (v: string[]) => (
+                  <div className="role-cell">
+                    {(v ?? []).length === 0 ? <span className="muted">—</span> : (v ?? []).map((s) => <Badge key={s}>{s}</Badge>)}
+                  </div>
+                ),
+              },
+              {
+                key: "_status",
+                label: "Status",
+                width: 110,
+                sortable: false,
+                render: (_v: unknown, k: AccessKey) => {
                   const state = lifecycleOf(k);
                   return (
-                    <tr key={k.id}>
-                      <td className="mono" style={{ fontSize: 12.5 }}>{dir.emailFor(k.user)}</td>
-                      <td className="mono">{k.key_prefix}</td>
-                      <td className={k.label ? "" : "muted"}>{k.label || "—"}</td>
-                      <td>
-                        <div className="role-cell">
-                          {(k.scopes ?? []).length === 0 ? (
-                            <span className="muted">—</span>
-                          ) : (
-                            (k.scopes ?? []).map((s) => <Badge key={s}>{s}</Badge>)
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        <Badge tone={lifecycleTone(state)} dot>
-                          {lifecycleLabel(state)}
-                        </Badge>
-                      </td>
-                      <td className="muted">{formatWhen(k.last_used_at)}</td>
-                      <td className="muted">{k.expires_at ? formatWhen(k.expires_at) : "never"}</td>
-                      <td>
-                        <div className="table__actions">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={state !== "active"}
-                            loading={revokingPrefix === k.key_prefix}
-                            onClick={() => revoke(k.key_prefix)}
-                          >
-                            Revoke
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
+                    <Badge tone={lifecycleTone(state)} dot>
+                      {lifecycleLabel(state)}
+                    </Badge>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
+                },
+              },
+              { key: "last_used_at", label: "Last used", width: 150, render: (v: string) => <span className="muted">{formatWhen(v)}</span> },
+              { key: "expires_at", label: "Expires", width: 150, render: (v: string | null) => <span className="muted">{v ? formatWhen(v) : "never"}</span> },
+              {
+                key: "_actions",
+                label: "",
+                width: 90,
+                sortable: false,
+                render: (_v: unknown, k: AccessKey) => {
+                  const state = lifecycleOf(k);
+                  return (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={state !== "active"}
+                      loading={revokingPrefix === k.key_prefix}
+                      onClick={() => revoke(k.key_prefix)}
+                    >
+                      Revoke
+                    </Button>
+                  );
+                },
+              },
+            ]}
+          />
         )}
       </div>
 

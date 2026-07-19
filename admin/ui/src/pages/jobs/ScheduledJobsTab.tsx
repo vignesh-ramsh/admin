@@ -6,6 +6,8 @@ import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { Select } from "../../components/Field";
 import { Loading, EmptyState, ErrorState } from "../../components/States";
+import { DataTable } from "../../components/agni/data/DataTable";
+import { Pagination } from "../../components/agni/data/Pagination";
 import { IconRefresh, IconSearch } from "../../layout/icons";
 
 function formatWhen(iso: string | null): string {
@@ -54,7 +56,6 @@ export function ScheduledJobsTab() {
 
   const filtered = all.filter((s) => s.task_name.toLowerCase().includes(q.trim().toLowerCase()));
   const paged = filtered.slice(offset, offset + limit);
-  const hasMore = offset + limit < filtered.length;
 
   return (
     <>
@@ -89,47 +90,23 @@ export function ScheduledJobsTab() {
         ) : filtered.length === 0 ? (
           <EmptyState title="No matches" message={`Nothing matches “${q}”.`} />
         ) : (
-          <div className="table-wrap">
-            <table className="table" style={{ tableLayout: "fixed" }}>
-              <colgroup>
-                <col />
-                <col style={{ width: 110 }} />
-                <col style={{ width: 150 }} />
-                <col style={{ width: 190 }} />
-                <col style={{ width: 100 }} />
-              </colgroup>
-              <thead>
-                <tr>
-                  <th>Task</th>
-                  <th>Queue</th>
-                  <th>Cron</th>
-                  <th>Last run</th>
-                  <th>Result</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paged.map((s) => (
-                  <tr key={s.task_name}>
-                    <td className="mono truncate" title={s.task_name}>
-                      {s.task_name}
-                    </td>
-                    <td>
-                      <Badge tone="accent">{s.queue}</Badge>
-                    </td>
-                    <td className="mono">{s.cron}</td>
-                    <td className="muted">{formatWhen(s.last_run_at)}</td>
-                    <td>
-                      {s.last_status === null ? (
-                        <span className="muted">never run</span>
-                      ) : (
-                        <Badge tone={s.last_status === "success" ? "success" : "danger"}>{s.last_status}</Badge>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            rowKey="task_name"
+            rows={paged}
+            columns={[
+              { key: "task_name", label: "Task", render: (v: string) => <span className="mono truncate" title={v}>{v}</span> },
+              { key: "queue", label: "Queue", width: 110, render: (v: string) => <Badge tone="accent">{v}</Badge> },
+              { key: "cron", label: "Cron", width: 150, render: (v: string) => <span className="mono">{v}</span> },
+              { key: "last_run_at", label: "Last run", width: 190, render: (v: string) => <span className="muted">{formatWhen(v)}</span> },
+              {
+                key: "last_status",
+                label: "Result",
+                width: 100,
+                render: (v: string | null) =>
+                  v === null ? <span className="muted">never run</span> : <Badge tone={v === "success" ? "success" : "danger"}>{v}</Badge>,
+              },
+            ]}
+          />
         )}
 
         {filtered.length > 0 && (
@@ -153,17 +130,12 @@ export function ScheduledJobsTab() {
                 ))}
               </Select>
             </div>
-            <div className="inline">
-              <span className="muted" style={{ fontSize: 12.5 }}>
-                {`${offset + 1}–${Math.min(offset + limit, filtered.length)} of ${filtered.length}`}
-              </span>
-              <Button variant="secondary" size="sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
-                Previous
-              </Button>
-              <Button variant="secondary" size="sm" disabled={!hasMore} onClick={() => setOffset(offset + limit)}>
-                Next
-              </Button>
-            </div>
+            <Pagination
+              page={Math.floor(offset / limit) + 1}
+              pageCount={Math.max(1, Math.ceil(filtered.length / limit))}
+              onChange={(p) => setOffset((p - 1) * limit)}
+              totalLabel={`${offset + 1}–${Math.min(offset + limit, filtered.length)} of ${filtered.length}`}
+            />
           </div>
         )}
       </div>

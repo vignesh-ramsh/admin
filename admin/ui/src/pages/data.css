@@ -23,8 +23,8 @@
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--surface-soft);
   font-size: 13px;
   font-weight: 500;
 }
@@ -39,8 +39,8 @@
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-2);
+  border-bottom: 1px solid var(--border-default);
+  background: var(--surface-soft);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   flex-wrap: wrap;
 }
@@ -52,7 +52,7 @@
 .row-open {
   font-size: 12.5px;
   font-weight: 500;
-  color: var(--accent);
+  color: var(--action-brand);
 }
 .th-sort {
   background: none;
@@ -90,20 +90,20 @@
 .bool-input input {
   width: 16px;
   height: 16px;
-  accent-color: var(--accent);
+  accent-color: var(--action-brand);
 }
 .notice {
   font-size: 12.5px;
-  color: var(--warning);
-  background: var(--warning-soft);
-  border: 1px solid var(--warning-border);
+  color: var(--status-warning);
+  background: var(--status-warning-soft);
+  border: 1px solid var(--status-warning);
   border-radius: var(--radius-sm);
   padding: 9px 12px;
 }
 
 /* ---- Record metadata ---- */
 .meta {
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-default);
   padding-top: 14px;
 }
 .meta__title {
@@ -111,7 +111,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   margin-bottom: 10px;
 }
 .meta__grid {
@@ -127,7 +127,7 @@
 }
 .meta__label {
   font-size: 11px;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
 }
 .meta__value {
   font-size: 12.5px;
@@ -139,8 +139,8 @@
 
 /* ---- Audit history ---- */
 .audit-row {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
   padding: 12px 14px;
 }
 .audit-row__head {
@@ -152,7 +152,7 @@
 .audit-row__by {
   font-size: 13px;
   font-weight: 500;
-  color: var(--text);
+  color: var(--text-primary);
 }
 .audit-diff {
   display: flex;
@@ -168,24 +168,24 @@
   padding: 3px 0;
 }
 .audit-diff__name {
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   font-size: 11.5px;
 }
 .audit-diff__before {
-  color: var(--danger);
+  color: var(--status-error);
   text-decoration: line-through;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .audit-diff__after {
-  color: var(--success);
+  color: var(--status-success);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .audit-diff__arrow {
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   text-align: center;
 }
 
@@ -195,6 +195,12 @@
   flex: 1;
   min-height: 0;
   width: 100%;
+  /* AgniUI's Modal body (agni/feedback/Modal.tsx) always applies its own
+     20px padding via inline style, with no className hook to zero it out
+     the way the old Modal's `.modal__body:has(...)` selector did — cancel
+     it here instead so this two-pane layout still reaches the full body. */
+  margin: -20px;
+  height: calc(100% + 40px);
 }
 .row-editor__main {
   flex: 1;
@@ -208,8 +214,8 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-left: 1px solid var(--border);
-  background: var(--surface-2);
+  border-left: 1px solid var(--border-default);
+  background: var(--surface-soft);
   transition: width 0.14s ease;
 }
 .row-editor__audit--collapsed {
@@ -221,13 +227,13 @@
   justify-content: space-between;
   gap: 8px;
   padding: 14px 14px 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
 }
 .row-editor__audit-title {
   font-size: 13px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-primary);
 }
 .row-editor__audit-collapse {
   display: flex;
@@ -238,17 +244,17 @@
   cursor: pointer;
   border: none;
   background: transparent;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
 }
 .row-editor__audit-collapse:hover {
-  color: var(--text);
+  color: var(--text-primary);
 }
 .row-editor__audit-collapse-label {
   writing-mode: vertical-rl;
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
   margin-top: 10px;
 }
 .row-editor__audit-body {
@@ -262,7 +268,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-default);
   flex-shrink: 0;
 }
 
@@ -281,7 +287,7 @@
   top: 6px;
   bottom: 6px;
   width: 2px;
-  background: var(--border);
+  background: var(--border-default);
 }
 .timeline-item {
   position: relative;
@@ -295,8 +301,8 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid var(--surface-2);
+  background: var(--action-brand);
+  border: 2px solid var(--surface-soft);
 }
 .timeline-item__head {
   display: flex;
@@ -307,21 +313,21 @@
 .timeline-item__by {
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-primary);
 }
 .timeline-item__when {
   font-size: 11.5px;
-  color: var(--text-muted);
+  color: var(--text-tertiary);
 }
 
 .field-error {
   font-size: 12px;
-  color: var(--danger);
+  color: var(--status-error);
 }
 /* A field in error: tint its control's border. */
 .field:has(.field-error) .input,
 .field:has(.field-error) .select,
 .field:has(.field-error) .textarea,
 .field:has(.field-error) .combo__input {
-  border-color: var(--danger-border);
+  border-color: var(--status-error);
 }

@@ -1,109 +1,34 @@
 /* ============================================================
    ARC Admin Desk — design tokens & base
-   A clean, professional light theme (enterprise SaaS aesthetic).
+   AgniUI's 3-layer token architecture (brand → colors → components),
+   copied in from /home/vignesh/design_system/AgniUI/tokens/ — see
+   src/styles/tokens/ for the untouched source files. Mode switch is a
+   token-level swap: set data-theme="dark" on <html> (see ThemeProvider).
    ============================================================ */
+@import "./styles/tokens/fonts.css";
+@import "./styles/tokens/brand.css";
+@import "./styles/tokens/colors.css";
+@import "./styles/tokens/typography.css";
+@import "./styles/tokens/spacing.css";
+@import "./styles/tokens/elevation.css";
+@import "./styles/tokens/states.css";
+@import "./styles/tokens/components.css";
+@import "./styles/tokens/charts.css";
+@import "./styles/tokens/forms.css";
+@import "./styles/tokens/base.css";
 
+/* ARC-specific layout dimensions — not part of AgniUI's own vocabulary,
+   just this app's own names for its shell geometry. Aliased onto AgniUI's
+   spacing scale so admin's layout.css needs no further changes. */
 :root {
-  /* Neutral palette */
-  --canvas: #f6f7f9;
-  --surface: #ffffff;
-  --surface-2: #fafbfc;
-  --border: #e4e7ec;
-  --border-strong: #d0d5dd;
-
-  /* Text */
-  --text: #101828;
-  --text-secondary: #475467;
-  --text-muted: #98a2b3;
-
-  /* Accent (indigo) */
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
-  --accent-soft: #eef2ff;
-  --accent-border: #c7d2fe;
-
-  /* Semantic */
-  --success: #067647;
-  --success-soft: #ecfdf3;
-  --success-border: #abefc6;
-  --warning: #b54708;
-  --warning-soft: #fffaeb;
-  --warning-border: #fedf89;
-  --danger: #b42318;
-  --danger-hover: #912018;
-  --danger-soft: #fef3f2;
-  --danger-border: #fecdca;
-
-  /* Radii */
-  --radius-sm: 6px;
-  --radius: 8px;
-  --radius-lg: 12px;
-
-  /* Shadow */
-  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
-  --shadow: 0 1px 3px rgba(16, 24, 40, 0.1), 0 1px 2px rgba(16, 24, 40, 0.06);
-  --shadow-lg: 0 12px 24px -8px rgba(16, 24, 40, 0.18);
-
-  /* Layout */
-  --sidebar-w: 244px;
-  --content-max: 1120px;
-  --topbar-h: 60px;
-
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-    Arial, sans-serif;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--text);
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
+  --sidebar-w: var(--rail-drawer-w-md);
+  --topbar-h: var(--bar-h);
 }
 
-* {
-  box-sizing: border-box;
-}
-
-html,
-body,
-#root {
+html, body, #root {
   height: 100%;
 }
 
 body {
-  margin: 0;
-  background: var(--canvas);
-  color: var(--text);
-}
-
-a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-h1,
-h2,
-h3,
-h4 {
-  margin: 0;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--text);
-}
-
-code,
-.mono {
-  font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
-  font-size: 0.86em;
-}
-
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 8px;
-  border: 2px solid var(--canvas);
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  font-size: var(--text-base);
 }

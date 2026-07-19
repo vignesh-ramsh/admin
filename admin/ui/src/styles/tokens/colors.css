@@ -1,0 +1,223 @@
+/* ============================================================================
+   AgniUI · Color system
+   Brand: Agnikul forest-green flame on deep launch-sky navy.
+   Base palette → semantic aliases (light :root) → dark overrides.
+   The reference desk app consumes BOTH base tokens (--agni-green-600,
+   --agni-neutral-100 …) and semantic aliases (--surface-card, --text-brand …),
+   so the dark scope remaps the few base tokens used directly in component code.
+   ========================================================================== */
+:root {
+  /* ── Brand green scale (anchors: 500 = wordmark, 600 = action/brand) ── */
+  --agni-green-50:  #EEF4EC;
+  --agni-green-100: #D9E7D6;
+  --agni-green-150: #E4EEE1;
+  --agni-green-200: #BCD4B7;
+  --agni-green-300: #97BC90;
+  --agni-green-400: #76A06E;
+  --agni-green-500: var(--brand-primary-tint);
+  --agni-green-600: var(--brand-primary);
+  --agni-green-700: var(--brand-primary-shade);
+  --agni-green-800: #294829;
+  --agni-green-900: #1E351F;
+
+  /* ── Launch-sky navy (dark surfaces + brand secondary) ── */
+  --agni-navy-700: #11205C;
+  --agni-navy-800: #0A1245;
+  --agni-navy-900: var(--brand-navy);
+  --agni-navy-950: #00073E;
+
+  /* ── Neutral / slate scale ── */
+  --agni-neutral-0:   #FFFFFF;
+  --agni-neutral-25:  #FAFBFA;
+  --agni-neutral-50:  #F5F6F5;
+  --agni-neutral-100: #ECEEEC;
+  --agni-neutral-200: #E1E3E4;
+  --agni-neutral-300: #CBCED1;
+  --agni-neutral-400: #9CA1A8;
+  --agni-neutral-500: #717680;
+  --agni-neutral-600: #565B64;
+  --agni-neutral-700: #3E434B;
+  --agni-neutral-800: #292D33;
+  --agni-neutral-900: var(--brand-ink);
+
+  /* ── Raw semantic hues ── 6-status set (Section 3): success, warning,
+     error, info, pending, blocked. Hue stays constant across modes (§6). ── */
+  --hue-success:  #079455;
+  --hue-success-soft: #ECFDF3;
+  --hue-warning:  #DC6803;
+  --hue-warning-soft: #FFFAEB;
+  --hue-info:     #1570EF;
+  --hue-info-soft: #EFF8FF;
+  --hue-error:    #D92D20;
+  --hue-error-soft: #FEF3F2;
+  --hue-pending:  #5C6B82;   /* cool slate — awaiting / queued */
+  --hue-pending-soft: #F1F3F7;
+  --hue-blocked:  #9F1239;   /* deep maroon — cannot proceed (distinct from error red) */
+  --hue-blocked-soft: #FFF1F3;
+  --hue-violet:   #5925DC;
+  --hue-violet-soft: #F4F3FF;
+
+  /* ════════ LIGHT THEME — semantic aliases ════════ */
+  /* Surfaces */
+  --surface-page:        #F6F7F6;
+  --surface-card:        #FFFFFF;
+  --surface-soft:        #F5F6F5;
+  --surface-sunken:      #ECEEEC;
+  --surface-brand:       var(--agni-green-600);
+  --surface-brand-soft:  var(--agni-green-50);
+  --surface-inverse:     var(--agni-navy-950);
+
+  /* Text */
+  --text-primary:   var(--agni-neutral-900);
+  --text-secondary: var(--agni-neutral-700);
+  --text-tertiary:  var(--agni-neutral-500);
+  --text-disabled:  var(--agni-neutral-400);
+  --text-brand:     var(--agni-green-600);
+  --text-on-brand:  #FFFFFF;
+  --text-inverse:   #FFFFFF;
+
+  /* Borders */
+  --border-subtle:  var(--agni-neutral-200);
+  --border-default: var(--agni-neutral-300);
+  --border-strong:  var(--agni-neutral-400);
+  --border-brand:   var(--agni-green-600);
+
+  /* Actions */
+  --action-brand:        var(--agni-green-600);
+  --action-brand-hover:  var(--agni-green-700);
+  --action-brand-press:  var(--agni-green-800);
+  --action-neutral:      var(--agni-neutral-100);
+  --action-neutral-hover:var(--agni-neutral-200);
+
+  /* Status (semantic) */
+  --status-success: var(--hue-success);
+  --status-success-soft: var(--hue-success-soft);
+  --status-warning: var(--hue-warning);
+  --status-warning-soft: var(--hue-warning-soft);
+  --status-info:    var(--hue-info);
+  --status-info-soft: var(--hue-info-soft);
+  --status-error:   var(--hue-error);
+  --status-error-hover: #B42318;   /* danger action hover / press ramp */
+  --status-error-press: #912018;
+  --status-error-soft: var(--hue-error-soft);
+  --status-pending: var(--hue-pending);
+  --status-pending-soft: var(--hue-pending-soft);
+  --status-blocked: var(--hue-blocked);
+  --status-blocked-soft: var(--hue-blocked-soft);
+
+  /* ── Badge tones: done/doing/todo/error/warning/brand + pending/blocked ── */
+  --tone-done-fg:   var(--hue-success);
+  --tone-done-bg:   var(--hue-success-soft);
+  --tone-doing-fg:  var(--hue-info);
+  --tone-doing-bg:  var(--hue-info-soft);
+  --tone-error-fg:  var(--hue-error);
+  --tone-error-bg:  var(--hue-error-soft);
+  --tone-todo-fg:   var(--agni-neutral-600);
+  --tone-todo-bg:   var(--agni-neutral-100);
+  --tone-warning-fg: var(--hue-warning);
+  --tone-warning-bg: var(--hue-warning-soft);
+  --tone-brand-fg:  var(--agni-green-700);
+  --tone-brand-bg:  var(--agni-green-50);
+  --tone-pending-fg: var(--hue-pending);
+  --tone-pending-bg: var(--hue-pending-soft);
+  --tone-blocked-fg: var(--hue-blocked);
+  --tone-blocked-bg: var(--hue-blocked-soft);
+
+  /* ── Kanban columns: approvals / todo / progress / overdue / done / rejected ── */
+  --kanban-approvals-bg: var(--hue-violet-soft); --kanban-approvals-bdr: #E0DBFB; --kanban-approvals-dot: var(--hue-violet);  --kanban-approvals-label: #4317B8;
+  --kanban-todo-bg:      var(--agni-neutral-50); --kanban-todo-bdr: var(--agni-neutral-200); --kanban-todo-dot: var(--agni-neutral-500); --kanban-todo-label: var(--agni-neutral-700);
+  --kanban-progress-bg:  var(--hue-info-soft);   --kanban-progress-bdr: #D3E6FE; --kanban-progress-dot: var(--hue-info);    --kanban-progress-label: #0E52BB;
+  --kanban-overdue-bg:   var(--hue-warning-soft);--kanban-overdue-bdr: #FCE7BE; --kanban-overdue-dot: var(--hue-warning);  --kanban-overdue-label: #B25201;
+  --kanban-done-bg:      var(--hue-success-soft);--kanban-done-bdr: #C9EBD6; --kanban-done-dot: var(--hue-success);     --kanban-done-label: #056B3E;
+  --kanban-rejected-bg:  var(--hue-error-soft);  --kanban-rejected-bdr: #FAD3CF; --kanban-rejected-dot: var(--hue-error);  --kanban-rejected-label: #B42318;
+
+  /* ── Avatar identity palette — deterministic per-name [bg · fg] pairs ── */
+  --avatar-1-bg: #EEF4EC; --avatar-1-fg: #3F7343;
+  --avatar-2-bg: #EFF8FF; --avatar-2-fg: #1570EF;
+  --avatar-3-bg: #F4F3FF; --avatar-3-fg: #5925DC;
+  --avatar-4-bg: #FFFAEB; --avatar-4-fg: #B25201;
+  --avatar-5-bg: #FEF3F2; --avatar-5-fg: #B42318;
+  --avatar-6-bg: #ECFDF3; --avatar-6-fg: #056B3E;
+
+  /* Overlay / scrim */
+  --scrim: rgba(6, 11, 46, 0.45);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   DARK THEME — launch-sky navy. Scope: [data-theme="dark"].
+   ════════════════════════════════════════════════════════════════════════ */
+[data-theme="dark"] {
+  /* Remap base tokens used directly in component code */
+  --agni-green-50:  rgba(126, 212, 164, 0.10);
+  --agni-green-150: rgba(126, 212, 164, 0.16);
+  --agni-green-600: #7ED4A4;
+  --agni-neutral-100: rgba(255, 255, 255, 0.06);
+
+  /* Surfaces */
+  --surface-page:       var(--agni-navy-900);
+  --surface-card:       #0C1340;
+  --surface-soft:       #111A4D;
+  --surface-sunken:     #080E33;
+  --surface-brand:      #2F6B3D;
+  --surface-brand-soft: rgba(126, 212, 164, 0.12);
+  --surface-inverse:    #FFFFFF;
+
+  /* Text */
+  --text-primary:   #EAEEF6;
+  --text-secondary: #B6C0D9;
+  --text-tertiary:  #7E8AAD;
+  --text-disabled:  #545F84;
+  --text-brand:     #7ED4A4;
+  --text-on-brand:  #FFFFFF;
+  --text-inverse:   var(--agni-neutral-900);
+
+  /* Borders */
+  --border-subtle:  rgba(255, 255, 255, 0.08);
+  --border-default: rgba(255, 255, 255, 0.16);
+  --border-strong:  rgba(255, 255, 255, 0.28);
+  --border-brand:   #7ED4A4;
+
+  /* Actions */
+  --action-brand:        #3F8C50;
+  --action-brand-hover:  #4C9C5D;
+  --action-brand-press:  #357A45;
+  --action-neutral:      rgba(255, 255, 255, 0.08);
+  --action-neutral-hover:rgba(255, 255, 255, 0.14);
+
+  /* Status softs need dark-friendly tints */
+  --status-success-soft: rgba(7, 148, 85, 0.16);
+  --status-warning-soft: rgba(220, 104, 3, 0.16);
+  --status-info-soft:    rgba(21, 112, 239, 0.16);
+  --status-error-soft:   rgba(217, 45, 32, 0.16);
+  --status-error-hover: #B42318; --status-error-press: #912018;
+  --status-pending: #A9B6CF; --status-pending-soft: rgba(169, 182, 207, 0.16);
+  --status-blocked: #FB7185; --status-blocked-soft: rgba(159, 18, 57, 0.24);
+
+  /* Badge tones — dark */
+  --tone-done-fg:  #6FDDA0; --tone-done-bg:  rgba(7, 148, 85, 0.18);
+  --tone-doing-fg: #6BB0FF; --tone-doing-bg: rgba(21, 112, 239, 0.18);
+  --tone-error-fg: #FF8A80; --tone-error-bg: rgba(217, 45, 32, 0.18);
+  --tone-todo-fg:  #C2CBE0; --tone-todo-bg:  rgba(255, 255, 255, 0.08);
+  --tone-warning-fg: #F5A65B; --tone-warning-bg: rgba(220, 104, 3, 0.18);
+  --tone-brand-fg: #8FE0B2; --tone-brand-bg: rgba(126, 212, 164, 0.14);
+  --tone-pending-fg: #A9B6CF; --tone-pending-bg: rgba(169, 182, 207, 0.14);
+  --tone-blocked-fg: #FB7185; --tone-blocked-bg: rgba(159, 18, 57, 0.26);
+
+  /* Kanban — dark */
+  --kanban-approvals-bg: rgba(89,37,220,0.16);  --kanban-approvals-bdr: rgba(124,86,247,0.34); --kanban-approvals-dot: #9B7CFF; --kanban-approvals-label: #B9A6FF;
+  --kanban-todo-bg:      rgba(255,255,255,0.04); --kanban-todo-bdr: rgba(255,255,255,0.12);     --kanban-todo-dot: #8C97B5;      --kanban-todo-label: #B6C0D9;
+  --kanban-progress-bg:  rgba(21,112,239,0.16);  --kanban-progress-bdr: rgba(21,112,239,0.34);  --kanban-progress-dot: #6BB0FF; --kanban-progress-label: #9CC6FF;
+  --kanban-overdue-bg:   rgba(220,104,3,0.16);   --kanban-overdue-bdr: rgba(220,104,3,0.34);    --kanban-overdue-dot: #F5A65B;  --kanban-overdue-label: #F7BE84;
+  --kanban-done-bg:      rgba(7,148,85,0.16);     --kanban-done-bdr: rgba(7,148,85,0.34);        --kanban-done-dot: #6FDDA0;     --kanban-done-label: #93E5B8;
+  --kanban-rejected-bg:  rgba(217,45,32,0.16);    --kanban-rejected-bdr: rgba(217,45,32,0.34);   --kanban-rejected-dot: #FF8A80; --kanban-rejected-label: #FFA9A2;
+
+  /* Avatar identity palette — dark: opaque fills (blended over --surface-card), lifted foregrounds */
+  --avatar-1-bg: #1E3250; --avatar-1-fg: #7ED4A4;
+  --avatar-2-bg: #1B2C5F; --avatar-2-fg: #6BB0FF;
+  --avatar-3-bg: #23245F; --avatar-3-fg: #9B7CFF;
+  --avatar-4-bg: #312B44; --avatar-4-fg: #F5A65B;
+  --avatar-5-bg: #33264A; --avatar-5-fg: #FF8A80;
+  --avatar-6-bg: #1C334F; --avatar-6-fg: #93E5B8;
+
+  --scrim: rgba(0, 3, 24, 0.66);
+}

@@ -1,46 +1,39 @@
-import type { ReactNode } from "react";
-import { useEffect } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { Modal as AgniModal } from "./agni/feedback/Modal";
 
+/**
+ * Thin adapter over the copied AgniUI Modal (agni/feedback/Modal.tsx) —
+ * keeps this app's existing "mount to show, unmount to hide" pattern (no
+ * `open` prop anywhere in this app) and `wide` boolean, so no call site
+ * needed touching except the two using the old `className="modal--with-
+ * audit"` hook, which had no equivalent in AgniUI's Modal (no className
+ * prop) — those two now pass `style` directly instead.
+ */
 export function Modal({
   title,
   onClose,
   children,
   footer,
   wide = false,
-  className,
+  style,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
-  className?: string;
+  style?: CSSProperties;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   return (
-    <div className="modal__overlay" onMouseDown={onClose}>
-      <div
-        className={`modal ${wide ? "modal--wide" : ""} ${className ?? ""}`}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <div className="modal__header">
-          <h3 className="modal__title">{title}</h3>
-          <button className="modal__close" onClick={onClose} aria-label="Close">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6 6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-        <div className="modal__body">{children}</div>
-        {footer && <div className="modal__footer">{footer}</div>}
-      </div>
-    </div>
+    <AgniModal
+      open
+      title={title}
+      onClose={onClose}
+      footer={footer}
+      size={wide ? "lg" : "md"}
+      style={style}
+    >
+      {children}
+    </AgniModal>
   );
 }

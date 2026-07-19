@@ -1,0 +1,133 @@
+/* ============================================================================
+   AgniUI · Component tokens — LAYER 3 of 3 (Section 7)
+   Component-specific roles that reference SEMANTIC tokens (colors.css), which
+   in turn reference BRAND tokens (brand.css). No component reads a literal hex.
+   Resolution chain:  brand.primary → action.brand → button.primary.bg
+   These flip automatically in dark mode because the semantics they point to do.
+   ========================================================================== */
+:root {
+  /* Buttons */
+  --button-primary-bg:        var(--action-brand);
+  --button-primary-bg-hover:  var(--action-brand-hover);
+  --button-primary-bg-press:  var(--action-brand-press);
+  --button-primary-fg:        var(--text-on-brand);
+  --button-secondary-bg:      var(--surface-card);
+  --button-secondary-fg:      var(--text-secondary);
+  --button-secondary-bdr:     var(--border-default);
+  --button-danger-bg:         var(--status-error);
+  --button-danger-bg-hover:   var(--status-error-hover);
+  --button-danger-bg-press:   var(--status-error-press);
+
+  /* Inputs */
+  --input-bg:            var(--surface-card);
+  --input-bg-disabled:   var(--surface-soft);
+  --input-bdr:           var(--border-default);
+  --input-bdr-focus:     var(--border-brand);
+  --input-bdr-error:     var(--status-error);
+  --input-placeholder:   var(--text-tertiary);
+
+  /* Surfaces / containment */
+  --card-bg:        var(--surface-card);
+  --card-bdr:       var(--border-subtle);
+  --card-shadow:    var(--shadow-xs);
+  --panel-bg:       var(--surface-card);
+  --drawer-bg:      var(--surface-card);
+  --modal-bg:       var(--surface-card);
+  --modal-scrim:    var(--scrim);
+
+  /* Data table */
+  --table-header-bg:   var(--surface-brand-soft);
+  --table-header-fg:   var(--text-secondary);
+  --table-row-hover:   var(--surface-soft);
+  --table-row-selected:var(--surface-brand-soft);
+  --table-cell-bdr:    var(--border-subtle);
+
+  /* Gantt timeline (GanttTimeline) — bar fills come from --kanban-*-dot */
+  --gantt-header-bg:   var(--table-header-bg);
+  --gantt-header-fg:   var(--table-header-fg);
+  --gantt-grid-line:   var(--border-subtle);
+  --gantt-row-hover:   var(--table-row-hover);
+  --gantt-group-bg:    var(--surface-soft);
+  --gantt-today:       var(--action-brand);
+  --gantt-row-h-md: 44px;  --gantt-row-h-sm: 34px;
+  --gantt-bar-h-md: 18px;  --gantt-bar-h-sm: 12px;
+
+  /* Navigation */
+  --nav-item-active-bg:  var(--action-brand);
+  --nav-item-active-fg:  var(--text-on-brand);
+  --nav-item-hover-bg:   var(--surface-brand-soft);
+  --nav-item-fg:         var(--text-secondary);
+
+  /* Link */
+  --link-color:        var(--text-brand);
+  --link-color-hover:  var(--action-brand-hover);
+
+  /* Tooltip (feedback/Tooltip + IconButton + icon controls) */
+  --tooltip-bg:      var(--surface-inverse);
+  --tooltip-fg:      var(--text-inverse);
+  --tooltip-bdr:     transparent;
+  --tooltip-radius:  var(--radius-sm);
+  --tooltip-shadow:  var(--shadow-lg);
+}
+
+[data-theme="dark"] {
+  /* ──────────────────────────────────────────────────────────────────────
+     Re-point chained component tokens against the dark semantics.
+     CSS substitutes var() at a custom property's DECLARATION site, then
+     inherits the COMPUTED value. Because these tokens are declared in :root
+     (where the semantics are light), overriding only the semantic aliases in
+     this scope would leave the component tokens stuck on their light computed
+     value. Re-declaring them here forces recomputation against the dark
+     surfaces/text/borders, so every component reading them flips correctly.
+     ────────────────────────────────────────────────────────────────────── */
+  --button-primary-bg:        var(--action-brand);
+  --button-primary-bg-hover:  var(--action-brand-hover);
+  --button-primary-bg-press:  var(--action-brand-press);
+  --button-secondary-bg:      var(--surface-card);
+  --button-secondary-fg:      var(--text-secondary);
+  --button-secondary-bdr:     var(--border-default);
+  --button-danger-bg:         var(--status-error);
+  --button-danger-bg-hover:   var(--status-error-hover);
+  --button-danger-bg-press:   var(--status-error-press);
+
+  --input-bg:            var(--surface-card);
+  --input-bg-disabled:   var(--surface-soft);
+  --input-bdr:           var(--border-default);
+  --input-bdr-focus:     var(--border-brand);
+  --input-placeholder:   var(--text-tertiary);
+
+  --card-bg:        var(--surface-card);
+  --card-bdr:       var(--border-subtle);
+  --panel-bg:       var(--surface-card);
+  --drawer-bg:      var(--surface-card);
+  --modal-bg:       var(--surface-card);
+  --modal-scrim:    var(--scrim);
+
+  --table-header-bg:   rgba(0, 7, 62, 0.55);
+  --table-header-fg:   var(--text-secondary);
+  --table-row-hover:   var(--surface-soft);
+  --table-row-selected:var(--surface-brand-soft);
+  --table-cell-bdr:    var(--border-subtle);
+
+  --gantt-header-bg:   var(--table-header-bg);
+  --gantt-header-fg:   var(--table-header-fg);
+  --gantt-grid-line:   var(--border-subtle);
+  --gantt-row-hover:   var(--table-row-hover);
+  --gantt-group-bg:    var(--surface-soft);
+  --gantt-today:       var(--action-brand);
+
+  --nav-item-active-bg:  var(--action-brand);
+  --nav-item-hover-bg:   var(--surface-brand-soft);
+  --nav-item-fg:         var(--text-secondary);
+
+  --link-color:        var(--text-brand);
+  --link-color-hover:  var(--action-brand-hover);
+
+  /* Tooltip — inverse chip becomes a light card on dark UI; add a hairline
+     border so it stays defined against light-mode-inverted surfaces. */
+  --tooltip-bg:      var(--surface-inverse);
+  --tooltip-fg:      var(--text-inverse);
+  --tooltip-bdr:     var(--border-subtle);
+  --tooltip-radius:  var(--radius-sm);
+  --tooltip-shadow:  var(--shadow-lg);
+}

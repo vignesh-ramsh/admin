@@ -4,8 +4,10 @@ import type { SchemaField, SchemaFileContent, SchemaIndex, TableMeta } from "../
 import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { Input } from "../../components/Field";
+import { Switch } from "../../components/agni/forms/Switch";
 import { FieldEditor } from "./FieldEditor";
 import { ApplyNowModal } from "./ApplyNowModal";
+import { ConfirmModal } from "../shared/ConfirmModal";
 import { useToast } from "../../components/Toast";
 import { IconPlus } from "../../layout/icons";
 
@@ -34,6 +36,7 @@ export function SchemaEditor({ plugin, target, tableMeta, onSaved, onDeleted, on
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showApply, setShowApply] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const isPatch = target.kind === "patch";
   const flag = (k: "system" | "audit" | "child") => !!content[k];
@@ -71,7 +74,7 @@ export function SchemaEditor({ plugin, target, tableMeta, onSaved, onDeleted, on
   };
 
   const del = async () => {
-    if (!confirm(`Delete ${target.kind} file “${name}”? This removes the JSON file from disk.`)) return;
+    setConfirmingDelete(false);
     setDeleting(true);
     try {
       const fn = isPatch ? "delete_patch_file" : "delete_schema_file";
@@ -112,7 +115,7 @@ export function SchemaEditor({ plugin, target, tableMeta, onSaved, onDeleted, on
         <div className="inline">
           {!target.isNew && (
             <>
-              <Button variant="ghost" size="sm" onClick={del} loading={deleting}>
+              <Button variant="ghost" size="sm" onClick={() => setConfirmingDelete(true)} loading={deleting}>
                 Delete
               </Button>
               {/* Reads the FILE on disk, so only meaningful once one exists
@@ -135,6 +138,15 @@ export function SchemaEditor({ plugin, target, tableMeta, onSaved, onDeleted, on
           name={name}
           onClose={() => setShowApply(false)}
           onApplied={onApplied}
+        />
+      )}
+
+      {confirmingDelete && (
+        <ConfirmModal
+          title="Delete file"
+          message={`Delete ${target.kind} file "${name}"? This removes the JSON file from disk.`}
+          onConfirm={del}
+          onCancel={() => setConfirmingDelete(false)}
         />
       )}
 
@@ -210,8 +222,8 @@ function FlagToggle({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className={`flag ${checked ? "flag--on" : ""}`}>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    <label className={`flag ${checked ? "flag--on" : ""}`} style={{ cursor: "pointer" }}>
+      <Switch checked={checked} onChange={onChange} />
       <span className="flag__body">
         <span className="flag__label">{label}</span>
         <span className="flag__hint">{hint}</span>

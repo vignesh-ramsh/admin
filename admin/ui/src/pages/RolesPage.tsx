@@ -6,6 +6,7 @@ import { PageHeader } from "../components/PageHeader";
 import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { Loading, EmptyState, ErrorState } from "../components/States";
+import { DataTable } from "../components/agni/data/DataTable";
 import { IconPlus, IconRefresh } from "../layout/icons";
 import { CreateRoleModal } from "./roles/CreateRoleModal";
 import { DeleteRoleModal } from "./roles/DeleteRoleModal";
@@ -81,47 +82,46 @@ export function RolesPage() {
         ) : roles.length === 0 ? (
           <EmptyState title="No roles" message="Create a role to start granting access." />
         ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th style={{ width: 200 }}>Name</th>
-                  <th>Description</th>
-                  <th style={{ width: 150 }}>Users</th>
-                  <th style={{ width: 90 }} />
-                </tr>
-              </thead>
-              <tbody>
-                {roles.map((r) => {
+          <DataTable
+            rowKey="name"
+            rows={roles}
+            columns={[
+              {
+                key: "name",
+                label: "Name",
+                width: 200,
+                render: (v: string) => <Badge tone={v === "Superuser" ? "danger" : "accent"}>{v}</Badge>,
+              },
+              { key: "description", label: "Description", render: (v: string) => v || <span className="muted">—</span> },
+              {
+                key: "_holders",
+                label: "Users",
+                width: 150,
+                sortable: false,
+                render: (_v: unknown, r: Role) => {
                   const holders = holdersOf(r.name);
-                  return (
-                    <tr key={r.id ?? r.name}>
-                      <td>
-                        <Badge tone={r.name === "Superuser" ? "danger" : "accent"}>{r.name}</Badge>
-                      </td>
-                      <td className={r.description ? "" : "muted"}>{r.description || "—"}</td>
-                      <td>
-                        {holders.length === 0 ? (
-                          <span className="muted">unused</span>
-                        ) : (
-                          <span className="holders" title={holders.map((u) => u.email).join(", ")}>
-                            {holders.length} user{holders.length === 1 ? "" : "s"}
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        <div className="table__actions">
-                          <Button variant="ghost" size="sm" onClick={() => setDeleting(r)}>
-                            Delete
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
+                  return holders.length === 0 ? (
+                    <span className="muted">unused</span>
+                  ) : (
+                    <span title={holders.map((u) => u.email).join(", ")}>
+                      {holders.length} user{holders.length === 1 ? "" : "s"}
+                    </span>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
+                },
+              },
+              {
+                key: "_actions",
+                label: "",
+                width: 90,
+                sortable: false,
+                render: (_v: unknown, r: Role) => (
+                  <Button variant="ghost" size="sm" onClick={() => setDeleting(r)}>
+                    Delete
+                  </Button>
+                ),
+              },
+            ]}
+          />
         )}
       </div>
 

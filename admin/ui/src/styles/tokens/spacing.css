@@ -1,0 +1,121 @@
+/* ============================================================================
+   AgniUI · Spacing, layout, radii & density
+   ========================================================================== */
+:root {
+  /* ── Spacing scale (4px base grid) ── */
+  --space-0:  0;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  /* ── Radii ── */
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-2xl:  24px;
+  --radius-full: 999px;
+
+  /* ── Layout: bars, rails, panes ── */
+  --bar-h:        60px;   /* top app bar height */
+  --bar-pad-x:    20px;   /* horizontal padding inside bars */
+  --footer-h:     40px;
+
+  --rail-w:           72px;   /* collapsed nav rail */
+  --rail-drawer-w-sm: 200px;
+  --rail-drawer-w-md: 248px;  /* expanded nav drawer (default) */
+  --rail-drawer-w-lg: 296px;
+  --workspace-rail-w: 56px;   /* right-hand workspace rail */
+
+  --pane-pad:     16px;   /* padding around content panes */
+  --pane-gap:     12px;   /* gap between stacked panes */
+  --content-max:  1440px; /* max content width for centered layouts */
+
+  /* ── Responsive grid ── columns / gutter / margin shift per breakpoint.
+     Desktop = 12-col, Tablet = 8-col, Phone = 4-col. Defaults are desktop. */
+  --grid-cols:    12; /* @kind other */
+  --grid-gutter:  24px;
+  --grid-margin:  24px;
+
+  /* ── Breakpoints (min-width thresholds) ──
+     Desktop-first ERP. Tokens document the system & feed JS / container queries;
+     use the matching @media min-width rules below for actual layout shifts.
+       phone    0–639     single column · nav as overlay drawer · bars compress
+       tablet   640–1023  icon rail (72px) · workspace rail hidden · 8-col
+       desktop  1024–1439 full rail drawer (248px) + content + workspace rail · 12-col
+       wide     ≥1440     content capped at --content-max, centred · 12-col      */
+  --bp-phone:    0;       /* @kind other */
+  --bp-tablet:   640px;   /* @kind other */
+  --bp-desktop:  1024px;  /* @kind other */
+  --bp-wide:     1440px;  /* @kind other */
+
+  /* ── Cluster gaps (Cluster component) ── */
+  --cluster-tight:    8px;
+  --cluster-default:  12px;
+  --cluster-loose:    20px;
+
+  /* ── Density: default = comfortable. Set data-density on a container. ── */
+  --density-cell-pad: 12px;   /* vertical padding in table cells / rows */
+  --density-row-h:    48px;
+  --density-control-h:38px;   /* default control (button/input) height */
+}
+
+/* Compact — high-information desks (the reference admin app uses this) */
+[data-density="compact"] {
+  --density-cell-pad: 8px;
+  --density-row-h:    36px;
+  --density-control-h:34px;
+  --pane-pad:         14px;
+}
+
+/* Spacious — review / approval surfaces */
+[data-density="spacious"] {
+  --density-cell-pad: 16px;
+  --density-row-h:    56px;
+  --density-control-h:44px;
+  --pane-pad:         20px;
+}
+
+/* ============================================================================
+   RESPONSIVE — grid, rails, panes & bars shift at the breakpoints above.
+   Desktop-first: the :root values ARE the desktop spec; these queries step the
+   layout DOWN for tablet and phone. Token-only — components reading --rail-w,
+   --pane-pad, --grid-cols etc. adapt automatically.
+   ========================================================================== */
+
+/* ── Tablet · 640–1023 ── icon rail, no right workspace rail, 8-col grid ── */
+@media (max-width: 1023.98px) {
+  :root {
+    --grid-cols:        8; /* @kind other */
+    --grid-gutter:      20px;
+    --grid-margin:      20px;
+    --rail-drawer-w-md: 216px;  /* expanded drawer is narrower on tablet */
+    --workspace-rail-w: 0px;     /* right workspace rail folds away */
+    --bar-h:            56px;
+    --pane-pad:         14px;
+    --pane-gap:         10px;
+  }
+}
+
+/* ── Phone · 0–639 ── single column, nav becomes an overlay drawer, 4-col ── */
+@media (max-width: 639.98px) {
+  :root {
+    --grid-cols:        4; /* @kind other */
+    --grid-gutter:      16px;
+    --grid-margin:      16px;
+    --rail-w:           0px;     /* collapsed rail hidden; nav opens as overlay */
+    --bar-h:            52px;
+    --bar-pad-x:        14px;
+    --pane-pad:         12px;
+    --content-max:      100%;    /* never cap on phone */
+  }
+}

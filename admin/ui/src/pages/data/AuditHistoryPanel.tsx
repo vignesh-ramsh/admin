@@ -3,6 +3,7 @@ import { call } from "../../api/client";
 import type { AuditEntry } from "../../api/types";
 import { Button } from "../../components/Button";
 import { Loading, EmptyState, ErrorState } from "../../components/States";
+import { AuditTrail, type AuditEntry as AgniAuditEntry } from "../../components/agni/erp/AuditTrail";
 import { useUserDirectory } from "../shared/useUserDirectory";
 import { formatWhen } from "../users/userUtils";
 import { SYSTEM_STRIPPED } from "./format";
@@ -78,11 +79,7 @@ export function AuditHistoryPanel({
         ) : entries.length === 0 ? (
           <EmptyState title="No changes recorded" message="This row has no audit history yet." />
         ) : (
-          <div className="timeline">
-            {entries.map((e) => (
-              <AuditTimelineItem key={e.id} entry={e} emailFor={dir.emailFor} />
-            ))}
-          </div>
+          <AuditTrail entries={entries.map((e) => toAgniEntry(e, dir.emailFor))} />
         )}
       </div>
       {entries.length > 0 && (
@@ -99,29 +96,29 @@ export function AuditHistoryPanel({
   );
 }
 
-function AuditTimelineItem({ entry, emailFor }: { entry: AuditEntry; emailFor: (id: string) => string }) {
+function toAgniEntry(entry: AuditEntry, emailFor: (id: string) => string): AgniAuditEntry {
   const before = entry.changes?.before;
   const after = entry.changes?.after;
   // System bookkeeping (updated_at changes on literally every write, id/
   // _state/created_at never change at all, created_by/updated_by would
   // show as a raw unresolved UUID and who-made-this-change is already the
-  // timeline item's own header) is technically accurate but pure noise
-  // next to the one or two fields someone actually changed — filtered the
-  // same way the row editor's own field list already excludes them
-  // (format.ts's SYSTEM_STRIPPED covers all of these).
+  // entry's own actor) is technically accurate but pure noise next to the
+  // one or two fields someone actually changed — filtered the same way
+  // the row editor's own field list already excludes them (format.ts's
+  // SYSTEM_STRIPPED covers all of these).
   const keys = new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]);
   const changed = [...keys].filter(
     (k) => !SYSTEM_STRIPPED.has(k) && JSON.stringify(before?.[k]) !== JSON.stringify(after?.[k])
   );
 
-  return (
-    <div className="timeline-item">
-      <div className="timeline-item__head">
-        <span className="timeline-item__by">{entry.changed_by ? emailFor(entry.changed_by) : "system"}</span>
-        <span className="timeline-item__when">{formatWhen(entry.changed_at)}</span>
-      </div>
-      {changed.length === 0 ? (
-        <div className="muted" style={{ fontSize: 12.5 }}>No field-level changes recorded.</div>
+  return {
+    actor: entry.changed_by ? emailFor(entry.changed_by) : "system",
+    action: "updated this row",
+    ts: formatWhen(entry.changed_at),
+    icon: "ph-pencil-simple",
+    detail:
+      changed.length === 0 ? (
+        <span className="muted">No field-level changes recorded.</span>
       ) : (
         <div className="audit-diff">
           {changed.map((k) => (
@@ -137,9 +134,8 @@ function AuditTimelineItem({ entry, emailFor }: { entry: AuditEntry; emailFor: (
             </div>
           ))}
         </div>
-      )}
-    </div>
-  );
+      ),
+  };
 }
 
 function fmt(value: unknown): string {

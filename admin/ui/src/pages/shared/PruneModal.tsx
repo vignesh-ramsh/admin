@@ -2,6 +2,7 @@ import { useState } from "react";
 import { call, ApiError } from "../../api/client";
 import { Modal } from "../../components/Modal";
 import { Button } from "../../components/Button";
+import { Banner } from "../../components/agni/feedback/Banner";
 import { Field, Input } from "../../components/Field";
 import { useToast } from "../../components/Toast";
 
@@ -62,12 +63,12 @@ export function PruneModal({
       }
     >
       <div className="row-gap">
-        <div className="danger-note">
+        <Banner tone="error">
           This is a <strong>permanent, unrecoverable delete</strong> — unlike everywhere else in
           this admin, {resource} have no soft-delete / trash to recover from. Only rows already
           revoked or expired, and older than the cutoff, are ever eligible; a still-active record
           is never touched.
-        </div>
+        </Banner>
         <Field label="Older than (days)" hint="Revoked or expired before this many days ago.">
           <Input
             type="number"

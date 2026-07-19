@@ -3,7 +3,9 @@ import { call, ApiError } from "../../api/client";
 import type { Role, User } from "../../api/types";
 import { Modal } from "../../components/Modal";
 import { Button } from "../../components/Button";
+import { Banner } from "../../components/agni/feedback/Banner";
 import { Badge } from "../../components/Badge";
+import { Tag } from "../../components/agni/core/Tag";
 import { Field, Input, Select } from "../../components/Field";
 import { useToast } from "../../components/Toast";
 import { isLocked, statusTone } from "./userUtils";
@@ -147,7 +149,7 @@ export function UserDetailModal({
       title={current.email}
       onClose={onClose}
       wide
-      className="modal--with-audit"
+      style={{ maxWidth: 980, height: "min(720px, calc(100vh - 48px))" }}
       footer={
         <Button variant="secondary" onClick={onClose}>
           Close
@@ -158,14 +160,14 @@ export function UserDetailModal({
       <div className="row-editor__main">
       <div className="row-gap">
         {autoLocked && (
-          <div className="danger-note">
+          <Banner tone="error">
             This account is automatically locked out until <strong>{current.locked_until}</strong> after
             repeated failed logins. This clears itself — or setting status to <strong>Active</strong> clears
             it immediately.
-          </div>
+          </Banner>
         )}
         {current.status === "Locked" && (
-          <div className="warn-note">
+          <Banner tone="warning">
             Manually locked
             {current.locked_until && (
               <>, with <strong>{current.locked_until}</strong> noted as a reminder of when this was meant
@@ -173,7 +175,7 @@ export function UserDetailModal({
             )}
             . This does <strong>not</strong> auto-unlock the account, regardless of that date — you still
             need to set status back to Active.
-          </div>
+          </Banner>
         )}
 
         <div className="detail-grid">
@@ -198,10 +200,10 @@ export function UserDetailModal({
 
         {showLockPrompt && (
           <div className="row-gap" style={{ gap: 8 }}>
-            <div className="warn-note">
+            <Banner tone="warning">
               Locking is <strong>not self-expiring</strong> (only the automatic brute-force lock is) —
               this date is stored purely so you know when it was meant to end.
-            </div>
+            </Banner>
             <div className="inline">
               <Input
                 type="datetime-local"
@@ -233,20 +235,14 @@ export function UserDetailModal({
           <div className="role-list">
             {held.length === 0 && <span className="muted" style={{ fontSize: 13 }}>No roles assigned.</span>}
             {held.map((r) => (
-              <span key={r} className="role-tag">
-                <Badge tone={r === "Superuser" ? "danger" : "accent"}>{r}</Badge>
-                <button
-                  className="role-tag__x"
-                  onClick={() => removeRole(r)}
-                  disabled={busy === "role"}
-                  aria-label={`Remove ${r}`}
-                  title={`Remove ${r}`}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                    <path d="M18 6 6 18M6 6l12 12" />
-                  </svg>
-                </button>
-              </span>
+              <Tag
+                key={r}
+                dot
+                color={r === "Superuser" ? "var(--status-error)" : "var(--action-brand)"}
+                onRemove={busy === "role" ? undefined : () => removeRole(r)}
+              >
+                {r}
+              </Tag>
             ))}
           </div>
           {available.length > 0 && (
@@ -314,10 +310,10 @@ export function UserDetailModal({
             </Button>
           ) : (
             <div className="row-gap" style={{ gap: 10 }}>
-              <div className="warn-note">
+              <Banner tone="warning">
                 Setting a password also clears any lockout and <strong>revokes every active
                 session</strong> for this user.
-              </div>
+              </Banner>
               <div className="inline">
                 <Input
                   type="password"
