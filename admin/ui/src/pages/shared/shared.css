@@ -180,3 +180,211 @@
   overflow-x: auto;
   white-space: nowrap;
 }
+
+/* ---- Workspace shell: a page-level header + a side panel/content pair
+   that share exactly the same height (Data Browser, Schema Builder).
+   The panel used to sit flush against the nav sidebar with the page
+   title pushed into the content pane alone (Schema Builder's old
+   layout) — every page's title now sits in the same place (this
+   wrapper's own 24px padding matches the normal .content padding), and
+   the panel gets a real gap from both the nav sidebar and the content,
+   not zero. */
+.workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: 24px;
+}
+.browse-shell {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+.browse-panel {
+  width: 270px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.browse-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* ---- Panel search + plugin filter (PanelSearch.tsx) ---- */
+.browse-panel__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px;
+  border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
+}
+.browse-panel__search-icon {
+  color: var(--text-tertiary);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.browse-panel__search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+.browse-panel__search-input::placeholder {
+  color: var(--text-tertiary);
+}
+.browse-panel__filter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+.browse-panel__filter:hover {
+  background: var(--surface-soft);
+  color: var(--text-primary);
+}
+.browse-panel__filter--on {
+  background: var(--surface-brand-soft);
+  color: var(--text-brand);
+}
+.browse-panel__filter-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 8px;
+  z-index: 40;
+  min-width: 160px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 4px;
+}
+.browse-panel__filter-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.browse-panel__filter-item:hover {
+  background: var(--surface-soft);
+}
+.browse-panel__filter-item--on {
+  background: var(--surface-brand-soft);
+  color: var(--text-brand);
+  font-weight: var(--fw-medium);
+}
+.browse-panel__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 6px;
+}
+.browse-panel__sentinel {
+  height: 1px;
+}
+
+/* ---- Browse panel list items — shared by Schema Builder's file groups
+   and Data Browser's table list (was schema.css-only). ---- */
+.file-group + .file-group {
+  margin-top: 10px;
+  border-top: 1px solid var(--border-default);
+  padding-top: 10px;
+}
+.file-group__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+}
+.file-group__title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+}
+.file-group__add {
+  display: inline-flex;
+  padding: 3px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.file-group__add:hover {
+  background: var(--surface-soft);
+  color: var(--action-brand);
+}
+.file-group__empty,
+.file-group__loading {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+  padding: 2px 8px 6px;
+}
+.file-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.file-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 8px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.file-item:hover {
+  background: var(--surface-soft);
+  color: var(--text-primary);
+}
+.file-item--active {
+  background: var(--surface-brand-soft);
+  color: var(--action-brand);
+  font-weight: 600;
+}
+.file-item__sub {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 1px;
+}

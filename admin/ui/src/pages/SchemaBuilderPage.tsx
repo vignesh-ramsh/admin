@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { call, ApiError } from "../api/client";
 import type { SchemaFileContent, SchemaFileList, TableMeta } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { PageHeader } from "../components/PageHeader";
 import { Button } from "../components/Button";
-import { Select } from "../components/Field";
 import { Loading, EmptyState } from "../components/States";
 import { IconPlus, IconSchema } from "../layout/icons";
+import { PanelSearch } from "./shared/PanelSearch";
+import { useIncrementalReveal } from "../hooks/useIncrementalReveal";
 import { SchemaEditor, type EditorTarget } from "./schema/SchemaEditor";
 import { MigrationPreviewModal } from "./schema/MigrationPreviewModal";
 import { clearSchemaCache } from "./schema/useTargetFields";
@@ -27,6 +28,7 @@ export function SchemaBuilderPage() {
   const plugin = params.get("plugin") ?? "";
   const fileKind = (params.get("kind") as "schema" | "patch" | null) ?? null;
   const fileName = params.get("file");
+  const [q, setQ] = useState("");
 
   const [plugins, setPlugins] = useState<string[]>([]);
   const [files, setFiles] = useState<SchemaFileList>({ schemas: [], patches: [] });
@@ -42,6 +44,10 @@ export function SchemaBuilderPage() {
     [onUnauthorized]
   );
 
+  // The filter icon picks a plugin the same way the old top-of-panel
+  // Select did — this ISN'T a client-side narrowing of an already-fetched
+  // superset (unlike Data Browser's plugin filter): changing it triggers
+  // a fresh server fetch of that plugin's own schema/patch files below.
   const selectPlugin = (name: string) => setParams({ plugin: name }, { replace: true });
   const selectFile = (kind: "schema" | "patch", name: string) =>
     setParams({ plugin, kind, file: name });
@@ -140,85 +146,95 @@ export function SchemaBuilderPage() {
     refreshFiles(plugin);
   };
 
+  const q_ = q.trim().toLowerCase();
+  const filteredSchemas = useMemo(
+    () => (q_ ? files.schemas.filter((n) => n.toLowerCase().includes(q_)) : files.schemas),
+    [files.schemas, q_]
+  );
+  const filteredPatches = useMemo(
+    () => (q_ ? files.patches.filter((n) => n.toLowerCase().includes(q_)) : files.patches),
+    [files.patches, q_]
+  );
+
   return (
-    <div className="schema-shell">
-      <aside className="schema-files">
-        <div className="schema-files__plugin">
-          <label className="schema-files__label">Plugin</label>
-          <Select value={plugin} onChange={(e) => selectPlugin(e.target.value)}>
-            {plugins.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="schema-files__lists">
-          <FileGroup
-            title="Schemas"
-            singular="schema"
-            names={files.schemas}
-            activeName={target?.kind === "schema" && !target.isNew ? target.name : null}
-            onOpen={(n) => selectFile("schema", n)}
-            onNew={() => newFile("schema")}
-            loading={loadingFiles}
-          />
-          <FileGroup
-            title="Patches"
-            singular="patch"
-            names={files.patches}
-            activeName={target?.kind === "patch" && !target.isNew ? target.name : null}
-            onOpen={(n) => selectFile("patch", n)}
-            onNew={() => newFile("patch")}
-            loading={loadingFiles}
-          />
-        </div>
-      </aside>
+    <div className="workspace">
+      <PageHeader
+        title="Schema Builder"
+        subtitle="Author tables and patches, then apply them with a migration."
+        actions={
+          plugin ? (
+            <Button variant="secondary" onClick={() => setPreview(true)}>
+              Preview migration
+            </Button>
+          ) : null
+        }
+      />
 
-      <section className="schema-work">
-        <div className="schema-work__inner">
-          <PageHeader
-            title="Schema Builder"
-            subtitle="Author tables and patches, then apply them with a migration."
-            actions={
-              plugin ? (
-                <Button variant="secondary" onClick={() => setPreview(true)}>
-                  Preview migration
-                </Button>
-              ) : null
-            }
+      <div className="browse-shell">
+        <aside className="browse-panel">
+          <PanelSearch
+            value={q}
+            onChange={setQ}
+            plugins={plugins}
+            activePlugin={plugin}
+            onPluginChange={selectPlugin}
+            placeholder="Search files…"
           />
-
-          {target ? (
-            <SchemaEditor
-              key={target.openId}
-              plugin={plugin}
-              target={target}
-              tableMeta={tableMeta}
-              onSaved={onSaved}
-              onDeleted={onDeleted}
-              onApplied={onApplied}
+          <div className="browse-panel__list">
+            <FileGroup
+              title="Schemas"
+              singular="schema"
+              names={filteredSchemas}
+              activeName={target?.kind === "schema" && !target.isNew ? target.name : null}
+              onOpen={(n) => selectFile("schema", n)}
+              onNew={() => newFile("schema")}
+              loading={loadingFiles}
             />
-          ) : (
-            <div className="card">
-              <EmptyState
-                title="Select a file to edit"
-                message="Pick a schema or patch on the left, or create a new one to define a table."
-                action={
-                  <div className="inline" style={{ marginTop: 4 }}>
-                    <Button variant="primary" size="sm" onClick={() => newFile("schema")}>
-                      <IconSchema size={15} /> New schema
-                    </Button>
-                    <Button variant="secondary" size="sm" onClick={() => newFile("patch")}>
-                      <IconPlus /> New patch
-                    </Button>
-                  </div>
-                }
+            <FileGroup
+              title="Patches"
+              singular="patch"
+              names={filteredPatches}
+              activeName={target?.kind === "patch" && !target.isNew ? target.name : null}
+              onOpen={(n) => selectFile("patch", n)}
+              onNew={() => newFile("patch")}
+              loading={loadingFiles}
+            />
+          </div>
+        </aside>
+
+        <section className="browse-content">
+          <div className="schema-work-inner">
+            {target ? (
+              <SchemaEditor
+                key={target.openId}
+                plugin={plugin}
+                target={target}
+                tableMeta={tableMeta}
+                onSaved={onSaved}
+                onDeleted={onDeleted}
+                onApplied={onApplied}
               />
-            </div>
-          )}
-        </div>
-      </section>
+            ) : (
+              <div className="card">
+                <EmptyState
+                  title="Select a file to edit"
+                  message="Pick a schema or patch on the left, or create a new one to define a table."
+                  action={
+                    <div className="inline" style={{ marginTop: 4 }}>
+                      <Button variant="primary" size="sm" onClick={() => newFile("schema")}>
+                        <IconSchema size={15} /> New schema
+                      </Button>
+                      <Button variant="secondary" size="sm" onClick={() => newFile("patch")}>
+                        <IconPlus /> New patch
+                      </Button>
+                    </div>
+                  }
+                />
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
 
       {preview && <MigrationPreviewModal plugin={plugin} onClose={() => setPreview(false)} />}
     </div>
@@ -242,6 +258,7 @@ function FileGroup({
   onNew: () => void;
   loading: boolean;
 }) {
+  const { visible, sentinelRef, hasMore } = useIncrementalReveal(names, 40);
   return (
     <div className="file-group">
       <div className="file-group__head">
@@ -257,18 +274,21 @@ function FileGroup({
       ) : names.length === 0 ? (
         <div className="file-group__empty">None</div>
       ) : (
-        <ul className="file-list">
-          {names.map((n) => (
-            <li key={n}>
-              <button
-                className={`file-item ${activeName === n ? "file-item--active" : ""}`}
-                onClick={() => onOpen(n)}
-              >
-                {n}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="file-list">
+            {visible.map((n) => (
+              <li key={n}>
+                <button
+                  className={`file-item ${activeName === n ? "file-item--active" : ""}`}
+                  onClick={() => onOpen(n)}
+                >
+                  {n}
+                </button>
+              </li>
+            ))}
+          </ul>
+          {hasMore && <div ref={sentinelRef} className="browse-panel__sentinel" />}
+        </>
       )}
     </div>
   );

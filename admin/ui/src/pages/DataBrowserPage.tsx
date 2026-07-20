@@ -6,7 +6,6 @@ import { useAuth } from "../auth/AuthContext";
 import { PageHeader } from "../components/PageHeader";
 import { Button } from "../components/Button";
 import { Select } from "../components/Field";
-import { Combobox, type ComboOption } from "../components/Combobox";
 import { Loading, EmptyState, ErrorState } from "../components/States";
 import { DataTable, type DataColumn } from "../components/agni/data/DataTable";
 import { Pagination } from "../components/agni/data/Pagination";
@@ -14,6 +13,8 @@ import { IconPlus, IconRefresh } from "../layout/icons";
 import { RowEditorModal, TableFlags } from "./data/RowEditorModal";
 import { FilterBar, type Filters } from "./data/FilterBar";
 import { ConfirmModal } from "./shared/ConfirmModal";
+import { PanelSearch } from "./shared/PanelSearch";
+import { useIncrementalReveal } from "../hooks/useIncrementalReveal";
 import { formatCell, listColumns, PROTECTED_TABLES, shortId } from "./data/format";
 import "./shared/shared.css";
 import "./data.css";
@@ -32,6 +33,7 @@ export function DataBrowserPage() {
   const table = params.get("table") ?? "";
   const setPlugin = (name: string) => setParams(name ? { plugin: name, table } : { table }, { replace: true });
   const setTable = (name: string) => setParams(plugin ? { plugin, table: name } : { table: name });
+  const [q, setQ] = useState("");
 
   const [plugins, setPlugins] = useState<string[]>([]);
   const [tableMeta, setTableMeta] = useState<TableMeta[]>([]);
@@ -69,18 +71,21 @@ export function DataBrowserPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handleErr]);
 
-  // Every table, narrowed by plugin only when one is chosen.
-  const tableOptions: ComboOption[] = useMemo(
-    () =>
-      tableMeta
-        .filter((m) => !plugin || m.plugin === plugin)
-        .map((m) => ({
-          value: m.table,
-          label: m.table,
-          sublabel: [m.plugin, m.child ? "child" : m.system ? "system" : null].filter(Boolean).join(" · "),
-        })),
-    [tableMeta, plugin]
-  );
+  // Every table, narrowed by plugin (panel's filter icon) and search text
+  // (panel's search box) — both client-side, over the one list_table_meta
+  // fetch above (small N in practice, no real pagination API to page
+  // against server-side).
+  const tableOptions = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return tableMeta
+      .filter((m) => !plugin || m.plugin === plugin)
+      .filter((m) => !needle || m.table.toLowerCase().includes(needle))
+      .map((m) => ({
+        value: m.table,
+        label: m.table,
+        sublabel: [m.plugin, m.child ? "child" : m.system ? "system" : null].filter(Boolean).join(" · "),
+      }));
+  }, [tableMeta, plugin, q]);
 
   // Table changed -> load its schema, reset paging/filters/selection.
   useEffect(() => {
@@ -149,7 +154,7 @@ export function DataBrowserPage() {
   const hasMore = rows.length === limit;
 
   return (
-    <>
+    <div className="workspace">
       <PageHeader
         title="Data Browser"
         subtitle="Browse and edit rows on any table, driven by its own schema."
@@ -167,42 +172,29 @@ export function DataBrowserPage() {
         }
       />
 
-      <div className="data-toolbar">
-        <div className="data-toolbar__group">
-          <label className="data-toolbar__label">Plugin</label>
-          <Select value={plugin} onChange={(e) => setPlugin(e.target.value)} style={{ width: 200 }}>
-            <option value="">All plugins</option>
-            {plugins.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <div className="data-toolbar__group">
-          <label className="data-toolbar__label">Table</label>
-          <div style={{ width: 260 }}>
-            <Combobox
-              value={table}
-              onChange={setTable}
-              options={tableOptions}
-              placeholder="Search tables…"
-              emptyText="No matching tables"
-            />
-          </div>
-        </div>
-        {schema && <TableFlags schema={schema} />}
-      </div>
+      <div className="browse-shell">
+        <aside className="browse-panel">
+          <PanelSearch
+            value={q}
+            onChange={setQ}
+            plugins={plugins}
+            activePlugin={plugin}
+            onPluginChange={setPlugin}
+            placeholder="Search tables…"
+          />
+          <TableList options={tableOptions} activeTable={table} onSelect={setTable} />
+        </aside>
 
       {!table ? (
-        <div className="card">
+        <section className="browse-content card">
           <EmptyState
             title="No table selected"
-            message="Search for a table above — by name, across every plugin — or narrow the search first by picking a plugin."
+            message="Pick a table on the left — search by name, or use the filter icon to narrow by plugin."
           />
-        </div>
+        </section>
       ) : (
-        <div className="card">
+        <section className="browse-content card">
+          {schema && <TableFlags schema={schema} />}
           {schema && <FilterBar schema={schema} onApply={(f) => { setOffset(0); setFilters(f); }} />}
 
           {!readOnly && selected.size > 0 && (
@@ -302,8 +294,9 @@ export function DataBrowserPage() {
               totalLabel={rows.length === 0 ? "0" : `${offset + 1}–${offset + rows.length}`}
             />
           </div>
-        </div>
+        </section>
       )}
+      </div>
 
       {editing && schema && (
         <RowEditorModal
@@ -327,6 +320,39 @@ export function DataBrowserPage() {
           onCancel={() => setConfirmingBulkDelete(false)}
         />
       )}
-    </>
+    </div>
+  );
+}
+
+function TableList({
+  options,
+  activeTable,
+  onSelect,
+}: {
+  options: { value: string; label: string; sublabel: string }[];
+  activeTable: string;
+  onSelect: (name: string) => void;
+}) {
+  const { visible, sentinelRef, hasMore } = useIncrementalReveal(options, 40);
+  if (options.length === 0) {
+    return <div className="file-group__empty" style={{ padding: "10px 10px" }}>No matching tables</div>;
+  }
+  return (
+    <div className="browse-panel__list">
+      <ul className="file-list">
+        {visible.map((o) => (
+          <li key={o.value}>
+            <button
+              className={`file-item ${activeTable === o.value ? "file-item--active" : ""}`}
+              onClick={() => onSelect(o.value)}
+            >
+              <span>{o.label}</span>
+              {o.sublabel && <span className="file-item__sub">{o.sublabel}</span>}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {hasMore && <div ref={sentinelRef} className="browse-panel__sentinel" />}
+    </div>
   );
 }

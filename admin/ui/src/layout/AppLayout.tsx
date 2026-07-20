@@ -72,10 +72,12 @@ export function AppLayout() {
   const title =
     Object.entries(TITLES).find(([path]) => location.pathname.startsWith(path))?.[1] ?? "Admin";
   const initials = (email ?? "?").slice(0, 2);
-  // The Schema Builder manages its own layout: its file list sits flush
-  // against the nav drawer as a second panel, so the page must not be
-  // padded or width-capped by the standard content wrapper.
-  const flush = location.pathname.startsWith("/schema");
+  // Data Browser and Schema Builder each manage their own layout — a
+  // side panel + content pane sharing exactly the page's own height
+  // (.workspace, shared/shared.css) — so neither should be padded or
+  // width-capped by the standard content wrapper; each owns its own
+  // padding instead.
+  const flush = location.pathname.startsWith("/schema") || location.pathname.startsWith("/data");
 
   return (
     <div className="shell">
