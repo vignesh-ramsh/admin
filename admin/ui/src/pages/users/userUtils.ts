@@ -1,4 +1,5 @@
 import type { User } from "../../api/types";
+export { formatWhen } from "../shared/datetime";
 
 /* A brute-force lockout (locked_until in the future) is a SEPARATE
    mechanism from status (authn's own CLI documents this: setting status
@@ -19,7 +20,3 @@ export function statusTone(user: User): "success" | "neutral" | "danger" | "warn
   return "neutral";
 }
 
-export function formatWhen(value: string | null): string {
-  if (!value) return "—";
-  return value.slice(0, 16).replace("T", " ");
-}

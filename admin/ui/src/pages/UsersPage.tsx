@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { call, ApiError } from "../api/client";
 import type { Role, User } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
@@ -20,7 +21,17 @@ export function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [q, setQ] = useState("");
-  const [roleFilter, setRoleFilter] = useState("");
+  // Initial value can arrive via ?role=… (the Roles page's own "N users"
+  // link, docs/admin-ui-ux-review.md #4.2 — that link used to be inert
+  // plain text with no way to see who actually holds a role). Kept in the
+  // URL afterward too, same "selection lives in the URL" convention Data
+  // Browser/Schema Builder already use.
+  const [params, setParams] = useSearchParams();
+  const [roleFilter, setRoleFilterState] = useState(params.get("role") ?? "");
+  const setRoleFilter = (value: string) => {
+    setRoleFilterState(value);
+    setParams(value ? { role: value } : {}, { replace: true });
+  };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);

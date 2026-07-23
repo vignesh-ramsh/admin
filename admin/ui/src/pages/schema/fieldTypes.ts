@@ -52,5 +52,5 @@ export function nextFieldId(fields: SchemaField[]): string {
 }
 
 export function blankField(id: string): SchemaField {
-  return { id, name: "", type: "STRING", required: false, unique: false };
+  return { id, name: "", type: "STRING", required: false, unique: false, list: true };
 }

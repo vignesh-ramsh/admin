@@ -19,6 +19,7 @@ export interface FieldMeta {
   target: string | null;
   target_field: string | null;
   is_column: boolean;
+  list: boolean;
 }
 
 export interface TableSchema {
@@ -96,6 +97,7 @@ export interface SchemaField {
   options?: string[];
   target?: string;
   target_field?: string;
+  list?: boolean;
 }
 
 export interface SchemaIndex {
@@ -232,6 +234,7 @@ export interface FilerFileRow {
   size_bytes: number;
   checksum: string;
   private: boolean;
+  path: string;
   status: "pending" | "clean" | "infected" | "skipped" | "deleted";
   deleted_at: string | null;
   created_at: string;

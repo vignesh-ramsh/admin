@@ -28,3 +28,5 @@ export const IconJobs = ({ size = 18 }: P) => <Ph name="clock" size={size} />;
 export const IconFiles = ({ size = 18 }: P) => <Ph name="folder" size={size} />;
 export const IconDownload = ({ size = 16 }: P) => <Ph name="download-simple" size={size} />;
 export const IconFile = ({ size = 16 }: P) => <Ph name="file" size={size} />;
+export const IconCopy = ({ size = 14 }: P) => <Ph name="copy" size={size} />;
+export const IconCheck = ({ size = 14 }: P) => <Ph name="check" size={size} />;

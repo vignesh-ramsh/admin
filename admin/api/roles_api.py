@@ -28,6 +28,21 @@ async def create_role(name: str, description: str | None = None, identity=None) 
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+async def update_role(name: str, description: str | None = None, identity=None) -> dict:
+    """Description only — `name` is the role's identity, referenced by
+    every user's `has_roles` and every access key's `scopes` (both plain
+    string arrays, not REFERENCE columns, §3.13), so renaming isn't a
+    plain field edit and isn't offered here (docs/admin-ui-ux-review.md
+    #4.1 was specifically about a typo'd description being permanent
+    short of delete-and-recreate — this closes exactly that gap, nothing
+    more)."""
+    role = await arc.relay.get("_roles", {"name": name})
+    if role is None:
+        arc.relay.throw("no such role", status=404, code="not_found")
+    return await arc.relay.save("_roles", {"id": role["id"], "description": description}, by=by_of(identity))
+
+
+@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def delete_role(name: str, identity=None) -> dict:
     role = await arc.relay.get("_roles", {"name": name})
     if role is None:

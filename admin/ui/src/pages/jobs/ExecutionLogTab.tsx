@@ -9,10 +9,7 @@ import { Loading, EmptyState, ErrorState } from "../../components/States";
 import { DataTable } from "../../components/agni/data/DataTable";
 import { Pagination } from "../../components/agni/data/Pagination";
 import { IconRefresh, IconSearch } from "../../layout/icons";
-
-function formatWhen(iso: string): string {
-  return new Date(iso).toLocaleString();
-}
+import { formatWhen } from "../shared/datetime";
 
 export function ExecutionLogTab() {
   const { onUnauthorized } = useAuth();

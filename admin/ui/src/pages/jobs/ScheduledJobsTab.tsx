@@ -9,11 +9,7 @@ import { Loading, EmptyState, ErrorState } from "../../components/States";
 import { DataTable } from "../../components/agni/data/DataTable";
 import { Pagination } from "../../components/agni/data/Pagination";
 import { IconRefresh, IconSearch } from "../../layout/icons";
-
-function formatWhen(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString();
-}
+import { formatWhen } from "../shared/datetime";
 
 /* Live config, not history (docs/arc.MD §3.15) — small N in practice (one
    entry per @arc.relay.task(cron=...) anywhere in the system), so search

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { call, ApiError } from "../api/client";
 import type { SettingEntry } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
@@ -6,6 +7,7 @@ import { PageHeader } from "../components/PageHeader";
 import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { Loading, EmptyState, ErrorState } from "../components/States";
+import { Banner } from "../components/agni/feedback/Banner";
 import { IconPlus, IconRefresh, IconEye, IconEyeOff, IconSearch } from "../layout/icons";
 import { SetSettingModal } from "./settings/SetSettingModal";
 import "./shared/shared.css";
@@ -80,6 +82,12 @@ export function SettingsPage() {
   };
 
   const filtered = rows.filter((r) => r.key.toLowerCase().includes(q.trim().toLowerCase()));
+  // filer_* keys are also editable here (this page is the single source
+  // of truth for "what exists"), but File Manager's own Settings tab
+  // shows the same keys grouped, in MB rather than raw bytes, alongside
+  // live antivirus status — no cross-link existed between the two before
+  // this (docs/admin-ui-ux-review.md #5.1).
+  const filerCount = filtered.filter((r) => r.key.startsWith("filer_")).length;
 
   return (
     <>
@@ -97,6 +105,22 @@ export function SettingsPage() {
           </>
         }
       />
+
+      {filerCount > 0 && (
+        <Banner
+          tone="info"
+          title="Filer settings have a dedicated screen"
+          action={
+            <Link to="/files?tab=settings" className="btn btn--secondary btn--sm">
+              Open File Manager
+            </Link>
+          }
+          style={{ marginBottom: 14 }}
+        >
+          {filerCount} of the keys below ({`filer_*`}) are also editable on File Manager's own Settings tab —
+          grouped, in MB rather than raw bytes, with live antivirus status alongside them.
+        </Banner>
+      )}
 
       <div className="list-toolbar">
         <div className="search">

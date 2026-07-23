@@ -27,9 +27,14 @@ export function editableFields(schema: TableSchema): FieldMeta[] {
   return [...extras, ...own];
 }
 
-/** Columns worth showing in the list view (TABLE fields aren't columns). */
+/** Columns worth showing in the list view — TABLE fields aren't columns at
+ *  all, and a field can opt itself OUT of the table view entirely via its
+ *  own schema-declared `list: false` (docs/admin-ui-ux-review.md #4;
+ *  psqldb.fields.Field.list, default true — a verbose JSON/MULTIFILE blob
+ *  is exactly the kind of field a schema author would turn this off for,
+ *  while still leaving it fully editable in the row editor). */
 export function listColumns(schema: TableSchema, max = 6): FieldMeta[] {
-  return schema.fields.filter((f) => f.is_column).slice(0, max);
+  return schema.fields.filter((f) => f.is_column && f.list).slice(0, max);
 }
 
 /** Human-readable cell text for the list view. `fieldType`, when given,

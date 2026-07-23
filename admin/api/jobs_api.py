@@ -66,6 +66,10 @@ async def list_job_log(
         filters["executor"] = executor
     if task_name:
         filters["task_name"] = {"contains": task_name}
+    # limit/offset arrive as plain query-string strings over GET/QUERY
+    # (relay's kwarg merging never coerces beyond that) — asyncpg rejects
+    # a numeric STRING outright. Same bug/fix already applied to
+    # filer_api.py, filer_admin_api.py, and audit_api.py this session.
     return await arc.relay.list(
-        "_job_log", filters=filters or None, order_by=["-finished_at"], limit=limit, offset=offset
+        "_job_log", filters=filters or None, order_by=["-finished_at"], limit=int(limit), offset=int(offset)
     )

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { call, ApiError } from "../api/client";
 import type { Role, User } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
@@ -9,17 +10,20 @@ import { Loading, EmptyState, ErrorState } from "../components/States";
 import { DataTable } from "../components/agni/data/DataTable";
 import { IconPlus, IconRefresh } from "../layout/icons";
 import { CreateRoleModal } from "./roles/CreateRoleModal";
+import { EditRoleModal } from "./roles/EditRoleModal";
 import { DeleteRoleModal } from "./roles/DeleteRoleModal";
 import "./shared/shared.css";
 import "./roles.css";
 
 export function RolesPage() {
   const { onUnauthorized } = useAuth();
+  const navigate = useNavigate();
   const [roles, setRoles] = useState<Role[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Role | null>(null);
   const [deleting, setDeleting] = useState<Role | null>(null);
 
   const handleErr = useCallback(
@@ -103,24 +107,40 @@ export function RolesPage() {
                 sortable: false,
                 render: (_v: unknown, r: Role) => {
                   const holders = holdersOf(r.name);
-                  return holders.length === 0 ? (
-                    <span className="muted">unused</span>
-                  ) : (
-                    <span title={holders.map((u) => u.email).join(", ")}>
+                  if (holders.length === 0) return <span className="muted">unused</span>;
+                  // Was inert text (docs/admin-ui-ux-review.md #4.2) —
+                  // now a real link into Users, pre-filtered to this role,
+                  // so "who actually holds this" is one click, not a
+                  // manual scan of every user's Roles column.
+                  return (
+                    <button
+                      type="button"
+                      className="role-users-link"
+                      title={holders.map((u) => u.email).join(", ")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/users?role=${encodeURIComponent(r.name)}`);
+                      }}
+                    >
                       {holders.length} user{holders.length === 1 ? "" : "s"}
-                    </span>
+                    </button>
                   );
                 },
               },
               {
                 key: "_actions",
                 label: "",
-                width: 90,
+                width: 140,
                 sortable: false,
                 render: (_v: unknown, r: Role) => (
-                  <Button variant="ghost" size="sm" onClick={() => setDeleting(r)}>
-                    Delete
-                  </Button>
+                  <div className="inline" onClick={(e) => e.stopPropagation()}>
+                    <Button variant="ghost" size="sm" onClick={() => setEditing(r)}>
+                      Edit
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setDeleting(r)}>
+                      Delete
+                    </Button>
+                  </div>
                 ),
               },
             ]}
@@ -133,6 +153,17 @@ export function RolesPage() {
           onClose={() => setCreating(false)}
           onCreated={() => {
             setCreating(false);
+            load();
+          }}
+        />
+      )}
+
+      {editing && (
+        <EditRoleModal
+          role={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
             load();
           }}
         />

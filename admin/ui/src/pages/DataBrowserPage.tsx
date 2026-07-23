@@ -9,7 +9,7 @@ import { Select } from "../components/Field";
 import { Loading, EmptyState, ErrorState } from "../components/States";
 import { DataTable, type DataColumn } from "../components/agni/data/DataTable";
 import { Pagination } from "../components/agni/data/Pagination";
-import { IconPlus, IconRefresh } from "../layout/icons";
+import { IconPlus, IconRefresh, IconChevron } from "../layout/icons";
 import { RowEditorModal, TableFlags } from "./data/RowEditorModal";
 import { FilterBar, type Filters } from "./data/FilterBar";
 import { ConfirmModal } from "./shared/ConfirmModal";
@@ -265,9 +265,17 @@ export function DataBrowserPage() {
                 {
                   key: "_actions",
                   label: "",
-                  width: 70,
+                  width: 32,
                   sortable: false,
-                  render: () => <span className="row-open">{readOnly ? "View" : "Edit"}</span>,
+                  // The whole row is already clickable (onRowClick below) —
+                  // this is just a subtle "goes somewhere" affordance, not
+                  // a second redundant "Edit"/"View" label repeated on
+                  // every row (docs/admin-ui-ux-review.md #2.3).
+                  render: () => (
+                    <span className="row-open" aria-hidden="true">
+                      <IconChevron size={14} />
+                    </span>
+                  ),
                 },
               ]}
             />

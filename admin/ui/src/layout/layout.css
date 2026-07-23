@@ -27,6 +27,123 @@
   font-weight: 600;
   color: var(--text-primary);
 }
+.sidebar__search {
+  padding: 10px 12px 0;
+  flex-shrink: 0;
+}
+.global-search-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.global-search-trigger:hover {
+  border-color: var(--border-strong);
+  color: var(--text-secondary);
+}
+.global-search-trigger span {
+  flex: 1;
+  text-align: left;
+}
+.global-search-trigger kbd {
+  font-family: var(--font-data, monospace);
+  font-size: 10.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-default);
+  color: var(--text-tertiary);
+}
+.global-search-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: var(--modal-scrim, rgba(0, 0, 0, 0.4));
+  backdrop-filter: blur(3px);
+  display: flex;
+  justify-content: center;
+  padding: 14vh 24px 24px;
+}
+.global-search-panel {
+  width: 100%;
+  max-width: 560px;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--modal-bg, var(--surface-card));
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-2xl);
+  overflow: hidden;
+  height: fit-content;
+}
+.global-search-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+.global-search-input input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 14.5px;
+  color: var(--text-primary);
+  font-family: inherit;
+}
+.global-search-results {
+  overflow-y: auto;
+  padding: 6px;
+}
+.global-search-empty {
+  padding: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.global-search-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  cursor: pointer;
+  text-align: left;
+}
+.global-search-item--active {
+  background: var(--surface-brand-soft);
+  color: var(--action-brand);
+}
+.global-search-item__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.global-search-item__sub {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
 .sidebar__nav {
   flex: 1;
   overflow-y: auto;
@@ -34,6 +151,55 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+/* ---- Sidebar footer: theme toggle, account, sign out — everything the
+   old top header used to hold (docs/admin-ui-ux-review.md #1). Pinned to
+   the bottom of the sidebar's own flex column, never scrolls with nav. */
+.sidebar__footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border-default);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.theme-toggle--sidebar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.theme-toggle--sidebar i {
+  font-size: 15px;
+  flex-shrink: 0;
+}
+.theme-toggle__label {
+  flex: 1;
+}
+.user-chip--sidebar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  min-width: 0;
+}
+.user-chip--sidebar .user-chip__email {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.sidebar__signout {
+  justify-content: center;
+  width: 100%;
 }
 .sidebar__section {
   font-size: 11px;
@@ -77,25 +243,6 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
-}
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: var(--topbar-h);
-  padding: 0 24px;
-  background: var(--surface-card);
-  border-bottom: 1px solid var(--border-default);
-  flex-shrink: 0;
-}
-.topbar__title {
-  font-size: 15px;
-  font-weight: 600;
-}
-.topbar__right {
-  display: flex;
-  align-items: center;
-  gap: 14px;
 }
 .user-chip {
   display: flex;
@@ -151,9 +298,88 @@
   margin-top: 3px;
 }
 
-.theme-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
+/* ---- Mobile / narrow-viewport (docs/admin-ui-ux-review.md #1.3) ----
+   Above the breakpoint these are all inert (display: none / never
+   rendered visibly) — .sidebar stays the permanent grid column it
+   always was. Below it, .sidebar becomes an off-canvas drawer: fixed,
+   translated off-screen by default, slid in via .sidebar--open, with a
+   scrim behind it and a hamburger button to open it (there's no header
+   left to put one in, §1 above, so it floats over .content instead). */
+.mobile-menu-btn {
+  display: none;
+}
+.sidebar__close {
+  display: none;
+}
+.sidebar-scrim {
+  display: none;
+}
+
+@media (max-width: 880px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(280px, 84vw);
+    z-index: 210;
+    transform: translateX(-100%);
+    transition: transform var(--dur-normal, 0.2s) var(--ease-standard, ease);
+    box-shadow: var(--shadow-2xl);
+  }
+  .sidebar--open {
+    transform: translateX(0);
+  }
+  .sidebar__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin-left: auto;
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 16px;
+  }
+  .sidebar-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: var(--modal-scrim, rgba(0, 0, 0, 0.4));
+    z-index: 200;
+  }
+  .mobile-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 190;
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--border-default);
+    background: var(--surface-card);
+    color: var(--text-primary);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md, 0 2px 8px rgba(0, 0, 0, 0.12));
+    cursor: pointer;
+    font-size: 18px;
+  }
+  /* Room for the floating hamburger button so it never sits on top of a
+     page's own title/actions (the same "floating navbar needs spacing,
+     content needs room for it" pair of rules). Covers both layouts:
+     .content itself (most pages) and .workspace (Data Browser/Schema
+     Builder's own flush, self-padded layout, §1's own note on why they
+     skip .content's padding). */
+  .content:not(.content--flush) {
+    padding-top: 64px;
+  }
+  .content--flush .workspace {
+    padding-top: 64px;
+  }
 }

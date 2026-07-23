@@ -30,10 +30,14 @@
 .row-clickable {
   cursor: pointer;
 }
+/* A subtle "this row opens something" affordance — NOT a repeated
+   "Edit"/"View"/"Preview" text label (docs/admin-ui-ux-review.md #2.3;
+   the row itself is already fully clickable, DataTable's own cursor:
+   pointer + hover background). */
 .row-open {
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--action-brand);
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-tertiary);
 }
 .th-sort {
   background: none;
@@ -83,9 +87,15 @@
 }
 
 /* ---- Record metadata ---- */
+/* Its own card (docs/admin-ui-ux-review.md #6) — previously just a
+   top-border separator sitting inline after the editable form, easy to
+   mistake for more form fields. Now a visually distinct, read-only strip
+   above the form: different background, full border, its own radius. */
 .meta {
-  border-top: 1px solid var(--border-default);
-  padding-top: 14px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
 }
 .meta__title {
   font-size: 11px;
@@ -138,19 +148,34 @@
 .audit-diff {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-.audit-diff__field {
-  display: grid;
-  grid-template-columns: 140px 1fr 20px 1fr;
-  align-items: center;
   gap: 8px;
+}
+/* Name on its own line, before/after below it (was a cramped 4-column
+   grid — 140px for the name alone left ~90px each for before/after in a
+   360px-wide panel, unreadable for anything longer than a short word;
+   a MULTIFILE JSON diff or a signed URL was pure ellipsis either way).
+   Each value also gets a hover title= with the untruncated text now. */
+.audit-diff__field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   font-size: 12.5px;
-  padding: 3px 0;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  border: 1px solid var(--border-subtle);
 }
 .audit-diff__name {
   color: var(--text-tertiary);
-  font-size: 11.5px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.audit-diff__values {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 .audit-diff__before {
   color: var(--status-error);
@@ -158,16 +183,22 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+  cursor: default;
 }
 .audit-diff__after {
   color: var(--status-success);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+  cursor: default;
 }
 .audit-diff__arrow {
   color: var(--text-tertiary);
-  text-align: center;
+  flex-shrink: 0;
 }
 
 /* ---- Row editor / audit history split panel ---- */

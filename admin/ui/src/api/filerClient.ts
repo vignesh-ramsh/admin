@@ -28,15 +28,17 @@ export interface UploadResult {
   file_id: string;
   status: string;
   private: boolean;
+  path: string;
 }
 
 export async function uploadFilerFile(
   file: File,
-  options: { storage?: string; private?: boolean } = {}
+  options: { storage?: string; private?: boolean; path?: string } = {}
 ): Promise<UploadResult> {
   const params = new URLSearchParams();
   if (options.storage) params.set("storage", options.storage);
   if (options.private !== undefined) params.set("private", String(options.private));
+  if (options.path) params.set("path", options.path);
   const qs = params.toString();
 
   const form = new FormData();

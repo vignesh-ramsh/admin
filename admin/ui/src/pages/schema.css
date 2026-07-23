@@ -63,6 +63,10 @@
   border-radius: var(--radius-md);
   overflow: hidden;
 }
+.fields__filter {
+  margin: 10px;
+  margin-bottom: 0;
+}
 .fields__head {
   display: flex;
   align-items: center;

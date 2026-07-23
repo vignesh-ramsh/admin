@@ -7,7 +7,7 @@ import { Badge } from "../../components/Badge";
 import { Select } from "../../components/Field";
 import { Loading, EmptyState, ErrorState } from "../../components/States";
 import { DataTable } from "../../components/agni/data/DataTable";
-import { IconRefresh, IconSearch, IconPlus } from "../../layout/icons";
+import { IconRefresh, IconSearch, IconPlus, IconChevron } from "../../layout/icons";
 import { FilePreviewModal } from "./FilePreviewModal";
 import { UploadFileModal } from "./UploadFileModal";
 import { formatBytes, statusTone } from "./filerUtils";
@@ -18,11 +18,22 @@ const PAGE_SIZE = 25;
 
 export function FilerFilesTab() {
   const { onUnauthorized } = useAuth();
+  // One box, matching EITHER filename or path server-side (docs/admin-ui-
+  // ux-review.md #5 — these used to be two separate inputs). Debounced
+  // (#1.2 in the same review) so typing doesn't fire a request per
+  // keystroke — 300ms, the standard "feels instant, still coalesces a
+  // fast typist" window.
+  const [qInput, setQInput] = useState("");
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [storage, setStorage] = useState("");
   const [visibility, setVisibility] = useState("");
   const [offset, setOffset] = useState(0);
+
+  useEffect(() => {
+    const t = setTimeout(() => setQ(qInput), 300);
+    return () => clearTimeout(t);
+  }, [qInput]);
 
   const [rows, setRows] = useState<FilerFileRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,9 +94,9 @@ export function FilerFilesTab() {
           <IconSearch />
           <input
             className="search__input"
-            placeholder="Search by filename…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search by filename or path…"
+            value={qInput}
+            onChange={(e) => setQInput(e.target.value)}
           />
         </div>
         <Select value={status} onChange={(e) => setStatus(e.target.value)} style={{ width: 150 }}>
@@ -131,6 +142,7 @@ export function FilerFilesTab() {
             onRowClick={(r: FilerFileRow) => setSelected(r)}
             columns={[
               { key: "original_filename", label: "Filename" },
+              { key: "path", label: "Path", width: 130, render: (v: string) => <span className="mono muted" style={{ fontSize: 12.5 }}>{v}</span> },
               { key: "content_type", label: "Type", width: 170, render: (v: string) => <span className="mono muted" style={{ fontSize: 12.5 }}>{v}</span> },
               { key: "size_bytes", label: "Size", width: 100, render: (v: number) => formatBytes(v) },
               {
@@ -151,7 +163,17 @@ export function FilerFilesTab() {
               },
               { key: "storage", label: "Storage", width: 90 },
               { key: "created_by", label: "Uploaded by", width: 180, render: (v: string | null) => v || <span className="muted">—</span> },
-              { key: "_actions", label: "", width: 70, sortable: false, render: () => <span className="row-open">Preview</span> },
+              {
+                key: "_actions",
+                label: "",
+                width: 32,
+                sortable: false,
+                render: () => (
+                  <span className="row-open" aria-hidden="true">
+                    <IconChevron size={14} />
+                  </span>
+                ),
+              },
             ]}
           />
         )}

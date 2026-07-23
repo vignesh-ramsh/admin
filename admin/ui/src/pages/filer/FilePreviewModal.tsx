@@ -6,9 +6,29 @@ import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { Banner } from "../../components/agni/feedback/Banner";
 import { useToast } from "../../components/Toast";
-import { IconDownload, IconFile } from "../../layout/icons";
+import { IconDownload, IconFile, IconCopy, IconCheck } from "../../layout/icons";
 import { formatBytes, statusTone, isImage } from "./filerUtils";
+import { formatWhen } from "../shared/datetime";
 import "./filer.css";
+
+function CopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="copy-btn"
+      title="Copy to clipboard"
+      aria-label="Copy to clipboard"
+      onClick={() => {
+        navigator.clipboard.writeText(value);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      {copied ? <IconCheck /> : <IconCopy />}
+    </button>
+  );
+}
 
 const UNAVAILABLE_REASON: Record<string, string> = {
   pending: "This file is still being scanned and isn't previewable yet.",
@@ -84,38 +104,82 @@ export function FilePreviewModal({
     >
       <div className="file-preview-layout">
         <div className="file-preview-layout__info">
-          <dl className="file-meta">
-            <dt>File ID</dt>
-            <dd className="mono">{file.file_id}</dd>
-            <dt>Content type</dt>
-            <dd className="mono">{file.content_type}</dd>
-            <dt>Size</dt>
-            <dd>{formatBytes(file.size_bytes)}</dd>
-            <dt>Storage</dt>
-            <dd>{file.storage}</dd>
-            <dt>Visibility</dt>
-            <dd>
-              <Badge tone={file.private ? "warning" : "neutral"}>{file.private ? "Private" : "Public"}</Badge>
-            </dd>
-            <dt>Status</dt>
-            <dd>
-              <Badge tone={statusTone(file.status)} dot>
-                {file.status}
-              </Badge>
-            </dd>
-            <dt>Checksum</dt>
-            <dd className="mono" style={{ fontSize: 11.5, wordBreak: "break-all" }}>{file.checksum}</dd>
-            <dt>Uploaded by</dt>
-            <dd>{file.created_by || <span className="muted">—</span>}</dd>
-            <dt>Uploaded at</dt>
-            <dd>{new Date(file.created_at).toLocaleString()}</dd>
+          <div className="file-meta-card">
+            <div className="file-meta-card__head">
+              <IconFile size={18} />
+              <span>Identity</span>
+            </div>
+            <div className="file-meta-row">
+              <span className="file-meta-row__label">File ID</span>
+              <span className="file-meta-row__value mono">{file.file_id}</span>
+              <CopyButton value={file.file_id} />
+            </div>
+            <div className="file-meta-row">
+              <span className="file-meta-row__label">Content type</span>
+              <span className="file-meta-row__value mono">{file.content_type}</span>
+            </div>
+            <div className="file-meta-row">
+              <span className="file-meta-row__label">Size</span>
+              <span className="file-meta-row__value">{formatBytes(file.size_bytes)}</span>
+            </div>
+            <div className="file-meta-row">
+              <span className="file-meta-row__label">Checksum</span>
+              <span className="file-meta-row__value mono" style={{ fontSize: 11 }}>
+                {file.checksum.slice(0, 16)}…
+              </span>
+              <CopyButton value={file.checksum} />
+            </div>
+          </div>
+
+          <div className="file-meta-card">
+            <div className="file-meta-card__head">
+              <i className="ph ph-hard-drives" aria-hidden="true" />
+              <span>Storage</span>
+            </div>
+            <div className="file-meta-row">
+              <span className="file-meta-row__label">Provider</span>
+              <span className="file-meta-row__value">{file.storage}</span>
+            </div>
+            <div className="file-meta-row">
+              <span className="file-meta-row__label">Path</span>
+              <span className="file-meta-row__value mono">{file.path}</span>
+            </div>
+            <div className="file-meta-row">
+              <span className="file-meta-row__label">Visibility</span>
+              <span className="file-meta-row__value">
+                <Badge tone={file.private ? "warning" : "neutral"}>{file.private ? "Private" : "Public"}</Badge>
+              </span>
+            </div>
+            <div className="file-meta-row">
+              <span className="file-meta-row__label">Status</span>
+              <span className="file-meta-row__value">
+                <Badge tone={statusTone(file.status)} dot>
+                  {file.status}
+                </Badge>
+              </span>
+            </div>
+          </div>
+
+          <div className="file-meta-card">
+            <div className="file-meta-card__head">
+              <i className="ph ph-clock-counter-clockwise" aria-hidden="true" />
+              <span>History</span>
+            </div>
+            <div className="file-meta-row">
+              <span className="file-meta-row__label">Uploaded by</span>
+              <span className="file-meta-row__value">{file.created_by || <span className="muted">—</span>}</span>
+            </div>
+            <div className="file-meta-row">
+              <span className="file-meta-row__label">Uploaded at</span>
+              <span className="file-meta-row__value">{formatWhen(file.created_at)}</span>
+            </div>
             {file.deleted_at && (
-              <>
-                <dt>Deleted at</dt>
-                <dd>{new Date(file.deleted_at).toLocaleString()}</dd>
-              </>
+              <div className="file-meta-row">
+                <span className="file-meta-row__label">Deleted at</span>
+                <span className="file-meta-row__value">{formatWhen(file.deleted_at)}</span>
+              </div>
             )}
-          </dl>
+          </div>
 
           {!servable && (
             <Banner tone="warning">{UNAVAILABLE_REASON[file.status] ?? "This file isn't currently available."}</Banner>

@@ -8,6 +8,7 @@ import { Button } from "../components/Button";
 import { Loading, EmptyState } from "../components/States";
 import { IconPlus, IconSchema } from "../layout/icons";
 import { PanelSearch } from "./shared/PanelSearch";
+import { Tabs } from "../components/Tabs";
 import { useIncrementalReveal } from "../hooks/useIncrementalReveal";
 import { SchemaEditor, type EditorTarget } from "./schema/SchemaEditor";
 import { MigrationPreviewModal } from "./schema/MigrationPreviewModal";
@@ -36,6 +37,13 @@ export function SchemaBuilderPage() {
   const [target, setTarget] = useState<EditorTarget | null>(null);
   const [loadingFiles, setLoadingFiles] = useState(false);
   const [preview, setPreview] = useState(false);
+  // Which of the two file lists the panel shows (docs/admin-ui-ux-review.md
+  // #3 — Schemas/Patches used to be two permanently-stacked sections).
+  // Independent of the currently OPEN file (fileKind) — you can browse
+  // Patches while a schema file is still open in the editor — but syncs to
+  // it below whenever a file is opened, so landing on a patch via a
+  // shared/bookmarked URL naturally selects the Patches tab too.
+  const [listTab, setListTab] = useState<"schema" | "patch">(fileKind ?? "schema");
 
   const handleErr = useCallback(
     (err: unknown) => {
@@ -90,6 +98,7 @@ export function SchemaBuilderPage() {
   // Open whatever file the URL names (also on a cold load / refresh).
   useEffect(() => {
     if (!plugin || !fileKind || !fileName) return;
+    setListTab(fileKind);
     if (target && !target.isNew && target.kind === fileKind && target.name === fileName) return;
     const fn = fileKind === "schema" ? "get_schema_file" : "get_patch_file";
     call<SchemaFileContent>(fn, { plugin, name: fileName }, { method: "GET" })
@@ -113,6 +122,7 @@ export function SchemaBuilderPage() {
 
   const newFile = (kind: "schema" | "patch") => {
     setParams({ plugin }, { replace: true }); // an unsaved file isn't addressable
+    setListTab(kind);
     setTarget({
       openId: Date.now(),
       kind,
@@ -180,25 +190,34 @@ export function SchemaBuilderPage() {
             onPluginChange={selectPlugin}
             placeholder="Search files…"
           />
+          <Tabs
+            tabs={[
+              { id: "schema", label: `Schemas (${filteredSchemas.length})` },
+              { id: "patch", label: `Patches (${filteredPatches.length})` },
+            ]}
+            active={listTab}
+            onChange={(id) => setListTab(id as "schema" | "patch")}
+          />
           <div className="browse-panel__list">
-            <FileGroup
-              title="Schemas"
-              singular="schema"
-              names={filteredSchemas}
-              activeName={target?.kind === "schema" && !target.isNew ? target.name : null}
-              onOpen={(n) => selectFile("schema", n)}
-              onNew={() => newFile("schema")}
-              loading={loadingFiles}
-            />
-            <FileGroup
-              title="Patches"
-              singular="patch"
-              names={filteredPatches}
-              activeName={target?.kind === "patch" && !target.isNew ? target.name : null}
-              onOpen={(n) => selectFile("patch", n)}
-              onNew={() => newFile("patch")}
-              loading={loadingFiles}
-            />
+            {listTab === "schema" ? (
+              <FileGroup
+                singular="schema"
+                names={filteredSchemas}
+                activeName={target?.kind === "schema" && !target.isNew ? target.name : null}
+                onOpen={(n) => selectFile("schema", n)}
+                onNew={() => newFile("schema")}
+                loading={loadingFiles}
+              />
+            ) : (
+              <FileGroup
+                singular="patch"
+                names={filteredPatches}
+                activeName={target?.kind === "patch" && !target.isNew ? target.name : null}
+                onOpen={(n) => selectFile("patch", n)}
+                onNew={() => newFile("patch")}
+                loading={loadingFiles}
+              />
+            )}
           </div>
         </aside>
 
@@ -242,7 +261,6 @@ export function SchemaBuilderPage() {
 }
 
 function FileGroup({
-  title,
   singular,
   names,
   activeName,
@@ -250,7 +268,6 @@ function FileGroup({
   onNew,
   loading,
 }: {
-  title: string;
   singular: string;
   names: string[];
   activeName: string | null;
@@ -262,9 +279,11 @@ function FileGroup({
   return (
     <div className="file-group">
       <div className="file-group__head">
-        <span className="file-group__title">{title}</span>
+        <span className="file-group__title">
+          {singular === "schema" ? "Schemas" : "Patches"}
+        </span>
         <button className="file-group__add" onClick={onNew} title={`New ${singular}`}>
-          <IconPlus size={15} />
+          <IconPlus size={15} /> New
         </button>
       </div>
       {loading ? (

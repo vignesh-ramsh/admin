@@ -39,6 +39,7 @@ def _field_to_dict(f) -> dict:
         "target": f.target,
         "target_field": f.target_field,
         "is_column": f.is_column(),
+        "list": f.list,
     }
 
 

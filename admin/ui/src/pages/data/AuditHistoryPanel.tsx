@@ -128,9 +128,15 @@ function toAgniEntry(entry: AuditEntry, emailFor: (id: string) => string): AgniA
             // not just hidden here.
             <div key={k} className="audit-diff__field">
               <span className="audit-diff__name mono">{k}</span>
-              <span className="audit-diff__before">{fmt(before?.[k])}</span>
-              <span className="audit-diff__arrow">→</span>
-              <span className="audit-diff__after">{fmt(after?.[k])}</span>
+              <div className="audit-diff__values">
+                <span className="audit-diff__before" title={fmt(before?.[k])}>
+                  {fmt(before?.[k])}
+                </span>
+                <i className="ph ph-arrow-right audit-diff__arrow" aria-hidden="true" />
+                <span className="audit-diff__after" title={fmt(after?.[k])}>
+                  {fmt(after?.[k])}
+                </span>
+              </div>
             </div>
           ))}
         </div>

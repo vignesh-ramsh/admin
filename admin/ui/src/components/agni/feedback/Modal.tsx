@@ -67,7 +67,7 @@ export function Modal({
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 20px", borderBottom: "1px solid var(--border-subtle)" }}>
             {danger && <span style={{ width: 30, height: 30, borderRadius: "var(--radius-md)", background: "var(--status-error-soft)", color: "var(--status-error)", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0 }}><i className="ph-fill ph-warning" /></span>}
             <span style={{ flex: 1, fontSize: "var(--text-md)", fontWeight: "var(--fw-semibold)", color: "var(--text-primary)" }}>{title}</span>
-            <button type="button" onClick={onClose} style={{ width: 30, height: 30, border: "none", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", fontSize: 17, borderRadius: "var(--radius-sm)", flexShrink: 0 }}><i className="ph ph-x" /></button>
+            <button type="button" onClick={onClose} aria-label="Close" style={{ width: 30, height: 30, border: "none", background: "transparent", color: "var(--text-tertiary)", cursor: "pointer", fontSize: 17, borderRadius: "var(--radius-sm)", flexShrink: 0 }}><i className="ph ph-x" aria-hidden="true" /></button>
           </div>
         )}
         <div style={{ padding: 20, overflowY: "auto", fontSize: "var(--text-base)", color: "var(--text-secondary)", lineHeight: "var(--leading-normal)" }}>{children}</div>

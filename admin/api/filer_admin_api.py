@@ -95,6 +95,16 @@ def _as_bool(value) -> bool:
     return str(value).strip().lower() not in ("false", "0", "no", "")
 
 
+def _escape_like(value: str) -> str:
+    """Same escaping the Query Engine's own `contains` operator does
+    (relay/query.py's _escape_like) — a search value that happens to
+    contain a literal '%'/'_' shouldn't silently become a wildcard.
+    Not imported from relay.query since it's two lines and internal
+    (leading underscore) — same "not worth a shared symbol" call the
+    rest of this codebase already makes for things this small."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_filer_files(
     status: str | None = None,
@@ -108,26 +118,42 @@ async def list_filer_files(
     plain if public, null if the file isn't currently servable) —
     Superuser already sees the raw row via the generic Data Browser
     (table="filerfile"); this is the same data, purpose-shaped for a
-    preview/download UI instead of a raw grid."""
-    filters: dict = {}
-    if status:
-        filters["status"] = status
-    if storage:
-        filters["storage"] = storage
-    if private is not None and private != "":
-        filters["private"] = _as_bool(private)
-    if q:
-        filters["original_filename"] = {"contains": q}
+    preview/download UI instead of a raw grid.
 
+    `q` matches EITHER original_filename OR path (docs/admin-ui-ux-
+    review.md #5 — the Files tab used to have two separate boxes for
+    these). The bounded Query Engine's `filters` dict is AND-only across
+    columns with no OR between two different fields, so this one query
+    goes through the raw-SQL escape hatch instead (arc.MD §3.4) — still
+    fully parameterized, no string-formatting of any caller value."""
+    where: list[str] = []
+    params: list = []
+    if status:
+        params.append(status)
+        where.append(f'status = ${len(params)}')
+    if storage:
+        params.append(storage)
+        where.append(f'storage = ${len(params)}')
+    if private is not None and private != "":
+        params.append(_as_bool(private))
+        where.append(f'private = ${len(params)}')
+    if q:
+        params.append(f"%{_escape_like(q)}%")
+        where.append(f"(original_filename ILIKE ${len(params)} ESCAPE '\\' OR path ILIKE ${len(params)} ESCAPE '\\')")
+
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
     # limit/offset arrive as plain query-string strings when this is
     # called via GET (relay's kwarg merging never coerces beyond that —
     # the same documented limitation file_upload's `private` and filer's
-    # own `serve_file`'s `exp` already had to work around) — relay's own
-    # query engine then rejects a numeric STRING outright rather than
-    # silently accepting it, which is what actually surfaced this.
-    rows = await arc.relay.list(
-        "filerfile", filters=filters or None, order_by=["-created_at"], limit=int(limit), offset=int(offset)
+    # own `serve_file`'s `exp` already had to work around) — asyncpg
+    # rejects a numeric STRING outright rather than silently accepting
+    # it, which is what actually surfaced this.
+    params.extend([int(limit), int(offset)])
+    query = (
+        f'SELECT * FROM "filerfile" {where_sql} '
+        f'ORDER BY created_at DESC LIMIT ${len(params) - 1} OFFSET ${len(params)}'
     )
+    rows = await arc.relay.sql(query, *params)
     out = []
     for row in rows:
         url = await arc.filer.sign_url(row["file_id"]) if row["status"] in ("clean", "skipped") else None

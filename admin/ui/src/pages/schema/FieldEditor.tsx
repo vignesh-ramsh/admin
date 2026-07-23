@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { SchemaField, TableMeta } from "../../api/types";
 import { Button } from "../../components/Button";
 import { Combobox, type ComboOption } from "../../components/Combobox";
-import { IconPlus } from "../../layout/icons";
+import { IconPlus, IconSearch } from "../../layout/icons";
 import { useTargetFieldOptions } from "./useTargetFields";
 import {
   typesFor,
@@ -28,8 +28,30 @@ export function FieldEditor({ fields, system, tableMeta, onChange }: Props) {
   const remove = (i: number) => onChange(fields.filter((_, idx) => idx !== i));
   const add = () => onChange([...fields, blankField(nextFieldId(fields))]);
 
+  // A quick filter, not a real "group" concept — a wide system table
+  // (_users has 15 fields, AA00-AA14) used to mean reading every row
+  // top to bottom to find one specific field (docs/admin-ui-ux-review.md
+  // #3.2). Only shown once there's enough fields for it to matter; index
+  // `i` used by update/remove below always refers to the REAL position
+  // in `fields`, never the filtered list's position.
+  const [filterQuery, setFilterQuery] = useState("");
+  const q = filterQuery.trim().toLowerCase();
+  const visible = q ? fields.filter((f) => f.name.toLowerCase().includes(q) || f.id.toLowerCase().includes(q)) : fields;
+
   return (
     <div className="fields">
+      {fields.length > 8 && (
+        <div className="fields__filter search">
+          <IconSearch size={14} />
+          <input
+            className="search__input"
+            placeholder={`Filter ${fields.length} fields by name or id…`}
+            value={filterQuery}
+            onChange={(e) => setFilterQuery(e.target.value)}
+          />
+        </div>
+      )}
+
       <div className="fields__head">
         <span style={{ width: 52 }}>ID</span>
         <span style={{ flex: 1 }}>Name</span>
@@ -37,14 +59,22 @@ export function FieldEditor({ fields, system, tableMeta, onChange }: Props) {
         <span style={{ flex: 1.5 }}>Configuration</span>
         <span style={{ width: 56, textAlign: "center" }}>Req</span>
         <span style={{ width: 56, textAlign: "center" }}>Uniq</span>
+        <span style={{ width: 56, textAlign: "center" }} title="Show this column in Data Browser's table/list view">
+          List
+        </span>
         <span style={{ width: 34 }} />
       </div>
 
       {fields.length === 0 && (
         <div className="fields__empty">No fields yet — add the table’s first field below.</div>
       )}
+      {fields.length > 0 && visible.length === 0 && (
+        <div className="fields__empty">No fields match “{filterQuery}”.</div>
+      )}
 
-      {fields.map((f, i) => (
+      {visible.map((f) => {
+        const i = fields.indexOf(f);
+        return (
         <div className="fields__row" key={f.id || i}>
           <span className="fields__id mono">{f.id}</span>
 
@@ -99,12 +129,24 @@ export function FieldEditor({ fields, system, tableMeta, onChange }: Props) {
               onChange={(e) => update(i, { unique: e.target.checked })}
             />
           </label>
+          <label
+            className="fields__check"
+            style={{ width: 56 }}
+            title="Show this column in Data Browser's table/list view — always still editable in the row editor either way"
+          >
+            <input
+              type="checkbox"
+              checked={f.list !== false}
+              onChange={(e) => update(i, { list: e.target.checked })}
+            />
+          </label>
 
           <button className="fields__remove" onClick={() => remove(i)} title="Remove field" aria-label="Remove field">
             <i className="ph ph-trash" style={{ fontSize: 16 }} />
           </button>
         </div>
-      ))}
+        );
+      })}
 
       <div className="fields__add">
         <Button variant="secondary" size="sm" onClick={add}>

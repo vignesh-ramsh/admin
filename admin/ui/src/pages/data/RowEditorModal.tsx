@@ -140,6 +140,24 @@ export function RowEditorModal({ table, schema, rowId, readOnly, onClose, onSave
               </div>
             )}
 
+            {row && (
+              <div className="meta">
+                <div className="meta__title">Record metadata</div>
+                <div className="meta__grid">
+                  <MetaItem label="id" value={String(row.id ?? "—")} mono />
+                  <MetaItem label="created" value={formatCell(row.created_at)} />
+                  <MetaItem label="updated" value={formatCell(row.updated_at)} />
+                  <MetaItem label="state" value={String(row._state ?? "0")} />
+                  {row.created_by != null && (
+                    <MetaItem label="created by" value={dir.emailFor(String(row.created_by))} />
+                  )}
+                  {row.updated_by != null && (
+                    <MetaItem label="updated by" value={dir.emailFor(String(row.updated_by))} />
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="form-grid">
               {fields.map((f) => (
                 <Field
@@ -166,24 +184,6 @@ export function RowEditorModal({ table, schema, rowId, readOnly, onClose, onSave
                 </Field>
               ))}
             </div>
-
-            {row && (
-              <div className="meta">
-                <div className="meta__title">Record metadata</div>
-                <div className="meta__grid">
-                  <MetaItem label="id" value={String(row.id ?? "—")} mono />
-                  <MetaItem label="created" value={formatCell(row.created_at)} />
-                  <MetaItem label="updated" value={formatCell(row.updated_at)} />
-                  <MetaItem label="state" value={String(row._state ?? "0")} />
-                  {row.created_by != null && (
-                    <MetaItem label="created by" value={dir.emailFor(String(row.created_by))} />
-                  )}
-                  {row.updated_by != null && (
-                    <MetaItem label="updated by" value={dir.emailFor(String(row.updated_by))} />
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         );
 
