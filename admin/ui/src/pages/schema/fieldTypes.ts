@@ -18,6 +18,8 @@ export const BASE_TYPES = [
   "SELECT",
   "REFERENCE",
   "TABLE",
+  "FILE",
+  "MULTIFILE",
 ] as const;
 
 export const SYSTEM_ONLY_TYPES = ["UUID"] as const;

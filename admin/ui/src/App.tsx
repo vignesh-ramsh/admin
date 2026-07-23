@@ -13,11 +13,14 @@ import { SessionsPage } from "./pages/SessionsPage";
 import { AccessKeysPage } from "./pages/AccessKeysPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { JobsPage } from "./pages/JobsPage";
+import { FileManagerPage } from "./pages/FileManagerPage";
 
 export default function App() {
-  const { token } = useAuth();
+  const { loading, authenticated } = useAuth();
 
-  if (!token) {
+  if (loading) return null;
+
+  if (!authenticated) {
     return (
       <Routes>
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
@@ -40,6 +43,7 @@ export default function App() {
         <Route path="/access-keys" element={<AccessKeysPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/jobs" element={<JobsPage />} />
+        <Route path="/files" element={<FileManagerPage />} />
         <Route path="*" element={<Navigate to="/health" replace />} />
       </Route>
     </Routes>

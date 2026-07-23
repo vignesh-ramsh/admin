@@ -200,7 +200,7 @@ def _atomic_write_validated(
     return schema
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_schema_files(plugin: str) -> dict:
     directory = require_plugin_dir(plugin)
     return {
@@ -209,7 +209,7 @@ async def list_schema_files(plugin: str) -> dict:
     }
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def get_schema_file(plugin: str, name: str) -> dict:
     directory = require_plugin_dir(plugin)
     path = directory / "schemas" / f"{name}.json"
@@ -218,7 +218,7 @@ async def get_schema_file(plugin: str, name: str) -> dict:
     return json.loads(path.read_text())
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def get_patch_file(plugin: str, name: str) -> dict:
     directory = require_plugin_dir(plugin)
     path = directory / "patches" / f"{name}.json"
@@ -278,7 +278,7 @@ def _serialize_op(op) -> dict:
     }
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def preview_migration_plan(plugin: str | None = None, table: str | None = None) -> dict:
     """Entirely read-only — build_plan diffs against the live database but
     never writes to it. Reloads EVERY installed plugin's schemas/patches
@@ -419,7 +419,7 @@ async def apply_patch_file(plugin: str, name: str, confirm: bool = False) -> dic
     return await _apply_or_preview(path, plugin, load_patch_file, is_patch=True, confirm=confirm)
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def get_migrate_command(plugin: str | None = None, table: str | None = None) -> dict:
     """The operator runs this themselves, in a fresh process — that's what
     actually and correctly refreshes the running application's own schema

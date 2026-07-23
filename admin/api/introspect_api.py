@@ -42,7 +42,7 @@ def _field_to_dict(f) -> dict:
     }
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_plugins(surface: str | None = None) -> list[str]:
     """`surface` ("data_browser" / "schema_builder") applies that surface's
     own exclusion list (admin._exclusions). Omitted -> every installed
@@ -50,7 +50,7 @@ async def list_plugins(surface: str | None = None) -> list[str]:
     return filter_plugins(arc.admin.list_installed_plugins(), surface)
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_table_meta(surface: str | None = None) -> list[dict]:
     """Every registered table with the metadata the Schema Builder's field
     pickers need.
@@ -92,7 +92,7 @@ def _hidden(surface: str | None):
     return excluded_for(surface)
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_tables(plugin: str, surface: str | None = None) -> list[str]:
     require_known_plugin(plugin)
     if plugin in _hidden(surface):
@@ -106,7 +106,7 @@ async def list_tables(plugin: str, surface: str | None = None) -> list[str]:
     return [r["table"] for r in rows]
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def get_table_schema(table: str) -> dict:
     try:
         schema = arc.psqldb.schema(table)

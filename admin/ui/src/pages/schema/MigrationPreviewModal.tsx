@@ -9,11 +9,11 @@ import { Loading, ErrorState, EmptyState } from "../../components/States";
 
 export function MigrationPreviewModal({ plugin, onClose }: { plugin: string; onClose: () => void }) {
   const { data: plan, loading, error } = useAsync<MigrationPlan>(
-    () => call("preview_migration_plan", { plugin }),
+    () => call("preview_migration_plan", { plugin }, { method: "GET" }),
     [plugin]
   );
   const { data: cmd } = useAsync<{ command: string }>(
-    () => call("get_migrate_command", { plugin }),
+    () => call("get_migrate_command", { plugin }, { method: "GET" }),
     [plugin]
   );
   const [copied, setCopied] = useState(false);

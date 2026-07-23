@@ -53,7 +53,7 @@ def _require_not_protected(table: str) -> None:
         )
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_rows(
     table: str,
     filters: dict | None = None,
@@ -79,7 +79,7 @@ async def list_rows(
     return [redact_row(r) for r in rows]
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def get_row(table: str, id: str) -> dict:
     try:
         row = await arc.relay.get(table, id)

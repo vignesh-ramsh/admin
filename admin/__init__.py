@@ -67,7 +67,7 @@ class AdminProvider:
 
 def register(kernel: Any) -> None:
     provider = AdminProvider(kernel)
-    kernel.export(CAPABILITY, provider, requires=["relay", "gateway", "authn"], optional_requires=[])
+    kernel.export(CAPABILITY, provider, requires=["relay", "gateway", "authn", "filer"], optional_requires=[])
 
     relay = kernel.get("relay")
     relay.register_api(Path(__file__).parent / "api")

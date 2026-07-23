@@ -40,7 +40,10 @@ export function RolesPage() {
     // role" — JSONB array membership has no Query Engine filter operator
     // (docs/arc.MD §3.4), so counting client-side is the established
     // pattern (authn's own `list-users --role` does the same).
-    Promise.all([call<Role[]>("list_roles"), call<User[]>("list_users")])
+    Promise.all([
+      call<Role[]>("list_roles", {}, { method: "GET" }),
+      call<User[]>("list_users", {}, { method: "GET" }),
+    ])
       .then(([r, u]) => {
         setRoles(r);
         setUsers(u);

@@ -14,7 +14,7 @@ const cache = new Map<string, Promise<TableSchema | null>>();
 function fetchSchema(table: string): Promise<TableSchema | null> {
   let p = cache.get(table);
   if (!p) {
-    p = call<TableSchema>("get_table_schema", { table }).catch(() => null);
+    p = call<TableSchema>("get_table_schema", { table }, { method: "GET" }).catch(() => null);
     cache.set(table, p);
   }
   return p;

@@ -22,7 +22,7 @@ export function useUserDirectory(): UserDirectory {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    call<User[]>("list_users")
+    call<User[]>("list_users", {}, { method: "GET" })
       .then(setUsers)
       .finally(() => setLoading(false));
   }, []);

@@ -14,7 +14,7 @@ from psqldb.validation import ValidationError
 from admin._security import by_of
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_roles() -> list[dict]:
     return await arc.relay.list("_roles", order_by=["name"])
 

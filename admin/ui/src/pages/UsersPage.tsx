@@ -41,8 +41,8 @@ export function UsersPage() {
     setLoading(true);
     setError(null);
     Promise.all([
-      call<User[]>("list_users", { role: roleFilter || null, q: q || null }),
-      call<Role[]>("list_roles"),
+      call<User[]>("list_users", { role: roleFilter || null, q: q || null }, { method: "GET" }),
+      call<Role[]>("list_roles", {}, { method: "GET" }),
     ])
       .then(([u, r]) => {
         setUsers(u);

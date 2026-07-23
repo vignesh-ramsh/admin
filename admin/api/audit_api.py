@@ -37,7 +37,7 @@ async def _table_exists(table: str) -> bool:
     return row is not None
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_audit_plugins() -> list[str]:
     """Which installed plugins actually have an audit table — not every
     plugin does (only schemas declaring "audit": true get one)."""
@@ -48,7 +48,7 @@ async def list_audit_plugins() -> list[str]:
     return out
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_audit_tables(plugin: str) -> list[str]:
     """Distinct tables actually represented in this plugin's audit trail —
     populates the "table" filter dropdown without guessing at names."""
@@ -59,7 +59,7 @@ async def list_audit_tables(plugin: str) -> list[str]:
     return [r["table"] for r in rows]
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_audit_entries(
     plugin: str,
     table: str | None = None,
@@ -70,6 +70,12 @@ async def list_audit_entries(
     audit_table = _audit_table(plugin)
     if not await _table_exists(audit_table):
         arc.relay.throw(f"plugin '{plugin}' has no audit trail", status=404, code="no_audit_table")
+
+    # GET/QUERY calls arrive with limit/offset as plain strings (relay's
+    # kwarg merging never coerces past string) — same fix as
+    # filer_admin_api.py's list_filer_files.
+    limit = int(limit)
+    offset = int(offset)
 
     where = []
     params: list = []

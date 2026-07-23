@@ -2,5 +2,5 @@
 name = "admin"
 version = "0.1.0"
 capability = "admin"
-requires = ["relay", "gateway", "authn"]
+requires = ["relay", "gateway", "authn", "filer"]
 optional_requires = []

@@ -47,7 +47,7 @@ export function AccessKeysPage() {
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    call<AccessKey[]>("list_access_keys", { email: emailFilter || null })
+    call<AccessKey[]>("list_access_keys", { email: emailFilter || null }, { method: "GET" })
       .then(setKeys)
       .catch((err) => {
         if (!handleErr(err)) setError(err instanceof ApiError ? err.message : "Failed to load access keys");

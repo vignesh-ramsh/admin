@@ -66,8 +66,8 @@ export function DataBrowserPage() {
   );
 
   useEffect(() => {
-    call<string[]>("list_plugins", { surface: SURFACE }).then(setPlugins).catch(handleErr);
-    call<TableMeta[]>("list_table_meta", { surface: SURFACE }).then(setTableMeta).catch(handleErr);
+    call<string[]>("list_plugins", { surface: SURFACE }, { method: "GET" }).then(setPlugins).catch(handleErr);
+    call<TableMeta[]>("list_table_meta", { surface: SURFACE }, { method: "GET" }).then(setTableMeta).catch(handleErr);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handleErr]);
 
@@ -98,7 +98,7 @@ export function DataBrowserPage() {
     setFilters(null);
     setOrderBy(null);
     setOffset(0);
-    call<TableSchema>("get_table_schema", { table })
+    call<TableSchema>("get_table_schema", { table }, { method: "GET" })
       .then(setSchema)
       .catch((err) => {
         if (!handleErr(err)) setError(err instanceof ApiError ? err.message : "Failed to load schema");
@@ -109,13 +109,17 @@ export function DataBrowserPage() {
     if (!table) return;
     setLoading(true);
     setError(null);
-    call<Row[]>("list_rows", {
-      table,
-      filters,
-      order_by: orderBy ? [orderBy] : null,
-      limit,
-      offset,
-    })
+    call<Row[]>(
+      "list_rows",
+      {
+        table,
+        filters,
+        order_by: orderBy ? [orderBy] : null,
+        limit,
+        offset,
+      },
+      { method: "QUERY" }
+    )
       .then((r) => {
         setRows(r);
         setSelected(new Set());
@@ -252,8 +256,8 @@ export function DataBrowserPage() {
                       </button>
                     ),
                     render: (v: unknown) => (
-                      <span className="truncate" title={formatCell(v)}>
-                        {formatCell(v)}
+                      <span className="truncate" title={formatCell(v, c.type)}>
+                        {formatCell(v, c.type)}
                       </span>
                     ),
                   })

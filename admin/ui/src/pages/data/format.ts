@@ -32,10 +32,16 @@ export function listColumns(schema: TableSchema, max = 6): FieldMeta[] {
   return schema.fields.filter((f) => f.is_column).slice(0, max);
 }
 
-/** Human-readable cell text for the list view. */
-export function formatCell(value: unknown): string {
+/** Human-readable cell text for the list view. `fieldType`, when given,
+ *  is used ONLY to special-case MULTIFILE — checked by type, not by
+ *  shape (Array.isArray alone would also mislabel a plain JSON column
+ *  that happens to hold an array as "N files"). */
+export function formatCell(value: unknown, fieldType?: string): string {
   if (value === null || value === undefined) return "—";
   if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (fieldType === "MULTIFILE" && Array.isArray(value)) {
+    return `${value.length} file${value.length === 1 ? "" : "s"}`;
+  }
   if (typeof value === "object") return JSON.stringify(value);
   const s = String(value);
   // ISO timestamp -> compact local-ish display

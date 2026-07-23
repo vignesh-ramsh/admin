@@ -63,6 +63,28 @@ export function validateField(field: FieldMeta, raw: string | boolean): string |
         return "Not valid JSON.";
       }
       break;
+    case "MULTIFILE": {
+      // Same JSONB column shape as JSON (psqldb/fields.py's own note),
+      // but filer's own contract is specifically an ARRAY of
+      // {label, fileid} objects — checked here too since a bare object
+      // or a JSON string would parse fine but never work as a MULTIFILE
+      // value (docs/filer-attachment-storage-proposal.md §4).
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(value);
+      } catch {
+        return "Not valid JSON.";
+      }
+      if (!Array.isArray(parsed)) return 'Must be a JSON array, e.g. [{"label": "...", "fileid": "..."}].';
+      break;
+    }
+    case "FILE":
+      // Always VARCHAR(32) — fixed by psqldb's own column mapping for
+      // this type, independent of whatever "length" (if any) the schema
+      // itself declares, so this doesn't go through the field.length
+      // branch below at all.
+      if (value.length > 32) return "A file_id is at most 32 characters — this doesn't look like one filer issued.";
+      break;
   }
 
   // length applies to the character types psqldb renders as VARCHAR(n).

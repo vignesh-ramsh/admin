@@ -54,7 +54,7 @@ export function SchemaBuilderPage() {
 
   // Plugin list; default the URL to the first plugin if it names none.
   useEffect(() => {
-    call<string[]>("list_plugins", { surface: SURFACE })
+    call<string[]>("list_plugins", { surface: SURFACE }, { method: "GET" })
       .then((list) => {
         setPlugins(list);
         if (list.length && !plugin) setParams({ plugin: list[0] }, { replace: true });
@@ -67,11 +67,11 @@ export function SchemaBuilderPage() {
     (name: string) => {
       setLoadingFiles(true);
       Promise.all([
-        call<SchemaFileList>("list_schema_files", { plugin: name }),
+        call<SchemaFileList>("list_schema_files", { plugin: name }, { method: "GET" }),
         // Every table, not just this plugin's — a REFERENCE may legitimately
         // point across plugins, and TABLE targets are filtered to child
         // tables from this same list.
-        call<TableMeta[]>("list_table_meta", { surface: SURFACE }).catch(() => [] as TableMeta[]),
+        call<TableMeta[]>("list_table_meta", { surface: SURFACE }, { method: "GET" }).catch(() => [] as TableMeta[]),
       ])
         .then(([f, meta]) => {
           setFiles(f);
@@ -92,7 +92,7 @@ export function SchemaBuilderPage() {
     if (!plugin || !fileKind || !fileName) return;
     if (target && !target.isNew && target.kind === fileKind && target.name === fileName) return;
     const fn = fileKind === "schema" ? "get_schema_file" : "get_patch_file";
-    call<SchemaFileContent>(fn, { plugin, name: fileName })
+    call<SchemaFileContent>(fn, { plugin, name: fileName }, { method: "GET" })
       .then((content) =>
         setTarget({
           openId: Date.now(),

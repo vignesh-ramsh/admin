@@ -46,7 +46,7 @@ export function AuditHistoryPanel({
     if (collapsed) return;
     setLoading(true);
     setError(null);
-    call<AuditEntry[]>("list_audit_entries", { plugin, table, row_id: rowId, limit, offset })
+    call<AuditEntry[]>("list_audit_entries", { plugin, table, row_id: rowId, limit, offset }, { method: "GET" })
       .then(setEntries)
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load audit history"))
       .finally(() => setLoading(false));

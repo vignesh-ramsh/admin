@@ -19,7 +19,7 @@ than erroring when it isn't."""
 import arc
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_scheduled_jobs() -> list[dict]:
     """Every task currently carrying a cron schedule (live config, not
     history), each paired with its own most recent Scheduler-triggered
@@ -48,7 +48,7 @@ async def list_scheduled_jobs() -> list[dict]:
     return out
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_job_log(
     status: str | None = None,
     job_type: str | None = None,

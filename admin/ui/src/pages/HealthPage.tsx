@@ -10,7 +10,7 @@ import { IconRefresh } from "../layout/icons";
 import "./health.css";
 
 export function HealthPage() {
-  const { data, loading, error, reload } = useAsync<HealthReport>(() => call("admin_health"));
+  const { data, loading, error, reload } = useAsync<HealthReport>(() => call("admin_health", {}, { method: "GET" }));
 
   const allOk = data ? Object.values(data).every((c) => c.ok) : false;
 

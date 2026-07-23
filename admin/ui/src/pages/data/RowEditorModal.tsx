@@ -50,7 +50,7 @@ export function RowEditorModal({ table, schema, rowId, readOnly, onClose, onSave
       return;
     }
     setLoading(true);
-    call<Row>("get_row", { table, id: rowId })
+    call<Row>("get_row", { table, id: rowId }, { method: "GET" })
       .then((r) => {
         setRow(r);
         const next: Values = {};

@@ -13,6 +13,7 @@ import {
   IconSchema,
   IconSettings,
   IconJobs,
+  IconFiles,
   IconLogout,
 } from "./icons";
 import "./layout.css";
@@ -47,6 +48,7 @@ const NAV: { section: string; items: NavEntry[] }[] = [
   {
     section: "System",
     items: [
+      { to: "/files", label: "File Manager", icon: IconFiles },
       { to: "/jobs", label: "Jobs", icon: IconJobs },
       { to: "/settings", label: "Settings & Secrets", icon: IconSettings },
     ],
@@ -63,6 +65,7 @@ const TITLES: Record<string, string> = {
   "/access-keys": "Access Keys",
   "/settings": "Settings & Secrets",
   "/jobs": "Jobs",
+  "/files": "File Manager",
 };
 
 export function AppLayout() {

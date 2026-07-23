@@ -10,7 +10,7 @@ import { Combobox, type ComboOption } from "../../components/Combobox";
 let metaPromise: Promise<TableMeta[]> | null = null;
 function loadTableMeta(): Promise<TableMeta[]> {
   if (!metaPromise) {
-    metaPromise = call<TableMeta[]>("list_table_meta", {}).catch(() => [] as TableMeta[]);
+    metaPromise = call<TableMeta[]>("list_table_meta", {}, { method: "GET" }).catch(() => [] as TableMeta[]);
   }
   return metaPromise;
 }
@@ -61,7 +61,7 @@ export function ReferencePicker({ field, value, onChange, disabled, targetTable 
       .then((physical) => {
         if (cancelled) return;
         setTarget(physical);
-        return call<TableSchema>("get_table_schema", { table: physical });
+        return call<TableSchema>("get_table_schema", { table: physical }, { method: "GET" });
       })
       .then((s) => {
         if (!cancelled && s) setSchema(s);
@@ -94,7 +94,7 @@ export function ReferencePicker({ field, value, onChange, disabled, targetTable 
       return;
     }
     let cancelled = false;
-    call<Row[]>("list_rows", { table: target, filters: { id: { eq: value } }, limit: 1 })
+    call<Row[]>("list_rows", { table: target, filters: { id: { eq: value } }, limit: 1 }, { method: "QUERY" })
       .then((rows) => {
         if (cancelled) return;
         const label = rows[0]?.[labelField];
@@ -119,7 +119,7 @@ export function ReferencePicker({ field, value, onChange, disabled, targetTable 
       const filters =
         query.trim() && textual ? { [labelField]: { contains: query.trim() } } : null;
 
-      const rows = await call<Row[]>("list_rows", { table: target, filters, limit: 20 });
+      const rows = await call<Row[]>("list_rows", { table: target, filters, limit: 20 }, { method: "QUERY" });
       return rows.map((r) => {
         const stored = field.target_field ? r[field.target_field] : r.id;
         const label = r[labelField];

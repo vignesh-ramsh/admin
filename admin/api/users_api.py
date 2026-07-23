@@ -64,7 +64,7 @@ def _validate_allowed_ips(allowed_ips: list[str] | None) -> list[str] | None:
     return cleaned
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_users(role: str | None = None, q: str | None = None) -> list[dict]:
     users = await arc.relay.list("_users", fields=_USER_LIST_FIELDS, order_by=["email"])
     if role:

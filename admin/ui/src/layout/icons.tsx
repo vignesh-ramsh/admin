@@ -25,3 +25,6 @@ export const IconSettings = ({ size = 18 }: P) => <Ph name="gear" size={size} />
 export const IconEye = ({ size = 16 }: P) => <Ph name="eye" size={size} />;
 export const IconEyeOff = ({ size = 16 }: P) => <Ph name="eye-slash" size={size} />;
 export const IconJobs = ({ size = 18 }: P) => <Ph name="clock" size={size} />;
+export const IconFiles = ({ size = 18 }: P) => <Ph name="folder" size={size} />;
+export const IconDownload = ({ size = 16 }: P) => <Ph name="download-simple" size={size} />;
+export const IconFile = ({ size = 16 }: P) => <Ph name="file" size={size} />;

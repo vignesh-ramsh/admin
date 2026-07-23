@@ -205,3 +205,50 @@ export interface JobLogEntry {
   finished_at: string;
   duration_ms: number;
 }
+
+/** admin.list_filer_settings() — one entry per known filer_* setting,
+ *  whether or not it has a value yet. `kind` drives the form control:
+ *  "bool" -> checkbox, "int" -> number input, "select:a,b" -> dropdown,
+ *  "text"/"secret" -> text input. `value` is always null when
+ *  `secret` is true — same masking-by-default as SettingEntry. */
+export interface FilerSettingEntry {
+  key: string;
+  kind: string;
+  secret: boolean;
+  value: string | null;
+  is_set: boolean;
+}
+
+/** admin.list_filer_files() — a FilerFile row enriched with a ready-to-use
+ *  download/preview `url` (signed if private, plain if public, null if
+ *  the file isn't currently servable — pending scan, infected, deleted). */
+export interface FilerFileRow {
+  id: string;
+  file_id: string;
+  storage: "local" | "s3";
+  storage_key: string;
+  original_filename: string;
+  content_type: string;
+  size_bytes: number;
+  checksum: string;
+  private: boolean;
+  status: "pending" | "clean" | "infected" | "skipped" | "deleted";
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+  url: string | null;
+}
+
+/** admin.get_filer_antivirus_status() — a live connectivity check against
+ *  the configured ClamAV socket, not a cached/assumed value. */
+export interface FilerAntivirusStatus {
+  engine: string;
+  socket: string;
+  connected: boolean;
+  version: string | null;
+  scan_public: boolean;
+  scan_private: boolean;
+  available_engines: string[];
+}

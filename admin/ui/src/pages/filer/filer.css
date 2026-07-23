@@ -1,0 +1,94 @@
+.filer-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.file-meta {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 16px;
+  font-size: 12.5px;
+}
+.file-meta dt {
+  color: var(--text-tertiary);
+}
+.file-meta dd {
+  margin: 0;
+}
+
+/* Settings tab — categories laid out side by side, wrapping down to one
+   column on narrow viewports. No max-width cap here on purpose: the
+   grid fills the same .content__inner width the Files tab's table
+   already uses, so the two tabs read as one consistent-width page. */
+.filer-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+/* Preview modal — info panel fixed-ish on the left, the actual preview
+   as its own scrollable section on the right (never stacked above the
+   info the way the old single-column layout had it). */
+.file-preview-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.file-preview-layout__info {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.file-preview-layout__preview {
+  min-height: 320px;
+  max-height: 70vh;
+  overflow: auto;
+  background: var(--surface-soft);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  display: flex;
+}
+.file-preview-image {
+  margin: auto;
+  padding: 12px;
+}
+.file-preview-image img {
+  max-width: 100%;
+  display: block;
+  border-radius: 4px;
+}
+.file-preview-pdf {
+  width: 100%;
+  height: 70vh;
+  border: 0;
+}
+.file-preview-empty {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px;
+  color: var(--text-secondary);
+}
+@media (max-width: 720px) {
+  .file-preview-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.filer-av-status {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  font-size: 13px;
+  padding: 10px 12px;
+  background: var(--surface-soft);
+  border-radius: 8px;
+}

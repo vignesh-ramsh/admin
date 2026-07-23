@@ -18,7 +18,7 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_access_keys(email: str | None = None) -> list[dict]:
     filters = None
     if email:

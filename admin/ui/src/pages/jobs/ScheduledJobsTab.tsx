@@ -42,7 +42,7 @@ export function ScheduledJobsTab() {
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    call<ScheduledJob[]>("list_scheduled_jobs")
+    call<ScheduledJob[]>("list_scheduled_jobs", {}, { method: "GET" })
       .then(setAll)
       .catch((err) => {
         if (!handleErr(err)) setError(err instanceof ApiError ? err.message : "Failed to load scheduled jobs");

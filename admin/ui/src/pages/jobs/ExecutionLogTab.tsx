@@ -40,14 +40,18 @@ export function ExecutionLogTab() {
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    call<JobLogEntry[]>("list_job_log", {
-      task_name: taskName.trim() || null,
-      status: status || null,
-      job_type: jobType || null,
-      executor: executor || null,
-      limit,
-      offset,
-    })
+    call<JobLogEntry[]>(
+      "list_job_log",
+      {
+        task_name: taskName.trim() || null,
+        status: status || null,
+        job_type: jobType || null,
+        executor: executor || null,
+        limit,
+        offset,
+      },
+      { method: "GET" }
+    )
       .then(setRows)
       .catch((err) => {
         if (!handleErr(err)) setError(err instanceof ApiError ? err.message : "Failed to load job log");
