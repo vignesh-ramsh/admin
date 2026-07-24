@@ -41,6 +41,13 @@ CAPABILITY = "admin"
 # through the mount.
 UI_PREFIX = "admin-desk"
 
+# The new admin console SPA (admin/ui-console) — a from-scratch, separately
+# designed replacement UI living alongside admin-desk, not instead of it.
+# Mounted at a different prefix (must match ui-console/vite.config.ts's
+# `base`); mount_spa supports multiple simultaneous SPA prefixes, so both
+# coexist with no interaction.
+CONSOLE_UI_PREFIX = "admin"
+
 
 class AdminProvider:
     """Deliberately thin — almost all of admin's actual logic lives in its
@@ -88,5 +95,16 @@ def register(kernel: Any) -> None:
         kernel.advise(
             f"admin: UI not built — /{UI_PREFIX} will 404 until you run "
             f"`cd plugins/admin/admin/ui && npm install && npm run build`. "
+            f"The admin API endpoints are unaffected."
+        )
+
+    # Same pattern, second SPA: admin/ui-console's own build output.
+    console_dist = Path(__file__).parent / "ui-console" / "dist"
+    if console_dist.is_dir():
+        kernel.get("gateway").mount_spa(console_dist, prefix=CONSOLE_UI_PREFIX)
+    else:
+        kernel.advise(
+            f"admin: console UI not built — /{CONSOLE_UI_PREFIX} will 404 until you run "
+            f"`cd plugins/admin/admin/ui-console && yarn install && yarn build`. "
             f"The admin API endpoints are unaffected."
         )
