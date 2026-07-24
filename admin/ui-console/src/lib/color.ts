@@ -204,36 +204,6 @@ const NEUTRAL_CHROMA_FACTOR: Record<AccentStep, number> = {
   950: 1,
 };
 
-/** Light-mode neutral ramp anchored to a configurable base background
- *  color (the user's "Background color" pick, default a near-white).
- *  neutral-50 IS the base exactly, so canvas/cards match it precisely;
- *  darker steps (borders → muted text → headings) derive from the same
- *  hue, easing chroma up then back down, so the whole ramp reads as one
- *  cohesive tinted-neutral family instead of a flat, hue-less gray. */
-export function generateLightNeutralScale(baseHex: string): Record<AccentStep, string> {
-  const { h, c } = hexToOklch(baseHex);
-  const chroma = Math.min(c, 0.06); // cap so a wildly saturated pick can't tint the whole UI
-  const out = {} as Record<AccentStep, string>;
-  const LIGHT_L: Record<AccentStep, number> = {
-    50: 0.985,
-    100: 0.965,
-    200: 0.925,
-    300: 0.86,
-    400: 0.72,
-    500: 0.58,
-    600: 0.46,
-    700: 0.36,
-    800: 0.27,
-    900: 0.19,
-    950: 0.13,
-  };
-  for (const step of ACCENT_STEPS) {
-    // Anchor the lightest step to the base color exactly; derive the rest.
-    out[step] = step === 50 ? baseHex : oklchToHex(LIGHT_L[step], chroma * NEUTRAL_CHROMA_FACTOR[step], h);
-  }
-  return out;
-}
-
 /** Dark-mode neutral ramp anchored to a configurable base background color
  *  (default: admin-desk's navy #060B2E). neutral-950 is the base itself, so
  *  the darkest surface matches the chosen background exactly; lighter steps
@@ -273,4 +243,28 @@ export function isValidHex(v: string): boolean {
 export function contrastFg(hex: string): "#0a0a0a" | "#fafafa" {
   const { l } = hexToOklch(hex);
   return l > 0.62 ? "#0a0a0a" : "#fafafa";
+}
+
+const TONE_STEP_ORDER: AccentStep[] = [...ACCENT_STEPS];
+
+/** Given an 11-step scale and the chosen background hex, pick readable
+ *  text/border tones from that SAME scale — never a new hue, just farther
+ *  or nearer steps along the one ramp, in whichever direction contrasts
+ *  with the background's actual lightness. Shared by ThemeContext (the
+ *  live "Custom" accent mode) and the Theme Lab prototype it was first
+ *  built for, so the two stay in sync by construction. */
+export function deriveTonalText(
+  scale: Record<AccentStep, string>,
+  bgHex: string,
+): { text: string; textMuted: string; textFaint: string; border: string; borderStrong: string } {
+  const { l } = hexToOklch(bgHex);
+  const isLight = l > 0.55;
+  const order = isLight ? [...TONE_STEP_ORDER].reverse() : TONE_STEP_ORDER; // darkest-first on a light bg, lightest-first on a dark bg
+  return {
+    text: scale[order[0]],
+    textMuted: scale[order[3]],
+    textFaint: scale[order[5]],
+    border: scale[order[1]],
+    borderStrong: scale[order[2]],
+  };
 }

@@ -1,96 +1,114 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Palette, Sun, Moon, Square, Ban } from "lucide-react";
+import { Check, Palette, Sparkles, RotateCcw, ChevronRight } from "lucide-react";
 import clsx from "clsx";
-import {
-  useTheme,
-  ACCENT_PRESETS,
-  DEFAULT_ACCENT,
-  LIGHT_BG_PRESETS,
-  DARK_BG_PRESETS,
-  LIGHT_SURFACE_PRESETS,
-  DARK_SURFACE_PRESETS,
-} from "../theme/ThemeContext";
-import { isValidHex } from "../lib/color";
+import { useTheme, ACCENT_PRESETS, type ComputedKey } from "../theme/ThemeContext";
+import { isValidHex, hexToOklch, toneAtLightness } from "../lib/color";
+import { ToneSlider } from "./ToneSlider";
 
-function Swatch({
-  hex,
-  selected,
-  onClick,
-  size = "md",
-  label,
-}: {
-  hex: string;
-  selected: boolean;
-  onClick: () => void;
-  size?: "sm" | "md";
-  label: string;
-}) {
+const COMPUTED_ROWS: { key: ComputedKey; label: string }[] = [
+  { key: "text", label: "Text" },
+  { key: "textMuted", label: "Muted text" },
+  { key: "textFaint", label: "Faint text" },
+  { key: "border", label: "Border" },
+  { key: "borderStrong", label: "Border (strong)" },
+];
+
+function Swatch({ hex, selected, onClick, label }: { hex: string; selected: boolean; onClick: () => void; label: string }) {
   return (
     <button
       type="button"
       aria-label={label}
       onClick={onClick}
       className={clsx(
-        "flex shrink-0 cursor-pointer items-center justify-center rounded-full border transition-transform hover:scale-110",
-        size === "md" ? "h-6 w-6" : "h-5 w-5",
+        "flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full border transition-transform hover:scale-110",
         selected ? "border-accent-500 ring-1 ring-accent-500" : "border-black/15",
       )}
       style={{ background: hex }}
     >
-      {selected && <Check size={size === "md" ? 12 : 10} className="text-white drop-shadow" />}
+      {selected && <Check size={12} className="text-white drop-shadow" />}
     </button>
   );
 }
 
-function AutoSwatch({ selected, onClick }: { selected: boolean; onClick: () => void }) {
+/** One overridable computed value: a swatch that expands an inline
+ *  slider + hex input + reset-to-auto when clicked ("clicking the color
+ *  pops up the picker/slider" — an inline accordion reveal rather than a
+ *  second floating popover nested inside this one). */
+function ComputedRow({ label, autoHex, overrideHex, accentHex, onChange, onReset }: {
+  label: string;
+  autoHex: string;
+  overrideHex: string | undefined;
+  accentHex: string;
+  onChange: (hex: string) => void;
+  onReset: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = overrideHex ?? autoHex;
+  const currentLightness = isValidHex(current) ? Math.round(hexToOklch(current).l * 100) : 50;
+
   return (
-    <button
-      type="button"
-      aria-label="Auto (derived from background)"
-      title="Auto — derive from background"
-      onClick={onClick}
-      className={clsx(
-        "flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-full border border-dashed transition-transform hover:scale-110",
-        selected ? "border-accent-500 text-accent-600" : "border-border-strong text-text-faint",
+    <div className="rounded-md border border-border">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full cursor-pointer items-center gap-2 px-2 py-1.5 text-left"
+      >
+        <ChevronRight size={12} className={clsx("shrink-0 text-text-faint transition-transform", open && "rotate-90")} />
+        <span className="h-4 w-4 shrink-0 rounded-full border border-black/10" style={{ background: current }} />
+        <span className="flex-1 text-[12.5px] text-text">{label}</span>
+        {overrideHex && <span className="text-[10px] font-medium text-accent-600 dark:text-accent-400">custom</span>}
+        <span className="font-mono text-[11px] text-text-faint">{current}</span>
+      </button>
+      {open && (
+        <div className="flex flex-col gap-2 border-t border-border px-2.5 py-2.5">
+          <ToneSlider accentHex={accentHex} valuePercent={currentLightness} onChange={(pct) => onChange(toneAtLightness(accentHex, pct))} ariaLabel={`${label} tone`} />
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={isValidHex(current) ? current : autoHex}
+              onChange={(e) => onChange(e.target.value)}
+              className="h-7 w-8 cursor-pointer rounded border border-border-strong bg-transparent p-0.5"
+            />
+            <input
+              value={current}
+              onChange={(e) => {
+                if (isValidHex(e.target.value)) onChange(e.target.value);
+              }}
+              spellCheck={false}
+              className="h-7 flex-1 rounded border border-border-strong bg-surface px-2 font-mono text-[11px] text-text outline-none focus:border-accent-500"
+            />
+            {overrideHex && (
+              <button type="button" onClick={onReset} title="Reset to auto" aria-label="Reset to auto" className="cursor-pointer rounded p-1 text-text-faint hover:text-text">
+                <RotateCcw size={13} />
+              </button>
+            )}
+          </div>
+        </div>
       )}
-    >
-      {selected ? <Check size={10} /> : <Ban size={10} />}
-    </button>
+    </div>
   );
 }
 
 export function AccentPicker({ placement = "bottom" }: { placement?: "top" | "bottom" }) {
   const {
-    mode,
+    accentMode,
     accent,
     setAccent,
-    lightBg,
-    darkBg,
-    setLightBg,
-    setDarkBg,
-    surfaceLight,
-    surfaceDark,
-    setSurfaceLight,
-    setSurfaceDark,
+    useDefaultAccent,
+    switchToCustomFromDefault,
+    bgLightness,
+    surfaceLightness,
+    setBgLightness,
+    setSurfaceLightness,
+    overrides,
+    setOverride,
+    resolved,
   } = useTheme();
   const [open, setOpen] = useState(false);
   const [accentDraft, setAccentDraft] = useState(accent);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  const bg = mode === "dark" ? darkBg : lightBg;
-  const setBg = mode === "dark" ? setDarkBg : setLightBg;
-  const bgPresets = mode === "dark" ? DARK_BG_PRESETS : LIGHT_BG_PRESETS;
-
-  const surface = mode === "dark" ? surfaceDark : surfaceLight;
-  const setSurface = mode === "dark" ? setSurfaceDark : setSurfaceLight;
-  const surfacePresets = mode === "dark" ? DARK_SURFACE_PRESETS : LIGHT_SURFACE_PRESETS;
-
-  const [bgDraft, setBgDraft] = useState(bg);
-  const [surfaceDraft, setSurfaceDraft] = useState(surface ?? bg);
-
   useEffect(() => setAccentDraft(accent), [accent]);
-  useEffect(() => setBgDraft(bg), [bg]);
-  useEffect(() => setSurfaceDraft(surface ?? bg), [surface, bg]);
 
   useEffect(() => {
     if (!open) return;
@@ -101,6 +119,8 @@ export function AccentPicker({ placement = "bottom" }: { placement?: "top" | "bo
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [open]);
 
+  const swatchHex = accentMode === "default" ? resolved.accentScale[600] : accent;
+
   return (
     <div ref={rootRef} className="relative">
       <button
@@ -110,7 +130,7 @@ export function AccentPicker({ placement = "bottom" }: { placement?: "top" | "bo
         title="Theme colors"
         className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border border-border-strong bg-surface transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800"
       >
-        <span className="h-4 w-4 rounded-full border border-black/10" style={{ background: accent }} />
+        <span className="h-4 w-4 rounded-full border border-black/10" style={{ background: swatchHex }} />
       </button>
       {open && (
         <div
@@ -124,83 +144,98 @@ export function AccentPicker({ placement = "bottom" }: { placement?: "top" | "bo
             <Palette size={14} /> Accent color
           </p>
           <div className="mb-2.5 grid grid-cols-8 gap-1.5">
+            <button
+              type="button"
+              onClick={useDefaultAccent}
+              aria-label="Default (admin-desk)"
+              title="Default — admin-desk's own colors, unchanged"
+              className={clsx(
+                "relative flex h-6 w-6 cursor-pointer items-center justify-center rounded-full border transition-transform hover:scale-110",
+                accentMode === "default" ? "border-accent-500 ring-1 ring-accent-500" : "border-black/15",
+              )}
+              style={{ background: "conic-gradient(from 180deg, #3F7343, #7ED4A4, #3F7343)" }}
+            >
+              {accentMode === "default" ? <Check size={12} className="text-white drop-shadow" /> : <Sparkles size={10} className="text-white drop-shadow" />}
+            </button>
             {ACCENT_PRESETS.map((hex) => (
-              <Swatch key={hex} hex={hex} label={hex} selected={hex.toLowerCase() === accent.toLowerCase()} onClick={() => setAccent(hex)} />
+              <Swatch key={hex} hex={hex} label={hex} selected={accentMode === "custom" && hex.toLowerCase() === accent.toLowerCase()} onClick={() => setAccent(hex)} />
             ))}
           </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={isValidHex(accentDraft) ? accentDraft : accent}
-              onChange={(e) => {
-                setAccentDraft(e.target.value);
-                setAccent(e.target.value);
-              }}
-              className="h-8 w-9 cursor-pointer rounded border border-border-strong bg-transparent p-0.5"
-            />
-            <input
-              value={accentDraft}
-              onChange={(e) => {
-                setAccentDraft(e.target.value);
-                if (isValidHex(e.target.value)) setAccent(e.target.value);
-              }}
-              placeholder="#4f46e5"
-              spellCheck={false}
-              className="h-8 flex-1 rounded-md border border-border-strong bg-surface px-2 font-mono text-[13px] text-text outline-none focus:border-accent-500"
-            />
-          </div>
-          {accent.toLowerCase() !== DEFAULT_ACCENT.toLowerCase() && (
-            <button type="button" onClick={() => setAccent(DEFAULT_ACCENT)} className="mt-2 cursor-pointer text-[12px] text-text-faint hover:text-text-muted">
-              Reset accent
-            </button>
+
+          {accentMode === "default" ? (
+            <p className="mb-2 rounded-md border border-dashed border-border px-2.5 py-2 text-[11px] text-text-faint">
+              Using admin-desk's original light &amp; dark palette, unchanged.{" "}
+              <button type="button" onClick={switchToCustomFromDefault} className="cursor-pointer font-medium text-accent-600 underline underline-offset-2 dark:text-accent-400">
+                Customize from here
+              </button>
+            </p>
+          ) : (
+            <div className="mb-2 flex items-center gap-2">
+              <input
+                type="color"
+                value={isValidHex(accentDraft) ? accentDraft : accent}
+                onChange={(e) => {
+                  setAccentDraft(e.target.value);
+                  setAccent(e.target.value);
+                }}
+                className="h-8 w-9 cursor-pointer rounded border border-border-strong bg-transparent p-0.5"
+              />
+              <input
+                value={accentDraft}
+                onChange={(e) => {
+                  setAccentDraft(e.target.value);
+                  if (isValidHex(e.target.value)) setAccent(e.target.value);
+                }}
+                placeholder="#4f46e5"
+                spellCheck={false}
+                className="h-8 flex-1 rounded-md border border-border-strong bg-surface px-2 font-mono text-[13px] text-text outline-none focus:border-accent-500"
+              />
+            </div>
           )}
 
           <div className="my-3 border-t border-border" />
 
-          {/* Background (canvas) — mode-aware, same control shape in light and dark. */}
-          <p className="mb-2 flex items-center gap-1.5 text-[13px] font-medium text-text">
-            {mode === "dark" ? <Moon size={13} /> : <Sun size={13} />} Background color
+          {/* Background / Panel tone — continuous sliders, custom mode only */}
+          <fieldset disabled={accentMode === "default"} className={clsx(accentMode === "default" && "pointer-events-none opacity-40")}>
+            <div className="mb-2.5">
+              <div className="mb-1.5 flex items-center justify-between">
+                <p className="text-[13px] font-medium text-text">Background tone</p>
+                <span className="font-mono text-[11px] text-text-faint">{bgLightness.toFixed(1)}%</span>
+              </div>
+              <ToneSlider accentHex={accent} valuePercent={bgLightness} onChange={setBgLightness} ariaLabel="Background tone" />
+            </div>
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <p className="text-[13px] font-medium text-text">Panel tone</p>
+                <span className="font-mono text-[11px] text-text-faint">{surfaceLightness.toFixed(1)}%</span>
+              </div>
+              <ToneSlider accentHex={accent} valuePercent={surfaceLightness} onChange={setSurfaceLightness} ariaLabel="Panel tone" />
+            </div>
+          </fieldset>
+          <p className="mt-1.5 text-[11px] text-text-faint">
+            {accentMode === "default"
+              ? "Background & panel follow admin-desk's own values while Default is selected."
+              : "Drag anywhere along the accent's own scale — sidebar, cards, and table backgrounds."}
           </p>
-          <div className="flex items-center gap-1.5">
-            {bgPresets.map((hex) => (
-              <Swatch key={hex} hex={hex} size="sm" label={hex} selected={bg.toLowerCase() === hex.toLowerCase()} onClick={() => setBg(hex)} />
-            ))}
-            <input
-              type="color"
-              value={isValidHex(bgDraft) ? bgDraft : bg}
-              onChange={(e) => {
-                setBgDraft(e.target.value);
-                setBg(e.target.value);
-              }}
-              aria-label="Custom background color"
-              className="ml-auto h-6 w-7 cursor-pointer rounded border border-border-strong bg-transparent p-0.5"
-            />
-          </div>
-          <p className="mt-1.5 text-[11px] text-text-faint">The page canvas behind every panel.</p>
 
           <div className="my-3 border-t border-border" />
 
-          {/* Panel/surface — sidebar, cards, tables. Independent of canvas. */}
-          <p className="mb-2 flex items-center gap-1.5 text-[13px] font-medium text-text">
-            <Square size={12} /> Panel color
-          </p>
-          <div className="flex items-center gap-1.5">
-            <AutoSwatch selected={surface === null} onClick={() => setSurface(null)} />
-            {surfacePresets.map((hex) => (
-              <Swatch key={hex} hex={hex} size="sm" label={hex} selected={surface !== null && surface.toLowerCase() === hex.toLowerCase()} onClick={() => setSurface(hex)} />
+          {/* Computed values — click any row to override just that one value. */}
+          <p className="mb-2 text-[13px] font-medium text-text">Computed values</p>
+          <div className="flex flex-col gap-1.5">
+            {COMPUTED_ROWS.map((row) => (
+              <ComputedRow
+                key={row.key}
+                label={row.label}
+                autoHex={resolved[row.key]}
+                overrideHex={overrides[row.key]}
+                accentHex={accent}
+                onChange={(hex) => setOverride(row.key, hex)}
+                onReset={() => setOverride(row.key, null)}
+              />
             ))}
-            <input
-              type="color"
-              value={isValidHex(surfaceDraft) ? surfaceDraft : bg}
-              onChange={(e) => {
-                setSurfaceDraft(e.target.value);
-                setSurface(e.target.value);
-              }}
-              aria-label="Custom panel color"
-              className="ml-auto h-6 w-7 cursor-pointer rounded border border-border-strong bg-transparent p-0.5"
-            />
           </div>
-          <p className="mt-1.5 text-[11px] text-text-faint">Sidebar, cards, and table backgrounds.</p>
+          <p className="mt-1.5 text-[11px] text-text-faint">Overrides apply on top of Default or Custom, and are remembered until you clear them.</p>
         </div>
       )}
     </div>

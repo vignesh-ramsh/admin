@@ -1,12 +1,13 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { FlaskConical, Moon, RotateCcw, Sun } from "lucide-react";
 import clsx from "clsx";
-import { generateAccentScale, hexToOklch, isValidHex, toneAtLightness, ACCENT_STEPS, type AccentStep } from "../../lib/color";
+import { generateAccentScale, isValidHex, toneAtLightness, deriveTonalText, ACCENT_STEPS, type AccentStep } from "../../lib/color";
 import { ACCENT_PRESETS, DEFAULT_ACCENT } from "../../theme/ThemeContext";
 import { PageHeader } from "../../components/PageHeader";
 import { Button, IconButton } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { DataTable, type Column } from "../../components/Table";
+import { ToneSlider } from "../../components/ToneSlider";
 
 /* ============================================================
    PROTOTYPE — not wired into the live theme system.
@@ -44,8 +45,6 @@ import { DataTable, type Column } from "../../components/Table";
 
 type Mode = "light" | "dark";
 
-const STEP_ORDER: AccentStep[] = [...ACCENT_STEPS];
-
 // Lightness percentages matching the fixed scale's own 50/100 (light) and
 // 900/950 (dark) anchors — just expressed continuously now.
 const SUGGESTED: Record<Mode, { bg: number; surface: number }> = {
@@ -72,23 +71,6 @@ const SEMANTIC: Record<Mode, { success: string; successBg: string; warning: stri
   },
 };
 
-/** Given the full scale and the chosen background hex, pick readable
- *  text/border tones from the SAME scale — never a new hue, just farther
- *  or nearer steps along the one ramp, in whichever direction contrasts
- *  with the background's actual lightness. */
-function deriveAutoTones(scale: Record<AccentStep, string>, bgHex: string) {
-  const { l } = hexToOklch(bgHex);
-  const isLight = l > 0.55;
-  const order = isLight ? [...STEP_ORDER].reverse() : STEP_ORDER; // darkest-first on a light bg, lightest-first on a dark bg
-  return {
-    text: scale[order[0]],
-    textMuted: scale[order[3]],
-    textFaint: scale[order[5]],
-    border: scale[order[1]],
-    borderStrong: scale[order[2]],
-  };
-}
-
 function buildPreviewVars(
   accentHex: string,
   scale: Record<AccentStep, string>,
@@ -98,7 +80,7 @@ function buildPreviewVars(
 ): CSSProperties {
   const canvas = toneAtLightness(accentHex, bgLightness);
   const surface = toneAtLightness(accentHex, surfaceLightness);
-  const auto = deriveAutoTones(scale, canvas);
+  const auto = deriveTonalText(scale, canvas);
   const semantic = SEMANTIC[mode];
 
   const vars: Record<string, string> = {};
@@ -126,45 +108,6 @@ function buildPreviewVars(
   return vars as CSSProperties;
 }
 
-const GRADIENT_SAMPLES = 24;
-
-/** Continuous tone picker: drag anywhere along the hue's own lightness
- *  range (2-98%), not just 11 fixed stops. The gradient track is sampled
- *  live from toneAtLightness so it always matches the current accent. */
-function ToneSlider({
-  accentHex,
-  valuePercent,
-  onChange,
-}: {
-  accentHex: string;
-  valuePercent: number;
-  onChange: (percent: number) => void;
-}) {
-  const gradient = useMemo(() => {
-    const stops: string[] = [];
-    for (let i = 0; i <= GRADIENT_SAMPLES; i++) {
-      const pct = (i / GRADIENT_SAMPLES) * 100;
-      const lightness = 2 + (pct / 100) * 96;
-      stops.push(`${toneAtLightness(accentHex, lightness)} ${pct}%`);
-    }
-    return `linear-gradient(to right, ${stops.join(", ")})`;
-  }, [accentHex]);
-
-  return (
-    <div className="relative h-8 w-full overflow-hidden rounded-md border border-border-strong" style={{ backgroundImage: gradient }}>
-      <input
-        type="range"
-        min={2}
-        max={98}
-        step={0.5}
-        value={valuePercent}
-        onChange={(e) => onChange(Number(e.target.value))}
-        aria-label="Tone lightness"
-        className="tone-slider absolute inset-0 h-8 w-full cursor-pointer"
-      />
-    </div>
-  );
-}
 
 interface MockRow {
   id: string;
@@ -195,7 +138,7 @@ export function ThemeLabPage() {
   const scale = useMemo(() => generateAccentScale(accent), [accent]);
   const canvasHex = useMemo(() => toneAtLightness(accent, bgLightness), [accent, bgLightness]);
   const surfaceHex = useMemo(() => toneAtLightness(accent, surfaceLightness), [accent, surfaceLightness]);
-  const auto = useMemo(() => deriveAutoTones(scale, canvasHex), [scale, canvasHex]);
+  const auto = useMemo(() => deriveTonalText(scale, canvasHex), [scale, canvasHex]);
   const previewVars = useMemo(
     () => buildPreviewVars(accent, scale, bgLightness, surfaceLightness, mode),
     [accent, scale, bgLightness, surfaceLightness, mode],
