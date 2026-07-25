@@ -28,9 +28,11 @@ import arc
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def list_settings() -> list[dict]:
+    # list_all() is already one dict per key (kind/value/type/default/doc,
+    # §1 P0) — this is now a thin key-in/row-out reshape, not the two-list
+    # merge it used to be.
     data = arc.settings.list_all()
-    rows = [{"key": k, "kind": "setting", "value": v} for k, v in data["settings"].items()]
-    rows += [{"key": k, "kind": "secret", "value": None} for k in data["secrets"]]
+    rows = [{"key": key, **info} for key, info in data.items()]
     rows.sort(key=lambda r: r["key"])
     return rows
 
