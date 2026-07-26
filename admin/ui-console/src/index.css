@@ -26,6 +26,13 @@
   --color-accent-900: var(--accent-900);
   --color-accent-950: var(--accent-950);
 
+  /* The solid accent fill users click, and a foreground computed to stay
+     readable on it. Separate from the numbered ramp because light and dark
+     want different lightness AND different foregrounds — a bright dark-mode
+     fill takes near-black text, which `bg-accent-600 text-white` can't say. */
+  --color-accent-action: var(--accent-action);
+  --color-accent-fg: var(--accent-fg);
+
   --color-neutral-50: var(--neutral-50);
   --color-neutral-100: var(--neutral-100);
   --color-neutral-200: var(--neutral-200);
@@ -63,6 +70,11 @@
 }
 
 :root {
+  /* Fallbacks only — ThemeContext overwrites both inline on :root as soon
+     as it mounts. These keep the very first paint sane. */
+  --accent-action: #4f46e5;
+  --accent-fg: #fafafa;
+
   --success: #16a34a;
   --success-bg: #dcfce7;
   --warning: #d97706;

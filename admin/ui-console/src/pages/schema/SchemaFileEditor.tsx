@@ -6,6 +6,7 @@ import { Badge } from "../../components/Badge";
 import { Select, Switch, TextInput } from "../../components/Field";
 import { ConfirmModal } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
+import { useSaveShortcut } from "../../hooks/useSaveShortcut";
 import { Plus, Trash2 } from "lucide-react";
 import { FieldEditor } from "./FieldEditor";
 import { ApplyNowModal } from "./ApplyNowModal";
@@ -76,6 +77,8 @@ export function SchemaFileEditor({ plugin, kind, name, isNew, content, plugins, 
       setSaving(false);
     }
   };
+
+  useSaveShortcut(save, !saving);
 
   const del = async () => {
     setConfirmingDelete(false);

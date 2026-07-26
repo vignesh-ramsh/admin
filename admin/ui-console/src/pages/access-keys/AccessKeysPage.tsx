@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, Outlet } from "react-router-dom";
-import { Plus, Trash2, Ban } from "lucide-react";
+import { Plus, Trash2, Ban, Search } from "lucide-react";
 import { call, ApiError } from "../../api/client";
 import type { AccessKey, User } from "../../api/types";
 import { useAsync } from "../../hooks/useAsync";
+import { useDebounce } from "../../hooks/useDebounce";
+import { usePageSearchFocus } from "../../hooks/usePageSearchFocus";
 import { PageHeader } from "../../components/PageHeader";
 import { Button, IconButton } from "../../components/Button";
+import { TextInput } from "../../components/Field";
 import { DataTable, type Column } from "../../components/Table";
 import { Badge } from "../../components/Badge";
 import { ErrorBlock } from "../../components/States";
@@ -22,6 +25,22 @@ export function AccessKeysPage() {
   );
   const { data: users } = useAsync<User[]>(() => call<User[]>("list_users", {}, { method: "GET" }));
   const emailById = new Map((users ?? []).map((u) => [u.id, u.email]));
+
+  const [qInput, setQInput] = useState("");
+  const q = useDebounce(qInput, 300);
+  const searchRef = usePageSearchFocus();
+  const rows = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const all = keys ?? [];
+    if (!needle) return all;
+    return all.filter(
+      (k) =>
+        (k.label ?? "").toLowerCase().includes(needle) ||
+        k.key_prefix.toLowerCase().includes(needle) ||
+        (emailById.get(k.user) ?? k.user).toLowerCase().includes(needle),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keys, q, users]);
 
   const [revokePrefix, setRevokePrefix] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -103,11 +122,22 @@ export function AccessKeysPage() {
         }
       />
 
+      <div className="relative mb-4 max-w-xs">
+        <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint" />
+        <TextInput
+          ref={searchRef}
+          placeholder="Search by label, prefix, or user…"
+          value={qInput}
+          onChange={(e) => setQInput(e.target.value)}
+          className="pl-8"
+        />
+      </div>
+
       {error ? (
         <ErrorBlock message={error} onRetry={reload} />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-          <DataTable columns={columns} rows={keys ?? []} rowKey={(k) => k.id} loading={loading} emptyLabel="No access keys found." fillHeight />
+          <DataTable columns={columns} rows={rows} rowKey={(k) => k.id} loading={loading} emptyLabel="No access keys found." fillHeight />
         </div>
       )}
 

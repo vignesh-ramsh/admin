@@ -2,7 +2,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import {
   generateAccentScale,
   generateDarkNeutralScale,
-  toneAtLightness,
+  generateNeutralScale,
+  neutralToneAtLightness,
+  accentAction,
+  contrastFg,
   deriveTonalText,
   hexToOklch,
   isValidHex,
@@ -28,15 +31,26 @@ const OVERRIDES_DARK_KEY = "arc-console-overrides-dark";
 
 export const DEFAULT_ACCENT = "#4f46e5"; // indigo — the starting point once a user leaves "Default" for a custom hue
 
-export const ACCENT_PRESETS = [
-  "#4f46e5", // indigo
-  "#0ea5a4", // teal
-  "#dc2626", // red
-  "#d97706", // amber
-  "#16a34a", // green
-  "#2563eb", // blue
-  "#c026d3", // fuchsia
-  "#334155", // slate (near-monochrome)
+/**
+ * The eight offered accents, spread deliberately around the hue wheel and
+ * kept clear of the fixed semantic hues (danger ~29°, warning ~55°,
+ * success ~155°, info ~255°) — in a console where Delete is red and status
+ * pills are green, a brand accent sitting on those same hues makes primary
+ * and destructive actions read alike. Rose leans pink of danger and
+ * Emerald sits cool of success for exactly that reason.
+ *
+ * Each entry is a single hue; the light and dark ramps, and the solid
+ * action fill for each mode, are derived from it (see lib/color.ts).
+ */
+export const ACCENT_PRESETS: { name: string; hex: string }[] = [
+  { name: "Indigo", hex: "#4f46e5" },
+  { name: "Violet", hex: "#8b5cf6" },
+  { name: "Sky", hex: "#0284c7" },
+  { name: "Teal", hex: "#0d9488" },
+  { name: "Emerald", hex: "#059669" },
+  { name: "Amber", hex: "#d97706" },
+  { name: "Rose", hex: "#e11d48" },
+  { name: "Slate", hex: "#334155" },
 ];
 
 // Continuous lightness (0-100) defaults for a freshly-picked custom accent,
@@ -58,6 +72,8 @@ interface ResolvedTheme {
   text: string;
   textMuted: string;
   textFaint: string;
+  action: string; // the solid accent fill users click
+  actionFg: string; // a foreground guaranteed readable on `action`
 }
 
 interface ThemeContextValue {
@@ -148,15 +164,25 @@ function resolveTheme(
       text: tokens.text,
       textMuted: tokens.textMuted,
       textFaint: tokens.textFaint,
+      // Default keeps admin-desk's own literal 600 as the action fill —
+      // the whole point of this branch is "no change" — and only derives
+      // the foreground, which was previously hardcoded white.
+      action: accentScale[600],
+      actionFg: contrastFg(accentScale[600]),
     };
   } else {
-    const accentScale = generateAccentScale(accent);
-    const canvas = toneAtLightness(accent, bgLightness);
-    const surface = toneAtLightness(accent, surfaceLightness);
-    const auto = deriveTonalText(accentScale, canvas);
+    const accentScale = generateAccentScale(accent, mode);
+    const neutralScale = generateNeutralScale(accent, mode);
+    const canvas = neutralToneAtLightness(accent, bgLightness);
+    const surface = neutralToneAtLightness(accent, surfaceLightness);
+    // Text/borders come off the *neutral* ramp, not the accent's own —
+    // a page of body copy should be near-neutral even when the accent is
+    // a saturated rose.
+    const auto = deriveTonalText(neutralScale, canvas);
+    const action = accentAction(accent, mode);
     base = {
       accentScale,
-      neutralScale: accentScale, // monochromatic: neutral IS the accent's own ramp
+      neutralScale,
       canvas,
       surface,
       border: auto.border,
@@ -164,6 +190,8 @@ function resolveTheme(
       text: auto.text,
       textMuted: auto.textMuted,
       textFaint: auto.textFaint,
+      action: action.bg,
+      actionFg: action.fg,
     };
   }
 
@@ -191,6 +219,8 @@ function applyTheme(mode: Mode, accentMode: AccentMode, resolved: ResolvedTheme)
   root.setProperty("--text", resolved.text);
   root.setProperty("--text-muted", resolved.textMuted);
   root.setProperty("--text-faint", resolved.textFaint);
+  root.setProperty("--accent-action", resolved.action);
+  root.setProperty("--accent-fg", resolved.actionFg);
 
   if (accentMode === "default") {
     // Replay admin-desk's own semantic hues exactly.

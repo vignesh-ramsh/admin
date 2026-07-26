@@ -76,31 +76,44 @@ export function FieldEditor({ fields, system, tableMeta, onChange }: Props) {
   const row = (f: SchemaField) => {
     const i = fields.indexOf(f);
     return (
-      <div className="grid grid-cols-[52px_1fr_128px_1fr_44px_44px_44px_32px] items-center gap-2 border-b border-border px-2 py-2 last:border-0" key={f.id || i}>
+      <div className="grid grid-cols-[52px_0.75fr_128px_1.25fr_44px_44px_44px_32px] items-center gap-2 border-b border-border px-2 py-2 last:border-0" key={f.id || i}>
         <span className="truncate font-mono text-[11px] text-text-faint">{f.id}</span>
-        <TextInput className="!h-8" placeholder="field_name" value={f.name} onChange={(e) => update(i, { name: e.target.value })} />
-        <Select
-          className="!h-8"
-          value={f.type}
-          onChange={(e) =>
-            update(i, {
-              type: e.target.value,
-              target: undefined,
-              target_field: undefined,
-              options: undefined,
-              length: undefined,
-              precision: undefined,
-              scale: undefined,
-            })
-          }
-        >
-          {typesFor(system).map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </Select>
-        <FieldConfig field={f} tableMeta={tableMeta} onChange={(patch) => update(i, patch)} />
+        <div className="min-w-0">
+          <TextInput className="!h-8" placeholder="field_name" value={f.name} onChange={(e) => update(i, { name: e.target.value })} />
+        </div>
+        <div className="min-w-0">
+          <Select
+            className="!h-8"
+            value={f.type}
+            onChange={(e) =>
+              update(i, {
+                type: e.target.value,
+                target: undefined,
+                target_field: undefined,
+                options: undefined,
+                length: undefined,
+                precision: undefined,
+                scale: undefined,
+              })
+            }
+          >
+            {typesFor(system).map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </Select>
+        </div>
+        {/* min-w-0 is load-bearing: without it, a grid item's default
+            min-width is its content's min-content size. REFERENCE's two
+            side-by-side comboboxes need more min-content width than every
+            other field type's single input, so this cell's 1fr track (and
+            every other track sharing this row's grid) would recompute —
+            and only THIS row's — the instant you picked Reference, visibly
+            shifting the Name/Type columns relative to every other row. */}
+        <div className="min-w-0">
+          <FieldConfig field={f} tableMeta={tableMeta} onChange={(patch) => update(i, patch)} />
+        </div>
         <Checkbox
           label=""
           className="mx-auto"
@@ -136,7 +149,7 @@ export function FieldEditor({ fields, system, tableMeta, onChange }: Props) {
         </div>
       )}
 
-      <div className="grid grid-cols-[52px_1fr_128px_1fr_44px_44px_44px_32px] gap-2 border-b border-border bg-neutral-50 px-2 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-faint dark:bg-neutral-900/40">
+      <div className="grid grid-cols-[52px_0.75fr_128px_1.25fr_44px_44px_44px_32px] gap-2 border-b border-border bg-neutral-50 px-2 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-faint dark:bg-neutral-900/40">
         <span>ID</span>
         <span>Name</span>
         <span>Type</span>
@@ -194,13 +207,29 @@ function FieldConfig({ field, tableMeta, onChange }: { field: SchemaField; table
 
     return (
       <div className="flex items-center gap-1.5">
-        <LocalCombobox
-          value={field.target ?? ""}
-          onChange={(v) => onChange({ target: v ?? undefined, target_field: undefined })}
-          options={tableOptions}
-          placeholder={isTableType ? "child table…" : "target table…"}
-        />
-        {t === "REFERENCE" && <TargetFieldPicker field={field} tableMeta={tableMeta} onChange={onChange} />}
+        {/* min-w-0 on each combobox is load-bearing, not decorative: a
+            Combobox's own min-width is "auto", and its automatic-minimum-
+            size never bottoms out at the inner input's min-w-0 the way a
+            plain flex item would — measured at ~267px even when its flex
+            parent was forced down to 80px. Without this, REFERENCE's two
+            side-by-side comboboxes refuse to shrink, overflow this cell,
+            and — since Combobox's root is `position: relative` — visually
+            and functionally sit on TOP of the Req/Uniq/List checkboxes to
+            its right (position:relative paints above static siblings
+            regardless of DOM order), making them unclickable. */}
+        <div className="min-w-0 flex-1">
+          <LocalCombobox
+            value={field.target ?? ""}
+            onChange={(v) => onChange({ target: v ?? undefined, target_field: undefined })}
+            options={tableOptions}
+            placeholder={isTableType ? "child table…" : "target table…"}
+          />
+        </div>
+        {t === "REFERENCE" && (
+          <div className="min-w-0 flex-1">
+            <TargetFieldPicker field={field} tableMeta={tableMeta} onChange={onChange} />
+          </div>
+        )}
       </div>
     );
   }

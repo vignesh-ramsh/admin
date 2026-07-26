@@ -14,6 +14,7 @@ import App from "./App.tsx";
 import { ThemeProvider } from "./theme/ThemeContext";
 import { AuthProvider } from "./auth/AuthContext";
 import { ToastProvider } from "./components/Toast";
+import { SaveShortcutProvider } from "./hooks/useSaveShortcut";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -21,7 +22,9 @@ createRoot(document.getElementById("root")!).render(
       <ThemeProvider>
         <AuthProvider>
           <ToastProvider>
-            <App />
+            <SaveShortcutProvider>
+              <App />
+            </SaveShortcutProvider>
           </ToastProvider>
         </AuthProvider>
       </ThemeProvider>

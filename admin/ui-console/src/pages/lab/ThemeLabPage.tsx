@@ -173,17 +173,18 @@ export function ThemeLabPage() {
           <div>
             <p className="mb-2 text-[13px] font-semibold text-text">1. Accent color</p>
             <div className="mb-2.5 grid grid-cols-8 gap-1.5">
-              {ACCENT_PRESETS.map((hex) => (
+              {ACCENT_PRESETS.map((preset) => (
                 <button
-                  key={hex}
+                  key={preset.hex}
                   type="button"
-                  aria-label={hex}
-                  onClick={() => setAccentDraft(hex)}
+                  aria-label={preset.name}
+                  title={preset.name}
+                  onClick={() => setAccentDraft(preset.hex)}
                   className={clsx(
                     "h-6 w-6 cursor-pointer rounded-full border transition-transform hover:scale-110",
-                    hex.toLowerCase() === accent.toLowerCase() ? "border-accent-500 ring-1 ring-accent-500" : "border-black/15",
+                    preset.hex.toLowerCase() === accent.toLowerCase() ? "border-accent-500 ring-1 ring-accent-500" : "border-black/15",
                   )}
-                  style={{ background: hex }}
+                  style={{ background: preset.hex }}
                 />
               ))}
             </div>

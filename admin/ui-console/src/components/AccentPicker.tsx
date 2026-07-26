@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Palette, Sparkles, RotateCcw, ChevronRight } from "lucide-react";
 import clsx from "clsx";
 import { useTheme, ACCENT_PRESETS, type ComputedKey } from "../theme/ThemeContext";
-import { isValidHex, hexToOklch, toneAtLightness } from "../lib/color";
+import { isValidHex, hexToOklch, toneAtLightness, accentAction, NEUTRAL_CHROMA_CAP } from "../lib/color";
 import { ToneSlider } from "./ToneSlider";
 
 const COMPUTED_ROWS: { key: ComputedKey; label: string }[] = [
@@ -18,6 +18,7 @@ function Swatch({ hex, selected, onClick, label }: { hex: string; selected: bool
     <button
       type="button"
       aria-label={label}
+      title={label}
       onClick={onClick}
       className={clsx(
         "flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-full border transition-transform hover:scale-110",
@@ -61,7 +62,13 @@ function ComputedRow({ label, autoHex, overrideHex, accentHex, onChange, onReset
       </button>
       {open && (
         <div className="flex flex-col gap-2 border-t border-border px-2.5 py-2.5">
-          <ToneSlider accentHex={accentHex} valuePercent={currentLightness} onChange={(pct) => onChange(toneAtLightness(accentHex, pct))} ariaLabel={`${label} tone`} />
+          <ToneSlider
+            accentHex={accentHex}
+            valuePercent={currentLightness}
+            onChange={(pct) => onChange(toneAtLightness(accentHex, pct, NEUTRAL_CHROMA_CAP))}
+            ariaLabel={`${label} tone`}
+            chromaCap={NEUTRAL_CHROMA_CAP}
+          />
           <div className="flex items-center gap-2">
             <input
               type="color"
@@ -91,6 +98,7 @@ function ComputedRow({ label, autoHex, overrideHex, accentHex, onChange, onReset
 
 export function AccentPicker({ placement = "bottom" }: { placement?: "top" | "bottom" }) {
   const {
+    mode,
     accentMode,
     accent,
     setAccent,
@@ -119,7 +127,10 @@ export function AccentPicker({ placement = "bottom" }: { placement?: "top" | "bo
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [open]);
 
-  const swatchHex = accentMode === "default" ? resolved.accentScale[600] : accent;
+  // Preview the tone the UI will actually paint, not the raw preset hex —
+  // the two diverge sharply for warm hues (amber's #d97706 resolves to a
+  // brown fill in light mode), which made the picker misrepresent itself.
+  const swatchHex = resolved.action;
 
   return (
     <div ref={rootRef} className="relative">
@@ -157,8 +168,14 @@ export function AccentPicker({ placement = "bottom" }: { placement?: "top" | "bo
             >
               {accentMode === "default" ? <Check size={12} className="text-white drop-shadow" /> : <Sparkles size={10} className="text-white drop-shadow" />}
             </button>
-            {ACCENT_PRESETS.map((hex) => (
-              <Swatch key={hex} hex={hex} label={hex} selected={accentMode === "custom" && hex.toLowerCase() === accent.toLowerCase()} onClick={() => setAccent(hex)} />
+            {ACCENT_PRESETS.map((preset) => (
+              <Swatch
+                key={preset.hex}
+                hex={accentAction(preset.hex, mode).bg}
+                label={preset.name}
+                selected={accentMode === "custom" && preset.hex.toLowerCase() === accent.toLowerCase()}
+                onClick={() => setAccent(preset.hex)}
+              />
             ))}
           </div>
 
@@ -202,14 +219,14 @@ export function AccentPicker({ placement = "bottom" }: { placement?: "top" | "bo
                 <p className="text-[13px] font-medium text-text">Background tone</p>
                 <span className="font-mono text-[11px] text-text-faint">{bgLightness.toFixed(1)}%</span>
               </div>
-              <ToneSlider accentHex={accent} valuePercent={bgLightness} onChange={setBgLightness} ariaLabel="Background tone" />
+              <ToneSlider accentHex={accent} valuePercent={bgLightness} onChange={setBgLightness} ariaLabel="Background tone" chromaCap={NEUTRAL_CHROMA_CAP} />
             </div>
             <div>
               <div className="mb-1.5 flex items-center justify-between">
                 <p className="text-[13px] font-medium text-text">Panel tone</p>
                 <span className="font-mono text-[11px] text-text-faint">{surfaceLightness.toFixed(1)}%</span>
               </div>
-              <ToneSlider accentHex={accent} valuePercent={surfaceLightness} onChange={setSurfaceLightness} ariaLabel="Panel tone" />
+              <ToneSlider accentHex={accent} valuePercent={surfaceLightness} onChange={setSurfaceLightness} ariaLabel="Panel tone" chromaCap={NEUTRAL_CHROMA_CAP} />
             </div>
           </fieldset>
           <p className="mt-1.5 text-[11px] text-text-faint">

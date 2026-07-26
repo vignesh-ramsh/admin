@@ -13,21 +13,27 @@ export function ToneSlider({
   valuePercent,
   onChange,
   ariaLabel = "Tone lightness",
+  chromaCap,
 }: {
   accentHex: string;
   valuePercent: number;
   onChange: (percent: number) => void;
   ariaLabel?: string;
+  /** Clamp the previewed chroma — pass this wherever the slider drives a
+   *  surface (canvas, panel), which the theme renders at neutral chroma,
+   *  so the track shows the tone the user will actually get rather than a
+   *  saturated version of it. */
+  chromaCap?: number;
 }) {
   const gradient = useMemo(() => {
     const stops: string[] = [];
     for (let i = 0; i <= GRADIENT_SAMPLES; i++) {
       const pct = (i / GRADIENT_SAMPLES) * 100;
       const lightness = 2 + (pct / 100) * 96;
-      stops.push(`${toneAtLightness(accentHex, lightness)} ${pct}%`);
+      stops.push(`${toneAtLightness(accentHex, lightness, chromaCap)} ${pct}%`);
     }
     return `linear-gradient(to right, ${stops.join(", ")})`;
-  }, [accentHex]);
+  }, [accentHex, chromaCap]);
 
   return (
     <div className="relative h-8 w-full overflow-hidden rounded-md border border-border-strong" style={{ backgroundImage: gradient }}>

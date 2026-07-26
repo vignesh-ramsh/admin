@@ -5,6 +5,7 @@ import { call } from "../../api/client";
 import type { TableMeta } from "../../api/types";
 import { useAsync } from "../../hooks/useAsync";
 import { useDebounce } from "../../hooks/useDebounce";
+import { usePageSearchFocus } from "../../hooks/usePageSearchFocus";
 import { PageHeader } from "../../components/PageHeader";
 import { TextInput } from "../../components/Field";
 import { EmptyState, ErrorBlock, LoadingBlock } from "../../components/States";
@@ -18,6 +19,7 @@ export function DataBrowserPage() {
   const hasTable = !!useMatch("/data/:table/*");
   const [q, setQ] = useState("");
   const debouncedQ = useDebounce(q, 250);
+  const searchRef = usePageSearchFocus();
 
   const { data: tableMeta, loading, error, reload } = useAsync(
     () => call<TableMeta[]>("list_table_meta", { surface: SURFACE }, { method: "GET" }),
@@ -46,6 +48,7 @@ export function DataBrowserPage() {
         <aside className="flex w-72 shrink-0 flex-col rounded-lg border border-border bg-surface">
           <div className="border-b border-border p-2.5">
             <TextInput
+              ref={searchRef}
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search tables…"

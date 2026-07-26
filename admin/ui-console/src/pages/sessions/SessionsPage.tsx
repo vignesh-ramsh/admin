@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, Outlet } from "react-router-dom";
-import { Trash2, LogOut } from "lucide-react";
+import { Trash2, LogOut, Search } from "lucide-react";
 import { call, ApiError } from "../../api/client";
 import type { Session, User } from "../../api/types";
 import { useAsync } from "../../hooks/useAsync";
+import { useDebounce } from "../../hooks/useDebounce";
+import { usePageSearchFocus } from "../../hooks/usePageSearchFocus";
 import { PageHeader } from "../../components/PageHeader";
 import { Button, IconButton } from "../../components/Button";
+import { TextInput } from "../../components/Field";
 import { DataTable, type Column } from "../../components/Table";
 import { Badge } from "../../components/Badge";
 import { ErrorBlock } from "../../components/States";
@@ -20,6 +23,17 @@ export function SessionsPage() {
   const { data: sessions, loading, error, reload } = useAsync<Session[]>(() => call<Session[]>("list_sessions", {}));
   const { data: users } = useAsync<User[]>(() => call<User[]>("list_users", {}, { method: "GET" }));
   const emailById = new Map((users ?? []).map((u) => [u.id, u.email]));
+
+  const [qInput, setQInput] = useState("");
+  const q = useDebounce(qInput, 300);
+  const searchRef = usePageSearchFocus();
+  const rows = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const all = sessions ?? [];
+    if (!needle) return all;
+    return all.filter((s) => (emailById.get(s.user) ?? s.user).toLowerCase().includes(needle) || (s.ip_address ?? "").toLowerCase().includes(needle));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions, q, users]);
 
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -80,11 +94,22 @@ export function SessionsPage() {
         }
       />
 
+      <div className="relative mb-4 max-w-xs">
+        <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint" />
+        <TextInput
+          ref={searchRef}
+          placeholder="Search by user or IP…"
+          value={qInput}
+          onChange={(e) => setQInput(e.target.value)}
+          className="pl-8"
+        />
+      </div>
+
       {error ? (
         <ErrorBlock message={error} onRetry={reload} />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-          <DataTable columns={columns} rows={sessions ?? []} rowKey={(s) => s.id} loading={loading} emptyLabel="No sessions found." fillHeight />
+          <DataTable columns={columns} rows={rows} rowKey={(s) => s.id} loading={loading} emptyLabel="No sessions found." fillHeight />
         </div>
       )}
 

@@ -1,10 +1,14 @@
+import { useMemo, useState } from "react";
 import { useNavigate, Outlet } from "react-router-dom";
-import { Plus, Pencil, Trash2, Users as UsersIcon } from "lucide-react";
+import { Plus, Pencil, Trash2, Users as UsersIcon, Search } from "lucide-react";
 import { call } from "../../api/client";
 import type { Role, User } from "../../api/types";
 import { useAsync } from "../../hooks/useAsync";
+import { useDebounce } from "../../hooks/useDebounce";
+import { usePageSearchFocus } from "../../hooks/usePageSearchFocus";
 import { PageHeader } from "../../components/PageHeader";
 import { Button, IconButton } from "../../components/Button";
+import { TextInput } from "../../components/Field";
 import { DataTable, type Column } from "../../components/Table";
 import { ErrorBlock } from "../../components/States";
 
@@ -19,11 +23,19 @@ export function RolesPage() {
     () => call<Role[]>("list_roles", {}, { method: "GET" }),
   );
   const { data: users } = useAsync<User[]>(() => call<User[]>("list_users", {}, { method: "GET" }));
+  const [qInput, setQInput] = useState("");
+  const q = useDebounce(qInput, 300);
+  const searchRef = usePageSearchFocus();
 
-  const rows: RoleRow[] = (roles ?? []).map((r) => ({
-    ...r,
-    memberCount: (users ?? []).filter((u) => (u.has_roles ?? []).includes(r.name)).length,
-  }));
+  const allRows: RoleRow[] = useMemo(
+    () => (roles ?? []).map((r) => ({ ...r, memberCount: (users ?? []).filter((u) => (u.has_roles ?? []).includes(r.name)).length })),
+    [roles, users],
+  );
+  const rows = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return allRows;
+    return allRows.filter((r) => r.name.toLowerCase().includes(needle) || (r.description ?? "").toLowerCase().includes(needle));
+  }, [allRows, q]);
 
   const columns: Column<RoleRow>[] = [
     { key: "name", header: "Name", render: (r) => <span className="font-medium">{r.name}</span> },
@@ -83,6 +95,17 @@ export function RolesPage() {
           </Button>
         }
       />
+
+      <div className="relative mb-4 max-w-xs">
+        <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint" />
+        <TextInput
+          ref={searchRef}
+          placeholder="Search by name or description…"
+          value={qInput}
+          onChange={(e) => setQInput(e.target.value)}
+          className="pl-8"
+        />
+      </div>
 
       {error ? (
         <ErrorBlock message={error} onRetry={reload} />

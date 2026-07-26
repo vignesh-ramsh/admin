@@ -5,6 +5,7 @@ import { call } from "../../api/client";
 import type { FilerFileRow } from "../../api/types";
 import { useAsync } from "../../hooks/useAsync";
 import { useDebounce } from "../../hooks/useDebounce";
+import { usePageSearchFocus } from "../../hooks/usePageSearchFocus";
 import { Button } from "../../components/Button";
 import { Select } from "../../components/Field";
 import { Badge, StatusBadge } from "../../components/Badge";
@@ -25,6 +26,7 @@ export function FilerFilesTab() {
   const navigate = useNavigate();
   const [qInput, setQInput] = useState("");
   const q = useDebounce(qInput, 300);
+  const searchRef = usePageSearchFocus();
   const [status, setStatus] = useState("");
   const [storage, setStorage] = useState("");
   const [visibility, setVisibility] = useState("");
@@ -75,6 +77,7 @@ export function FilerFilesTab() {
         <div className="relative w-full max-w-xs">
           <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint" />
           <input
+            ref={searchRef}
             className="h-9 w-full rounded-md border border-border-strong bg-surface pl-8 pr-3 text-sm text-text placeholder:text-text-faint focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/25"
             placeholder="Search by filename or path…"
             value={qInput}

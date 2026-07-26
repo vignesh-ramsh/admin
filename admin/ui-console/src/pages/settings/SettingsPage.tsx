@@ -5,6 +5,7 @@ import { call } from "../../api/client";
 import type { SettingEntry } from "../../api/types";
 import { useAsync } from "../../hooks/useAsync";
 import { useDebounce } from "../../hooks/useDebounce";
+import { usePageSearchFocus } from "../../hooks/usePageSearchFocus";
 import { PageHeader } from "../../components/PageHeader";
 import { Button, IconButton } from "../../components/Button";
 import { Badge } from "../../components/Badge";
@@ -22,6 +23,7 @@ export function SettingsPage() {
   const navigate = useNavigate();
   const [qInput, setQInput] = useState("");
   const q = useDebounce(qInput, 300);
+  const searchRef = usePageSearchFocus();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [revealed, setRevealed] = useState<Record<string, string>>({});
   const [revealing, setRevealing] = useState<string | null>(null);
@@ -86,6 +88,7 @@ export function SettingsPage() {
       <div className="relative mb-4 max-w-sm">
         <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint" />
         <input
+          ref={searchRef}
           className="h-9 w-full rounded-md border border-border-strong bg-surface pl-8 pr-3 text-sm text-text placeholder:text-text-faint focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/25"
           placeholder="Search by key…"
           value={qInput}
@@ -104,7 +107,7 @@ export function SettingsPage() {
       ) : (
         <div className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-1">
           {groups.map(([group, groupRows]) => (
-            <div key={group} className="overflow-hidden rounded-lg border border-border bg-surface">
+            <div key={group} className="shrink-0 overflow-hidden rounded-lg border border-border bg-surface">
               <button
                 type="button"
                 onClick={() => toggleGroup(group)}

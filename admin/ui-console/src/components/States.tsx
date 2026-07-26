@@ -45,7 +45,12 @@ export function EmptyState({
     <div
       className={clsx(
         "flex h-full min-h-[280px] flex-1 flex-col items-center justify-center gap-2 text-center",
-        bordered && "rounded-lg border border-dashed border-border",
+        // bg-surface travels with `bordered`: this is the "I'm a standalone
+        // placeholder card" case (vs. bordered=false, inline content that
+        // inherits whatever surface it's dropped into) — without it, this
+        // box sat on the page's canvas color instead of reading as a card
+        // like every other panel around it.
+        bordered && "rounded-lg border border-dashed border-border bg-surface",
       )}
     >
       {icon && <div className="mb-1 text-text-faint">{icon}</div>}

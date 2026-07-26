@@ -5,6 +5,7 @@ import { call } from "../../api/client";
 import type { User } from "../../api/types";
 import { useAsync } from "../../hooks/useAsync";
 import { useDebounce } from "../../hooks/useDebounce";
+import { usePageSearchFocus } from "../../hooks/usePageSearchFocus";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
 import { TextInput } from "../../components/Field";
@@ -17,6 +18,7 @@ export function UsersPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
+  const searchRef = usePageSearchFocus();
 
   const { data, loading, error, reload } = useAsync<User[]>(
     () => call<User[]>("list_users", debouncedSearch ? { q: debouncedSearch } : {}, { method: "GET" }),
@@ -78,6 +80,7 @@ export function UsersPage() {
       <div className="relative mb-4 max-w-xs">
         <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint" />
         <TextInput
+          ref={searchRef}
           placeholder="Search by email…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}

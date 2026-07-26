@@ -10,6 +10,7 @@ import { TextInput, Checkbox } from "../../components/Field";
 import { Badge, StatusBadge } from "../../components/Badge";
 import { LoadingBlock, ErrorBlock } from "../../components/States";
 import { useToast } from "../../components/Toast";
+import { useSaveShortcut } from "../../hooks/useSaveShortcut";
 import { formatDateTime, isTestAccount } from "../shared/datetime";
 
 export function UserDetailRoute() {
@@ -98,6 +99,8 @@ export function UserDetailRoute() {
       setSaving(false);
     }
   };
+
+  useSaveShortcut(saveProfile, !!user && !saving);
 
   const setStatus = async (status: "Active" | "Inactive" | "Locked") => {
     if (!user) return;
@@ -329,6 +332,8 @@ function SetPasswordModal({ email, onClose }: { email: string; onClose: () => vo
       setBusy(false);
     }
   };
+
+  useSaveShortcut(submit, !busy && !!password);
 
   return (
     <Modal

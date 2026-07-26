@@ -9,6 +9,7 @@ import { Badge } from "../../components/Badge";
 import { TextInput, TextArea, Select, Switch } from "../../components/Field";
 import { LoadingBlock, ErrorBlock } from "../../components/States";
 import { useToast } from "../../components/Toast";
+import { useSaveShortcut } from "../../hooks/useSaveShortcut";
 
 type FormValue = string | boolean;
 
@@ -96,6 +97,8 @@ export function FilerSettingsTab() {
       setSaving(false);
     }
   };
+
+  useSaveShortcut(save, dirtyKeys.length > 0 && !saving);
 
   if (loading && !values) return <LoadingBlock label="Loading filer settings…" />;
   if (error) return <ErrorBlock message={error} onRetry={reload} />;

@@ -8,6 +8,7 @@ import { Button } from "../../components/Button";
 import { TextInput, Checkbox } from "../../components/Field";
 import { LoadingBlock } from "../../components/States";
 import { useToast } from "../../components/Toast";
+import { useSaveShortcut } from "../../hooks/useSaveShortcut";
 
 const NEW_KEY_SENTINEL = "__new__";
 
@@ -78,6 +79,8 @@ function SetSettingForm({
       setBusy(false);
     }
   };
+
+  useSaveShortcut(submit, !busy && !(secret && !confirmed));
 
   return (
     <Modal

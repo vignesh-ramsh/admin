@@ -76,7 +76,7 @@ export function UploadFileRoute() {
           <input
             type="file"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="cursor-pointer text-sm text-text file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-accent-600 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:bg-accent-700"
+            className="cursor-pointer text-sm text-text file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-accent-action file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-accent-fg hover:file:brightness-95"
           />
         </div>
         <Select

@@ -7,6 +7,7 @@ import { Modal, ConfirmModal } from "../../components/Modal";
 import { Button } from "../../components/Button";
 import { LoadingBlock } from "../../components/States";
 import { useToast } from "../../components/Toast";
+import { useSaveShortcut } from "../../hooks/useSaveShortcut";
 import type { DataTableOutletContext } from "./DataTableView";
 import { FieldInput } from "./FieldInput";
 import { editableFields, formatCell, toInputValue } from "./format";
@@ -99,6 +100,8 @@ export function RowEditorRoute({ mode }: { mode: "create" | "edit" }) {
   };
 
   const viewOnly = readOnly || (!isCreate && loading);
+
+  useSaveShortcut(save, !viewOnly && !saving);
 
   return (
     <>

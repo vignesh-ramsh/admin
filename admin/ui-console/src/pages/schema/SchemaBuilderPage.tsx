@@ -5,11 +5,12 @@ import clsx from "clsx";
 import { call } from "../../api/client";
 import type { SchemaFileList, TableMeta } from "../../api/types";
 import { PageHeader } from "../../components/PageHeader";
-import { Button } from "../../components/Button";
+import { Button, IconButton } from "../../components/Button";
 import { TextInput } from "../../components/Field";
 import { EmptyState, ErrorBlock, LoadingBlock } from "../../components/States";
 import { useAsync } from "../../hooks/useAsync";
 import { useDebounce } from "../../hooks/useDebounce";
+import { usePageSearchFocus } from "../../hooks/usePageSearchFocus";
 import { clearSchemaCache } from "./useTargetFields";
 import { SchemaFileEditor } from "./SchemaFileEditor";
 
@@ -40,6 +41,7 @@ export function SchemaBuilderPage() {
   const isEditingRoute = !!useMatch("/schema/:kind/:name");
   const [q, setQ] = useState("");
   const debouncedQ = useDebounce(q, 250);
+  const searchRef = usePageSearchFocus();
   const [pluginFilter, setPluginFilter] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -130,9 +132,16 @@ export function SchemaBuilderPage() {
       <PageHeader title="Schema Builder" description="Author tables and patches, then apply them with a migration." />
 
       <div className="flex min-h-0 flex-1 gap-4">
-        <aside className="flex w-80 shrink-0 flex-col rounded-lg border border-border bg-surface">
-          <div className="flex items-center gap-2 border-b border-border p-2.5">
-            <TextInput value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search files…" className="!h-8 flex-1" />
+        <aside className="flex w-72 shrink-0 flex-col rounded-lg border border-border bg-surface">
+          <div className="flex items-center gap-1.5 border-b border-border py-2.5 pl-2.5 pr-2">
+            {/* min-w-0 lets this wrapper actually shrink/grow with the row
+                instead of sizing to the input's own content — the wrapper,
+                not the input, is the real flex item here since TextInput's
+                className lands on the <input>, one flex context too deep
+                to affect this row's horizontal layout. */}
+            <div className="min-w-0 flex-1">
+              <TextInput ref={searchRef} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search files…" className="!h-8 w-full" />
+            </div>
             {/* Plugin filter — moved out of always-visible chips (which don't
                 scale as business plugins grow) into a compact filter menu.
                 Defaults to every plugin. */}
@@ -204,15 +213,17 @@ export function SchemaBuilderPage() {
                 </button>
               );
             })}
-            <button
-              type="button"
+            {/* Same fixed h-8 w-8 box as the filter button above, and the
+                same right-edge inset (pr-2 on both rows) — so the two
+                icons land in exactly the same column instead of the
+                filter sitting ~6.5px left of this one, as it did when this
+                button sized itself to its own content instead. */}
+            <IconButton
+              className="ml-auto"
+              label={`New ${tab === "schemas" ? "schema" : "patch"}`}
+              icon={<Plus size={15} />}
               onClick={() => startNew(tab)}
-              className="ml-auto cursor-pointer rounded p-1 text-text-faint hover:text-accent-600"
-              aria-label={`New ${tab === "schemas" ? "schema" : "patch"}`}
-              title={`New ${tab === "schemas" ? "schema" : "patch"}`}
-            >
-              <Plus size={15} />
-            </button>
+            />
           </div>
 
           <div className="scrollbar-thin flex-1 overflow-y-auto p-2">
