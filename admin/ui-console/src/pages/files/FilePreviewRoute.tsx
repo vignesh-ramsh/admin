@@ -8,7 +8,7 @@ import { Badge, StatusBadge } from "../../components/Badge";
 import { LoadingBlock, EmptyState } from "../../components/States";
 import { useToast } from "../../components/Toast";
 import { formatDateTime } from "../shared/datetime";
-import { formatBytes, isImageType, isTextType } from "./filerUtils";
+import { formatBytes, isImageType, canPreviewInline } from "./filerUtils";
 import type { FilesOutletContext } from "./FilerFilesTab";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -142,18 +142,22 @@ export function FilePreviewRoute() {
               <FileIcon size={36} />
               <span className="text-[13px]">No preview available</span>
             </div>
-          ) : isImageType(file.content_type) ? (
-            <img src={file.url!} alt={file.original_filename} className="max-h-[280px] max-w-full rounded object-contain lg:max-h-[440px]" />
-          ) : file.content_type === "application/pdf" ? (
-            <iframe src={file.url!} title={file.original_filename} className="h-[280px] w-full rounded border-0 lg:h-[440px]" />
-          ) : isTextType(file.content_type) ? (
-            <iframe src={file.url!} title={file.original_filename} className="h-[280px] w-full rounded border border-border bg-surface lg:h-[440px]" />
-          ) : (
+          ) : !canPreviewInline(file.content_type) ? (
+            // The serve endpoint sends Content-Disposition: attachment for
+            // any type outside its own inline allowlist (filer/__init__.py)
+            // — pointing an <img>/<iframe> at that same URL wouldn't show a
+            // preview, it would just trigger a silent download. Route these
+            // to Download instead of guessing at a heuristic that could
+            // drift from what the backend actually allows.
             <div className="flex flex-col items-center gap-2 text-center text-text-faint">
               <FileIcon size={36} />
-              <span className="text-[13px]">No inline preview for {file.content_type}</span>
+              <span className="text-[13px]">No preview available for {file.content_type}</span>
               <span className="text-xs">Use Download instead.</span>
             </div>
+          ) : isImageType(file.content_type) ? (
+            <img src={file.url!} alt={file.original_filename} className="max-h-[280px] max-w-full rounded object-contain lg:max-h-[440px]" />
+          ) : (
+            <iframe src={file.url!} title={file.original_filename} className="h-[280px] w-full rounded border-0 lg:h-[440px]" />
           )}
         </div>
 

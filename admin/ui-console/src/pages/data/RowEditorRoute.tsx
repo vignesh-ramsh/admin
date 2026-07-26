@@ -27,6 +27,7 @@ export function RowEditorRoute({ mode }: { mode: "create" | "edit" }) {
   const showAudit = !isCreate && !!schema.audit;
 
   const [values, setValues] = useState<Values>({});
+  const [original, setOriginal] = useState<Values>({});
   const [row, setRow] = useState<Row | null>(null);
   const [loading, setLoading] = useState(!isCreate);
   const [saving, setSaving] = useState(false);
@@ -55,6 +56,7 @@ export function RowEditorRoute({ mode }: { mode: "create" | "edit" }) {
           next[f.name] = f.type === "BOOLEAN" ? r[f.name] === true : toInputValue(f, r[f.name]);
         }
         setValues(next);
+        setOriginal(next);
       })
       .catch((err) => toast.error(err instanceof ApiError ? err.message : "Failed to load row"))
       .finally(() => setLoading(false));
@@ -66,6 +68,15 @@ export function RowEditorRoute({ mode }: { mode: "create" | "edit" }) {
     if (Object.keys(found).length > 0) {
       setErrors(found);
       toast.error("Fix the highlighted fields before saving.");
+      return;
+    }
+    // Editing an existing row with nothing actually changed still isn't
+    // worth a round trip: save_row always issues a real UPDATE, which
+    // bumps updated_at and — on an audited table — writes a no-op
+    // before===after row to _audit_*. Skip the call entirely rather than
+    // let the backend write a change that never happened.
+    if (!isCreate && fields.every((f) => values[f.name] === original[f.name])) {
+      toast.show("No changes to save.");
       return;
     }
     setSaving(true);

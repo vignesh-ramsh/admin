@@ -10,10 +10,21 @@ export function formatBytes(bytes: number | null | undefined): string {
   return `${i === 0 ? value : value.toFixed(1)} ${UNITS[i]}`;
 }
 
-export function isImageType(contentType: string | null | undefined): boolean {
-  return !!contentType && contentType.startsWith("image/");
+// Must match filer/__init__.py's _INLINE_ALLOWLIST exactly — the backend
+// serve endpoint sends `Content-Disposition: attachment` for anything NOT
+// in that set (deliberately: it never trusts a browser to render an
+// uploaded text/html/svg/json inline, to keep an uploaded file from ever
+// executing as same-origin content — see filer/__init__.py §9/§12). A
+// broader client-side guess like "any image/*" or "any text/*" would
+// render an <img>/<iframe> pointing at a URL the server force-downloads
+// instead — the preview silently turns into a download with nothing
+// showing, which is exactly the bug this set exists to avoid.
+const INLINE_ALLOWLIST = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf"]);
+
+export function canPreviewInline(contentType: string | null | undefined): boolean {
+  return !!contentType && INLINE_ALLOWLIST.has(contentType);
 }
 
-export function isTextType(contentType: string | null | undefined): boolean {
-  return !!contentType && (contentType.startsWith("text/") || contentType === "application/json");
+export function isImageType(contentType: string | null | undefined): boolean {
+  return contentType === "image/png" || contentType === "image/jpeg" || contentType === "image/gif" || contentType === "image/webp";
 }
