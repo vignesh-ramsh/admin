@@ -33,9 +33,18 @@ from admin._security import by_of, check_password_strength, hash_password
 SUPERUSER_ROLE_NAME = "Superuser"
 
 _USER_LIST_FIELDS = [
-    "id", "email", "username", "full_name", "status", "has_roles",
-    "max_sessions", "allowed_ips", "locked_until", "last_login_at",
-    "created_by", "updated_by",
+    "id",
+    "email",
+    "username",
+    "full_name",
+    "status",
+    "has_roles",
+    "max_sessions",
+    "allowed_ips",
+    "locked_until",
+    "last_login_at",
+    "created_by",
+    "updated_by",
 ]
 
 
@@ -57,7 +66,9 @@ def _validate_allowed_ips(allowed_ips: list[str] | None) -> list[str] | None:
         if not entry:
             continue
         try:
-            ipaddress.ip_network(entry, strict=False) if "/" in entry else ipaddress.ip_address(entry)
+            ipaddress.ip_network(entry, strict=False) if "/" in entry else ipaddress.ip_address(
+                entry
+            )
         except ValueError:
             arc.relay.throw(f"'{entry}' is not a valid IP address or CIDR range", code="invalid_ip")
         cleaned.append(entry)
@@ -66,7 +77,11 @@ def _validate_allowed_ips(allowed_ips: list[str] | None) -> list[str] | None:
 
 @arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_users(role: str | None = None, q: str | None = None) -> list[dict]:
-    users = await arc.relay.list("_users", fields=_USER_LIST_FIELDS, order_by=["email"])
+    # role/q filtering both happen client-side below (JSONB array
+    # membership + prefix search have no Query Engine operator) — a
+    # truncated fetch here would silently drop matching users, not just
+    # show fewer of them.
+    users = await arc.relay.list("_users", fields=_USER_LIST_FIELDS, order_by=["email"], limit=None)
     if role:
         # JSONB array membership has no Query Engine filter operator
         # (docs/arc.MD §3.4) — filtering client-side is the established
@@ -97,7 +112,8 @@ async def create_user(
     if superuser:
         if await arc.relay.get("_roles", {"name": SUPERUSER_ROLE_NAME}) is None:
             await arc.relay.save(
-                "_roles", {"name": SUPERUSER_ROLE_NAME, "description": "Bypasses all role checks."},
+                "_roles",
+                {"name": SUPERUSER_ROLE_NAME, "description": "Bypasses all role checks."},
                 by=by_of(identity),
             )
         if SUPERUSER_ROLE_NAME not in roles:
@@ -107,7 +123,9 @@ async def create_user(
     # as authn's own CLI. authn's has_roles validation hook would reject
     # them anyway; filtering first gives a clearer response shape than a
     # generic "no role named X" thrown mid-save.
-    known = {r["name"] for r in await arc.relay.list("_roles", fields=["name"])}
+    # Correctness-critical: a real role missing from this set gets wrongly
+    # "skipped" below as if it didn't exist.
+    known = {r["name"] for r in await arc.relay.list("_roles", fields=["name"], limit=None)}
     skipped = [r for r in roles if r not in known]
     roles = [r for r in roles if r in known]
 
@@ -116,8 +134,10 @@ async def create_user(
         # to_thread: zxcvbn scoring and (below) Argon2 hashing are real CPU
         # — running them on the event loop stalls every in-flight request.
         await asyncio.to_thread(
-            check_password_strength, raw_password,
-            min_score=arc.authn.min_password_score(), user_inputs=[email],
+            check_password_strength,
+            raw_password,
+            min_score=arc.authn.min_password_score(),
+            user_inputs=[email],
         )
     except ValueError as exc:
         arc.relay.throw(str(exc), status=400, code="weak_password")
@@ -189,7 +209,9 @@ async def update_profile(
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
-async def set_status(email: str, status: str, locked_until: str | None = None, identity=None) -> dict:
+async def set_status(
+    email: str, status: str, locked_until: str | None = None, identity=None
+) -> dict:
     if status not in ("Active", "Inactive", "Locked"):
         arc.relay.throw("status must be Active, Inactive, or Locked", code="bad_status")
     user = await arc.relay.get("_users", {"email": email.strip().lower()})
@@ -214,7 +236,9 @@ async def set_status(email: str, status: str, locked_until: str | None = None, i
                 parsed = datetime.fromisoformat(locked_until)
             except ValueError:
                 arc.relay.throw("locked_until must be an ISO datetime", code="bad_locked_until")
-            update["locked_until"] = parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+            update["locked_until"] = (
+                parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+            )
     await arc.relay.save("_users", update, by=by_of(identity))
     return {"ok": True}
 
@@ -250,8 +274,10 @@ async def set_password(email: str, password: str, identity=None) -> dict:
         arc.relay.throw("no such user", status=404, code="not_found")
     try:
         await asyncio.to_thread(
-            check_password_strength, password,
-            min_score=arc.authn.min_password_score(), user_inputs=[email],
+            check_password_strength,
+            password,
+            min_score=arc.authn.min_password_score(),
+            user_inputs=[email],
         )
     except ValueError as exc:
         arc.relay.throw(str(exc), status=400, code="weak_password")
@@ -260,14 +286,21 @@ async def set_password(email: str, password: str, identity=None) -> dict:
     password_hash = await asyncio.to_thread(hash_password, password)
     await arc.relay.save(
         "_users",
-        {"id": user["id"], "password_hash": password_hash, "failed_login_count": 0, "locked_until": None},
+        {
+            "id": user["id"],
+            "password_hash": password_hash,
+            "failed_login_count": 0,
+            "locked_until": None,
+        },
         by=by,
     )
 
     # An admin-assisted reset is exactly the moment an old, possibly-
     # compromised session shouldn't keep working — same reasoning authn's
     # own CLI set-password already documents.
-    sessions = await arc.relay.list("_sessions", filters={"user": user["id"], "revoked_at": {"is_null": True}})
+    sessions = await arc.relay.list(
+        "_sessions", filters={"user": user["id"], "revoked_at": {"is_null": True}}
+    )
     for s in sessions:
         await arc.relay.save("_sessions", {"id": s["id"], "revoked_at": _utcnow()}, by=by)
         await arc.authn.invalidate_session_cache(s["token_hash"])

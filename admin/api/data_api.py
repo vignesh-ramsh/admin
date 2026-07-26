@@ -40,7 +40,8 @@ def _require_not_protected(table: str) -> None:
         arc.relay.throw(
             f"'{table}' is managed through its own dedicated endpoints "
             f"(users/roles/sessions/access-keys) — not the generic data browser",
-            status=409, code="protected_table",
+            status=409,
+            code="protected_table",
         )
     if table.startswith("_audit_"):
         # Integrity bookkeeping (docs/arc.MD §3.9's audit trigger writes
@@ -49,7 +50,8 @@ def _require_not_protected(table: str) -> None:
         # same posture as the protected tables above.
         arc.relay.throw(
             f"'{table}' is an audit trail, written only by its table's trigger — read-only here",
-            status=409, code="protected_table",
+            status=409,
+            code="protected_table",
         )
 
 
@@ -70,7 +72,9 @@ async def list_rows(
     except CoercionError as exc:
         throw_coercion(exc)
     try:
-        rows = await arc.relay.list(table, filters=filters, order_by=order_by, limit=limit, offset=offset)
+        rows = await arc.relay.list(
+            table, filters=filters, order_by=order_by, limit=limit, offset=offset
+        )
     except _READ_ERRORS as exc:
         _friendly(exc)
     # Reads on protected tables are open by design, but hash material never

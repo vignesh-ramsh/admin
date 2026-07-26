@@ -56,6 +56,7 @@ def require_plugin_dir(plugin: str) -> Path:
             f"plugin '{plugin}' does not follow the plugins/<name>/<name>/ layout "
             f"convention (expected {directory}) — cannot determine where to write "
             f"its schema/patch files",
-            status=409, code="unconventional_plugin_layout",
+            status=409,
+            code="unconventional_plugin_layout",
         )
     return directory

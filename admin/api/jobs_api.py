@@ -71,5 +71,9 @@ async def list_job_log(
     # a numeric STRING outright. Same bug/fix already applied to
     # filer_api.py, filer_admin_api.py, and audit_api.py this session.
     return await arc.relay.list(
-        "_job_log", filters=filters or None, order_by=["-finished_at"], limit=int(limit), offset=int(offset)
+        "_job_log",
+        filters=filters or None,
+        order_by=["-finished_at"],
+        limit=int(limit),
+        offset=int(offset),
     )

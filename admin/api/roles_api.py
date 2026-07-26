@@ -16,13 +16,18 @@ from admin._security import by_of
 
 @arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_roles() -> list[dict]:
-    return await arc.relay.list("_roles", order_by=["name"])
+    # Genuinely "every role" — a management screen showing a truncated
+    # role list (some roles invisible past DEFAULT_LIST_LIMIT) would be
+    # actively broken, not just slow.
+    return await arc.relay.list("_roles", order_by=["name"], limit=None)
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def create_role(name: str, description: str | None = None, identity=None) -> dict:
     try:
-        return await arc.relay.save("_roles", {"name": name, "description": description}, by=by_of(identity))
+        return await arc.relay.save(
+            "_roles", {"name": name, "description": description}, by=by_of(identity)
+        )
     except ValidationError as exc:
         arc.relay.throw(str(exc), status=400, code="invalid_role")
 
@@ -39,7 +44,9 @@ async def update_role(name: str, description: str | None = None, identity=None) 
     role = await arc.relay.get("_roles", {"name": name})
     if role is None:
         arc.relay.throw("no such role", status=404, code="not_found")
-    return await arc.relay.save("_roles", {"id": role["id"], "description": description}, by=by_of(identity))
+    return await arc.relay.save(
+        "_roles", {"id": role["id"], "description": description}, by=by_of(identity)
+    )
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
@@ -49,7 +56,10 @@ async def delete_role(name: str, identity=None) -> dict:
         arc.relay.throw("no such role", status=404, code="not_found")
 
     by = by_of(identity)
-    users = await arc.relay.list("_users", fields=["id", "has_roles"])
+    # Correctness-critical, not just a listing: EVERY user with this role
+    # must be found and updated, or deleting a role would silently leave
+    # it dangling on any user past DEFAULT_LIST_LIMIT.
+    users = await arc.relay.list("_users", fields=["id", "has_roles"], limit=None)
     affected = [u for u in users if name in (u.get("has_roles") or [])]
     for u in affected:
         remaining = [r for r in (u["has_roles"] or []) if r != name]

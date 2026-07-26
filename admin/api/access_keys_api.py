@@ -26,7 +26,11 @@ async def list_access_keys(email: str | None = None) -> list[dict]:
         if user is None:
             arc.relay.throw("no such user", status=404, code="not_found")
         filters = {"user": user["id"]}
-    rows = await arc.relay.list("_access_keys", filters=filters, order_by=["-expires_at"])
+    # Unfiltered (no email) this is "every access key in the system" for a
+    # management screen — silently truncating it would just hide keys.
+    rows = await arc.relay.list(
+        "_access_keys", filters=filters, order_by=["-expires_at"], limit=None
+    )
     return [
         {
             "id": str(r["id"]),
@@ -56,9 +60,15 @@ async def create_access_key(
     scopes = list(scopes or [])
 
     if "Superuser" in scopes or "*" in scopes:
-        arc.relay.throw("access key scopes may never include Superuser or '*'", status=400, code="scope_forbidden")
+        arc.relay.throw(
+            "access key scopes may never include Superuser or '*'",
+            status=400,
+            code="scope_forbidden",
+        )
     if not has_roles_subset(scopes, user.get("has_roles")):
-        arc.relay.throw("scopes must be a subset of the user's has_roles", status=400, code="invalid_scopes")
+        arc.relay.throw(
+            "scopes must be a subset of the user's has_roles", status=400, code="invalid_scopes"
+        )
 
     raw_key, prefix, key_hash = new_access_key()
     expires_at = _utcnow() + timedelta(days=expires_in_days) if expires_in_days else None
@@ -66,8 +76,12 @@ async def create_access_key(
         row = await arc.relay.save(
             "_access_keys",
             {
-                "user": user["id"], "key_prefix": prefix, "key_hash": key_hash,
-                "label": label, "scopes": scopes, "expires_at": expires_at,
+                "user": user["id"],
+                "key_prefix": prefix,
+                "key_hash": key_hash,
+                "label": label,
+                "scopes": scopes,
+                "expires_at": expires_at,
             },
             by=by_of(identity),
         )
@@ -86,13 +100,17 @@ async def revoke_access_key(key_prefix: str, identity=None) -> dict:
     if row is None:
         arc.relay.throw("no such access key", status=404, code="not_found")
     if row["revoked_at"] is None:
-        await arc.relay.save("_access_keys", {"id": row["id"], "revoked_at": _utcnow()}, by=by_of(identity))
+        await arc.relay.save(
+            "_access_keys", {"id": row["id"], "revoked_at": _utcnow()}, by=by_of(identity)
+        )
         await arc.authn.invalidate_access_key_cache(row["key_prefix"])
     return {"ok": True}
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
-async def clear_access_keys(email: str | None = None, all_users: bool = False, identity=None) -> dict:
+async def clear_access_keys(
+    email: str | None = None, all_users: bool = False, identity=None
+) -> dict:
     if not email and not all_users:
         arc.relay.throw("must specify either email or all_users=true", code="scope_required")
     filters = {"revoked_at": {"is_null": True}}
@@ -102,7 +120,11 @@ async def clear_access_keys(email: str | None = None, all_users: bool = False, i
             arc.relay.throw("no such user", status=404, code="not_found")
         filters["user"] = user["id"]
     by = by_of(identity)
-    rows = await arc.relay.list("_access_keys", filters=filters, fields=["id", "key_prefix"])
+    # Correctness-critical: "all_users=True" means revoke EVERY active key —
+    # under-fetching here would silently leave some keys still valid.
+    rows = await arc.relay.list(
+        "_access_keys", filters=filters, fields=["id", "key_prefix"], limit=None
+    )
     for r in rows:
         await arc.relay.save("_access_keys", {"id": r["id"], "revoked_at": _utcnow()}, by=by)
         await arc.authn.invalidate_access_key_cache(r["key_prefix"])
@@ -112,7 +134,11 @@ async def clear_access_keys(email: str | None = None, all_users: bool = False, i
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def prune_access_keys(older_than_days: int = 30) -> dict:
     cutoff = _utcnow() - timedelta(days=older_than_days)
-    all_keys = await arc.relay.list("_access_keys", fields=["id", "revoked_at", "expires_at"])
+    # Correctness-critical: every key past the cutoff must be found, or
+    # pruning silently stops working past DEFAULT_LIST_LIMIT keys.
+    all_keys = await arc.relay.list(
+        "_access_keys", fields=["id", "revoked_at", "expires_at"], limit=None
+    )
     to_delete = [
         k["id"]
         for k in all_keys

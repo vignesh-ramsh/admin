@@ -52,13 +52,15 @@ async def list_filer_settings() -> list[dict]:
     rows = []
     for key, (kind, secret) in _FILER_SETTINGS.items():
         value = arc.settings.get(key, reveal=not secret)
-        rows.append({
-            "key": key,
-            "kind": kind,
-            "secret": secret,
-            "value": None if secret else value,
-            "is_set": value is not None,
-        })
+        rows.append(
+            {
+                "key": key,
+                "kind": kind,
+                "secret": secret,
+                "value": None if secret else value,
+                "is_set": value is not None,
+            }
+        )
     return rows
 
 
@@ -79,7 +81,11 @@ async def set_filer_settings(values: dict) -> dict:
             continue
         kind, secret = entry
         if kind == "bool":
-            value = "true" if (raw is True or str(raw).strip().lower() in ("1", "true", "yes", "on")) else "false"
+            value = (
+                "true"
+                if (raw is True or str(raw).strip().lower() in ("1", "true", "yes", "on"))
+                else "false"
+            )
         else:
             value = str(raw).strip()
             if secret and not value:
@@ -130,16 +136,18 @@ async def list_filer_files(
     params: list = []
     if status:
         params.append(status)
-        where.append(f'status = ${len(params)}')
+        where.append(f"status = ${len(params)}")
     if storage:
         params.append(storage)
-        where.append(f'storage = ${len(params)}')
+        where.append(f"storage = ${len(params)}")
     if private is not None and private != "":
         params.append(_as_bool(private))
-        where.append(f'private = ${len(params)}')
+        where.append(f"private = ${len(params)}")
     if q:
         params.append(f"%{_escape_like(q)}%")
-        where.append(f"(original_filename ILIKE ${len(params)} ESCAPE '\\' OR path ILIKE ${len(params)} ESCAPE '\\')")
+        where.append(
+            f"(original_filename ILIKE ${len(params)} ESCAPE '\\' OR path ILIKE ${len(params)} ESCAPE '\\')"
+        )
 
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
     # limit/offset arrive as plain query-string strings when this is
@@ -151,12 +159,16 @@ async def list_filer_files(
     params.extend([int(limit), int(offset)])
     query = (
         f'SELECT * FROM "filerfile" {where_sql} '
-        f'ORDER BY created_at DESC LIMIT ${len(params) - 1} OFFSET ${len(params)}'
+        f"ORDER BY created_at DESC LIMIT ${len(params) - 1} OFFSET ${len(params)}"
     )
     rows = await arc.relay.sql(query, *params)
     out = []
     for row in rows:
-        url = await arc.filer.sign_url(row["file_id"]) if row["status"] in ("clean", "skipped") else None
+        url = (
+            await arc.filer.sign_url(row["file_id"])
+            if row["status"] in ("clean", "skipped")
+            else None
+        )
         out.append({**row, "url": url})
     return out
 

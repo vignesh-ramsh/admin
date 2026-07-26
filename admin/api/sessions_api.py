@@ -24,7 +24,10 @@ async def list_sessions(email: str | None = None) -> list[dict]:
         if user is None:
             arc.relay.throw("no such user", status=404, code="not_found")
         filters = {"user": user["id"]}
-    rows = await arc.relay.list("_sessions", filters=filters, order_by=["-expires_at"])
+    # Unfiltered (no email) this is "every session in the system" for a
+    # management screen — silently truncating it would just hide sessions,
+    # not make anything faster in a way the caller could notice.
+    rows = await arc.relay.list("_sessions", filters=filters, order_by=["-expires_at"], limit=None)
     return [
         {
             "id": str(r["id"]),
@@ -45,7 +48,9 @@ async def revoke_session(session_id: str, identity=None) -> dict:
     if row is None:
         arc.relay.throw("no such session", status=404, code="not_found")
     if row["revoked_at"] is None:
-        await arc.relay.save("_sessions", {"id": row["id"], "revoked_at": _utcnow()}, by=by_of(identity))
+        await arc.relay.save(
+            "_sessions", {"id": row["id"], "revoked_at": _utcnow()}, by=by_of(identity)
+        )
         await arc.authn.invalidate_session_cache(row["token_hash"])
     return {"ok": True}
 
@@ -63,7 +68,11 @@ async def clear_sessions(email: str | None = None, all_users: bool = False, iden
             arc.relay.throw("no such user", status=404, code="not_found")
         filters["user"] = user["id"]
     by = by_of(identity)
-    rows = await arc.relay.list("_sessions", filters=filters, fields=["id", "token_hash"])
+    # Correctness-critical: "all_users=True" means revoke EVERY active
+    # session — under-fetching here would silently leave some logged in.
+    rows = await arc.relay.list(
+        "_sessions", filters=filters, fields=["id", "token_hash"], limit=None
+    )
     for r in rows:
         await arc.relay.save("_sessions", {"id": r["id"], "revoked_at": _utcnow()}, by=by)
         await arc.authn.invalidate_session_cache(r["token_hash"])
@@ -81,7 +90,12 @@ async def prune_sessions(older_than_days: int = 30) -> dict:
     grouping (docs/arc.MD §3.4), so this filters client-side, the same
     established pattern already used for has_roles membership checks."""
     cutoff = _utcnow() - timedelta(days=older_than_days)
-    all_sessions = await arc.relay.list("_sessions", fields=["id", "revoked_at", "expires_at"])
+    # Correctness-critical: every session past the cutoff must be found,
+    # or pruning silently stops working once there are more than
+    # DEFAULT_LIST_LIMIT sessions in the table.
+    all_sessions = await arc.relay.list(
+        "_sessions", fields=["id", "revoked_at", "expires_at"], limit=None
+    )
     to_delete = [
         s["id"]
         for s in all_sessions

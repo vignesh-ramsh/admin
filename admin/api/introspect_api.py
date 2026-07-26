@@ -113,9 +113,7 @@ async def get_table_schema(table: str) -> dict:
         schema = arc.psqldb.schema(table)
     except SchemaError as exc:
         arc.relay.throw(str(exc), status=404, code="unknown_table")
-    parent_table = (
-        _parent_tables_by_stem().get(schema.source_path.stem) if schema.child else None
-    )
+    parent_table = _parent_tables_by_stem().get(schema.source_path.stem) if schema.child else None
     return {
         "table": schema.table,
         "plugin": schema.plugin,

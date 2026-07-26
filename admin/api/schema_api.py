@@ -30,7 +30,14 @@ from pathlib import Path
 
 import arc
 from psqldb import migrate as psqldb_migrate
-from psqldb.model import FieldError, SchemaError, load_patch_file, load_patches_dir, load_schema_file, load_schemas_dir
+from psqldb.model import (
+    FieldError,
+    SchemaError,
+    load_patch_file,
+    load_patches_dir,
+    load_schema_file,
+    load_schemas_dir,
+)
 
 from admin._paths import PLUGINS_ROOT, patches_dir, require_plugin_dir, schemas_dir
 
@@ -55,6 +62,7 @@ def _read_json_files(directory) -> list[str]:
 # file is ever written. A bad value then simply cannot be persisted, whether
 # it came from this UI, a hand-edited file, or a direct API call.
 # --------------------------------------------------------------------- #
+
 
 def _schemas_on_disk() -> list:
     """Every plugin's schema files as they are RIGHT NOW on disk — not
@@ -110,14 +118,16 @@ def _validate_targets(candidate, stem: str) -> None:
                 )
             arc.relay.throw(
                 f"field '{f.name}': target '{f.target}' does not match any schema file name{hint}",
-                status=400, code="invalid_target",
+                status=400,
+                code="invalid_target",
             )
 
         if f.type == "TABLE" and not target.child:
             arc.relay.throw(
                 f"field '{f.name}': TABLE target '{f.target}' is not a child table — "
                 f'its schema must declare "child": true',
-                status=400, code="invalid_target",
+                status=400,
+                code="invalid_target",
             )
 
         if f.type == "REFERENCE" and f.target_field:
@@ -128,7 +138,8 @@ def _validate_targets(candidate, stem: str) -> None:
                     f"field '{f.name}': target_field '{f.target_field}' is not unique on "
                     f"'{f.target}' — Postgres can only reference a unique column. "
                     f"Unique options: {sorted(allowed)}",
-                    status=400, code="invalid_target_field",
+                    status=400,
+                    code="invalid_target_field",
                 )
 
 
@@ -163,7 +174,8 @@ def _validate_no_name_clash(candidate, plugin: str, stem: str, *, is_patch: bool
                 f"field '{f.name}' (id {f.id}) already exists on table '{table}', "
                 f"declared as id {clash[0]} by {clash[1]}. Two declarations of the same "
                 f"column can never migrate — rename this field, or reuse id {clash[0]}.",
-                status=400, code="duplicate_field_name",
+                status=400,
+                code="duplicate_field_name",
             )
 
 
@@ -214,7 +226,9 @@ async def get_schema_file(plugin: str, name: str) -> dict:
     directory = require_plugin_dir(plugin)
     path = directory / "schemas" / f"{name}.json"
     if not path.is_file():
-        arc.relay.throw(f"no schema file '{name}.json' for plugin '{plugin}'", status=404, code="not_found")
+        arc.relay.throw(
+            f"no schema file '{name}.json' for plugin '{plugin}'", status=404, code="not_found"
+        )
     return json.loads(path.read_text())
 
 
@@ -223,7 +237,9 @@ async def get_patch_file(plugin: str, name: str) -> dict:
     directory = require_plugin_dir(plugin)
     path = directory / "patches" / f"{name}.json"
     if not path.is_file():
-        arc.relay.throw(f"no patch file '{name}.json' for plugin '{plugin}'", status=404, code="not_found")
+        arc.relay.throw(
+            f"no patch file '{name}.json' for plugin '{plugin}'", status=404, code="not_found"
+        )
     return json.loads(path.read_text())
 
 
@@ -247,7 +263,9 @@ async def save_patch_file(plugin: str, name: str, content: dict) -> dict:
     save_schema_file."""
     directory = require_plugin_dir(plugin)
     path = directory / "patches" / f"{name}.json"
-    schema = _atomic_write_validated(path, content, loader=load_patch_file, plugin=plugin, is_patch=True)
+    schema = _atomic_write_validated(
+        path, content, loader=load_patch_file, plugin=plugin, is_patch=True
+    )
     return {"ok": True, "path": str(path), "table": schema.table}
 
 
@@ -256,7 +274,9 @@ async def delete_schema_file(plugin: str, name: str) -> dict:
     directory = require_plugin_dir(plugin)
     path = directory / "schemas" / f"{name}.json"
     if not path.is_file():
-        arc.relay.throw(f"no schema file '{name}.json' for plugin '{plugin}'", status=404, code="not_found")
+        arc.relay.throw(
+            f"no schema file '{name}.json' for plugin '{plugin}'", status=404, code="not_found"
+        )
     path.unlink()
     return {"ok": True}
 
@@ -266,15 +286,21 @@ async def delete_patch_file(plugin: str, name: str) -> dict:
     directory = require_plugin_dir(plugin)
     path = directory / "patches" / f"{name}.json"
     if not path.is_file():
-        arc.relay.throw(f"no patch file '{name}.json' for plugin '{plugin}'", status=404, code="not_found")
+        arc.relay.throw(
+            f"no patch file '{name}.json' for plugin '{plugin}'", status=404, code="not_found"
+        )
     path.unlink()
     return {"ok": True}
 
 
 def _serialize_op(op) -> dict:
     return {
-        "kind": op.kind, "table": op.table, "plugin": op.plugin,
-        "description": op.description, "destructive": op.destructive, "source": op.source,
+        "kind": op.kind,
+        "table": op.table,
+        "plugin": op.plugin,
+        "description": op.description,
+        "destructive": op.destructive,
+        "source": op.source,
     }
 
 
@@ -326,10 +352,14 @@ async def preview_migration_plan(plugin: str | None = None, table: str | None = 
 # — so a file edited (or a concurrent apply on the same table) between the
 # preview and the real apply can't silently apply stale ops.
 # --------------------------------------------------------------------- #
-async def _apply_or_preview(path: Path, plugin: str, loader, *, is_patch: bool, confirm: bool) -> dict:
+async def _apply_or_preview(
+    path: Path, plugin: str, loader, *, is_patch: bool, confirm: bool
+) -> dict:
     kind = "patch" if is_patch else "schema"
     if not path.is_file():
-        arc.relay.throw(f"no {kind} file '{path.stem}.json' for plugin '{plugin}'", status=404, code="not_found")
+        arc.relay.throw(
+            f"no {kind} file '{path.stem}.json' for plugin '{plugin}'", status=404, code="not_found"
+        )
     try:
         candidate = loader(path, plugin=plugin)
     except (SchemaError, FieldError) as exc:
@@ -374,7 +404,9 @@ async def _apply_or_preview(path: Path, plugin: str, loader, *, is_patch: bool, 
         # applied (the class of bug the CLI's own `-p` scoping had, before
         # being fixed — only_table never had it, since _diff_table already
         # excludes anything not matching `table` at the source).
-        migration_path = psqldb_migrate.write_migration_file(PLUGINS_ROOT / plugin, plugin, plan, reference)
+        migration_path = psqldb_migrate.write_migration_file(
+            PLUGINS_ROOT / plugin, plugin, plan, reference
+        )
 
         # THE live reload — this process's own arc.psqldb registry now
         # reflects the new shape for THIS table, immediately. See

@@ -49,7 +49,9 @@ def hash_password(password: str) -> str:
     return PasswordHasher().hash(password)
 
 
-def check_password_strength(password: str, *, min_score: int, user_inputs: list[str] | None = None) -> None:
+def check_password_strength(
+    password: str, *, min_score: int, user_inputs: list[str] | None = None
+) -> None:
     """Raises ValueError with a clear message if too weak — same zxcvbn
     scoring authn.validate_password_strength does."""
     from zxcvbn import zxcvbn

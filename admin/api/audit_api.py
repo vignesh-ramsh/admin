@@ -13,6 +13,7 @@ job (useUserDirectory), not duplicated server-side per endpoint."""
 import arc
 
 from admin._paths import require_known_plugin
+
 # One shared redaction set/helper for every admin endpoint that can return
 # rows off authn's tables — the Data Browser's read path (data_api) applies
 # the identical treatment. Found originally by testing this endpoint against
@@ -91,7 +92,7 @@ async def list_audit_entries(
     query = (
         f'SELECT id, "table", row_id, changes, changed_by, changed_at '
         f'FROM "{audit_table}" {where_clause} '
-        f'ORDER BY changed_at DESC LIMIT ${len(params) - 1} OFFSET ${len(params)}'
+        f"ORDER BY changed_at DESC LIMIT ${len(params) - 1} OFFSET ${len(params)}"
     )
     rows = await arc.relay.sql(query, *params)
     return [
