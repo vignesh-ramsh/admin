@@ -11,6 +11,16 @@ import { Pagination } from "../../components/agni/data/Pagination";
 import { IconRefresh, IconSearch } from "../../layout/icons";
 import { formatWhen } from "../shared/datetime";
 
+// Queued/Running are new lifecycle states (_job_log now gets a row at
+// enqueue time, updated in place as the job runs, rather than only ever
+// getting one row after it finished) — success/failed are unchanged.
+const STATUS_TONE: Record<string, "neutral" | "success" | "warning" | "danger" | "accent"> = {
+  Queued: "neutral",
+  Running: "warning",
+  success: "success",
+  failed: "danger",
+};
+
 export function ExecutionLogTab() {
   const { onUnauthorized } = useAuth();
   const [rows, setRows] = useState<JobLogEntry[]>([]);
@@ -86,6 +96,8 @@ export function ExecutionLogTab() {
           style={{ width: 130 }}
         >
           <option value="">Any status</option>
+          <option value="Queued">Queued</option>
+          <option value="Running">Running</option>
           <option value="success">Success</option>
           <option value="failed">Failed</option>
         </Select>
@@ -135,9 +147,9 @@ export function ExecutionLogTab() {
               { key: "job_type", label: "Job type", width: 100, render: (v: string) => <Badge tone={v === "Scheduler" ? "accent" : "neutral"}>{v}</Badge> },
               { key: "executor", label: "Executor", width: 90, render: (v: string) => <span className="mono muted">{v}</span> },
               { key: "queued_by", label: "Queued by", width: 110, render: (v: string | null) => <span className="mono muted">{v ?? "—"}</span> },
-              { key: "status", label: "Status", width: 90, render: (v: string) => <Badge tone={v === "success" ? "success" : "danger"}>{v}</Badge> },
-              { key: "finished_at", label: "Finished", width: 160, render: (v: string) => <span className="muted">{formatWhen(v)}</span> },
-              { key: "duration_ms", label: "Duration", width: 80, align: "right", render: (v: number) => <span className="mono muted">{v} ms</span> },
+              { key: "status", label: "Status", width: 90, render: (v: string) => <Badge tone={STATUS_TONE[v] ?? "danger"}>{v}</Badge> },
+              { key: "finished_at", label: "Finished", width: 160, render: (v: string | null) => <span className="muted">{formatWhen(v)}</span> },
+              { key: "duration_ms", label: "Duration", width: 80, align: "right", render: (v: number | null) => <span className="mono muted">{v == null ? "—" : `${v} ms`}</span> },
               { key: "error", label: "Error", render: (v: string | null) => <span className="truncate" title={v ?? undefined}>{v ?? "—"}</span> },
             ]}
           />
