@@ -76,6 +76,12 @@ export function validateField(field: FieldMeta, raw: string | boolean): string |
         return "Not valid JSON.";
       }
       if (!Array.isArray(parsed)) return 'Must be a JSON array, e.g. [{"label": "...", "fileid": "..."}].';
+      for (let i = 0; i < parsed.length; i++) {
+        const entry = parsed[i];
+        if (entry === null || typeof entry !== "object" || Array.isArray(entry) || !("fileid" in entry)) {
+          return `Entry ${i} must be an object with a "fileid" key, e.g. {"label": "...", "fileid": "..."}.`;
+        }
+      }
       break;
     }
     case "FILE":
