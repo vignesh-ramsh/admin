@@ -22,14 +22,18 @@ def _utcnow() -> datetime:
 async def list_access_keys(email: str | None = None) -> list[dict]:
     filters = None
     if email:
-        user = await arc.relay.get("_users", {"email": email.strip().lower()})
+        user = await arc.relay.get("_users", {"email": email.strip().lower()}, ["id"])
         if user is None:
             arc.relay.throw("no such user", status=404, code="not_found")
         filters = {"user": user["id"]}
     # Unfiltered (no email) this is "every access key in the system" for a
     # management screen — silently truncating it would just hide keys.
     rows = await arc.relay.list(
-        "_access_keys", filters=filters, order_by=["-expires_at"], limit=None
+        "_access_keys",
+        fields=["id", "user", "key_prefix", "label", "scopes", "expires_at", "last_used_at", "revoked_at"],
+        filters=filters,
+        order_by=["-expires_at"],
+        limit=None,
     )
     return [
         {
@@ -54,7 +58,7 @@ async def create_access_key(
     expires_in_days: int | None = None,
     identity=None,
 ) -> dict:
-    user = await arc.relay.get("_users", {"email": email.strip().lower()})
+    user = await arc.relay.get("_users", {"email": email.strip().lower()}, ["id", "has_roles"])
     if user is None:
         arc.relay.throw("no such user", status=404, code="not_found")
     scopes = list(scopes or [])
@@ -96,7 +100,9 @@ async def create_access_key(
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def revoke_access_key(key_prefix: str, identity=None) -> dict:
-    row = await arc.relay.get("_access_keys", {"key_prefix": key_prefix})
+    row = await arc.relay.get(
+        "_access_keys", {"key_prefix": key_prefix}, ["id", "revoked_at", "key_prefix"]
+    )
     if row is None:
         arc.relay.throw("no such access key", status=404, code="not_found")
     if row["revoked_at"] is None:
@@ -115,7 +121,7 @@ async def clear_access_keys(
         arc.relay.throw("must specify either email or all_users=true", code="scope_required")
     filters = {"revoked_at": {"is_null": True}}
     if email:
-        user = await arc.relay.get("_users", {"email": email.strip().lower()})
+        user = await arc.relay.get("_users", {"email": email.strip().lower()}, ["id"])
         if user is None:
             arc.relay.throw("no such user", status=404, code="not_found")
         filters["user"] = user["id"]

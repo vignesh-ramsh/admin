@@ -110,7 +110,7 @@ async def create_user(
     allowed_ips = _validate_allowed_ips(allowed_ips)
 
     if superuser:
-        if await arc.relay.get("_roles", {"name": SUPERUSER_ROLE_NAME}) is None:
+        if await arc.relay.get("_roles", {"name": SUPERUSER_ROLE_NAME}, ["id"]) is None:
             await arc.relay.save(
                 "_roles",
                 {"name": SUPERUSER_ROLE_NAME, "description": "Bypasses all role checks."},
@@ -187,7 +187,7 @@ async def update_profile(
     unchanged" (the same convention save_row's partial-update semantics
     already use elsewhere), so there has to be an explicit way to say
     "clear it" rather than "didn't mention it"."""
-    user = await arc.relay.get("_users", {"email": email.strip().lower()})
+    user = await arc.relay.get("_users", {"email": email.strip().lower()}, ["id"])
     if user is None:
         arc.relay.throw("no such user", status=404, code="not_found")
 
@@ -214,7 +214,7 @@ async def set_status(
 ) -> dict:
     if status not in ("Active", "Inactive", "Locked"):
         arc.relay.throw("status must be Active, Inactive, or Locked", code="bad_status")
-    user = await arc.relay.get("_users", {"email": email.strip().lower()})
+    user = await arc.relay.get("_users", {"email": email.strip().lower()}, ["id"])
     if user is None:
         arc.relay.throw("no such user", status=404, code="not_found")
 
@@ -245,7 +245,7 @@ async def set_status(
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def add_role(email: str, role: str, identity=None) -> dict:
-    user = await arc.relay.get("_users", {"email": email.strip().lower()})
+    user = await arc.relay.get("_users", {"email": email.strip().lower()}, ["id", "has_roles"])
     if user is None:
         arc.relay.throw("no such user", status=404, code="not_found")
     current = list(user.get("has_roles") or [])
@@ -257,7 +257,7 @@ async def add_role(email: str, role: str, identity=None) -> dict:
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def remove_role(email: str, role: str, identity=None) -> dict:
-    user = await arc.relay.get("_users", {"email": email.strip().lower()})
+    user = await arc.relay.get("_users", {"email": email.strip().lower()}, ["id", "has_roles"])
     if user is None:
         arc.relay.throw("no such user", status=404, code="not_found")
     before = list(user.get("has_roles") or [])
@@ -269,7 +269,7 @@ async def remove_role(email: str, role: str, identity=None) -> dict:
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def set_password(email: str, password: str, identity=None) -> dict:
-    user = await arc.relay.get("_users", {"email": email.strip().lower()})
+    user = await arc.relay.get("_users", {"email": email.strip().lower()}, ["id"])
     if user is None:
         arc.relay.throw("no such user", status=404, code="not_found")
     try:
@@ -299,7 +299,9 @@ async def set_password(email: str, password: str, identity=None) -> dict:
     # compromised session shouldn't keep working — same reasoning authn's
     # own CLI set-password already documents.
     sessions = await arc.relay.list(
-        "_sessions", filters={"user": user["id"], "revoked_at": {"is_null": True}}
+        "_sessions",
+        fields=["id", "token_hash"],
+        filters={"user": user["id"], "revoked_at": {"is_null": True}},
     )
     for s in sessions:
         await arc.relay.save("_sessions", {"id": s["id"], "revoked_at": _utcnow()}, by=by)

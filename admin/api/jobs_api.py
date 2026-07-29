@@ -34,6 +34,7 @@ async def list_scheduled_jobs() -> list[dict]:
     for entry in arc.lineup.scheduled_tasks():
         last = await arc.relay.list(
             "_job_log",
+            fields=["finished_at", "status"],
             filters={"task_name": entry["task_name"], "job_type": "Scheduler"},
             order_by=["-finished_at"],
             limit=1,
@@ -72,6 +73,7 @@ async def list_job_log(
     # filer_api.py, filer_admin_api.py, and audit_api.py this session.
     return await arc.relay.list(
         "_job_log",
+        fields=arc.relay.all_columns("_job_log"),
         filters=filters or None,
         order_by=["-finished_at"],
         limit=int(limit),

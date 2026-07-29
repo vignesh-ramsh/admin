@@ -72,8 +72,18 @@ async def list_rows(
     except CoercionError as exc:
         throw_coercion(exc)
     try:
+        # A generic Data Browser needs every column by design — that's
+        # what "browse any table" means — so this is the one place in
+        # admin that deliberately asks arc.relay for the full row rather
+        # than a short, curated list. redact_row() below still hides hash
+        # material by VALUE regardless of which columns came back.
         rows = await arc.relay.list(
-            table, filters=filters, order_by=order_by, limit=limit, offset=offset
+            table,
+            fields=arc.relay.all_columns(table),
+            filters=filters,
+            order_by=order_by,
+            limit=limit,
+            offset=offset,
         )
     except _READ_ERRORS as exc:
         _friendly(exc)
@@ -86,7 +96,7 @@ async def list_rows(
 @arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def get_row(table: str, id: str) -> dict:
     try:
-        row = await arc.relay.get(table, id)
+        row = await arc.relay.get(table, id, arc.relay.all_columns(table))
     except _READ_ERRORS as exc:
         _friendly(exc)
     if row is None:

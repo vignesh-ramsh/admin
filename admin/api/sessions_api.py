@@ -20,14 +20,20 @@ def _utcnow() -> datetime:
 async def list_sessions(email: str | None = None) -> list[dict]:
     filters = None
     if email:
-        user = await arc.relay.get("_users", {"email": email.strip().lower()})
+        user = await arc.relay.get("_users", {"email": email.strip().lower()}, ["id"])
         if user is None:
             arc.relay.throw("no such user", status=404, code="not_found")
         filters = {"user": user["id"]}
     # Unfiltered (no email) this is "every session in the system" for a
     # management screen — silently truncating it would just hide sessions,
     # not make anything faster in a way the caller could notice.
-    rows = await arc.relay.list("_sessions", filters=filters, order_by=["-expires_at"], limit=None)
+    rows = await arc.relay.list(
+        "_sessions",
+        fields=["id", "user", "session_type", "expires_at", "revoked_at", "ip_address", "last_seen_at"],
+        filters=filters,
+        order_by=["-expires_at"],
+        limit=None,
+    )
     return [
         {
             "id": str(r["id"]),
@@ -44,7 +50,7 @@ async def list_sessions(email: str | None = None) -> list[dict]:
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def revoke_session(session_id: str, identity=None) -> dict:
-    row = await arc.relay.get("_sessions", session_id)
+    row = await arc.relay.get("_sessions", session_id, ["id", "revoked_at", "token_hash"])
     if row is None:
         arc.relay.throw("no such session", status=404, code="not_found")
     if row["revoked_at"] is None:
@@ -63,7 +69,7 @@ async def clear_sessions(email: str | None = None, all_users: bool = False, iden
         arc.relay.throw("must specify either email or all_users=true", code="scope_required")
     filters = {"revoked_at": {"is_null": True}}
     if email:
-        user = await arc.relay.get("_users", {"email": email.strip().lower()})
+        user = await arc.relay.get("_users", {"email": email.strip().lower()}, ["id"])
         if user is None:
             arc.relay.throw("no such user", status=404, code="not_found")
         filters["user"] = user["id"]

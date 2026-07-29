@@ -18,8 +18,12 @@ from admin._security import by_of
 async def list_roles() -> list[dict]:
     # Genuinely "every role" — a management screen showing a truncated
     # role list (some roles invisible past DEFAULT_LIST_LIMIT) would be
-    # actively broken, not just slow.
-    return await arc.relay.list("_roles", order_by=["name"], limit=None)
+    # actively broken, not just slow. all_columns(): _roles carries
+    # nothing sensitive, and the whole row is this function's own
+    # documented contract, not a curated subset.
+    return await arc.relay.list(
+        "_roles", fields=arc.relay.all_columns("_roles"), order_by=["name"], limit=None
+    )
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
@@ -41,7 +45,7 @@ async def update_role(name: str, description: str | None = None, identity=None) 
     #4.1 was specifically about a typo'd description being permanent
     short of delete-and-recreate — this closes exactly that gap, nothing
     more)."""
-    role = await arc.relay.get("_roles", {"name": name})
+    role = await arc.relay.get("_roles", {"name": name}, ["id"])
     if role is None:
         arc.relay.throw("no such role", status=404, code="not_found")
     return await arc.relay.save(
@@ -51,7 +55,7 @@ async def update_role(name: str, description: str | None = None, identity=None) 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def delete_role(name: str, identity=None) -> dict:
-    role = await arc.relay.get("_roles", {"name": name})
+    role = await arc.relay.get("_roles", {"name": name}, ["id"])
     if role is None:
         arc.relay.throw("no such role", status=404, code="not_found")
 
