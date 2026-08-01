@@ -1,16 +1,15 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { AlertCircle } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { Button } from "../components/Button";
-import { Field, Input } from "../components/Field";
-import { Checkbox } from "../components/agni/forms/Checkbox";
+import { TextInput, Checkbox } from "../components/Field";
 import { ApiError } from "../api/client";
-import { Logo } from "../components/Logo";
-import "./login.css";
+import { ARC_LOGO_URL } from "../lib/assets";
 
 export function LoginPage() {
   const { login } = useAuth();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +20,7 @@ export function LoginPage() {
     setError(null);
     setBusy(true);
     try {
-      await login(email, password, remember ? "Extended" : "Fixed");
+      await login(identifier, password, remember ? "Extended" : "Fixed");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Unable to sign in. Please try again.");
     } finally {
@@ -30,56 +29,52 @@ export function LoginPage() {
   };
 
   return (
-    <div className="login">
-      <div className="login__card">
-        <div className="login__brand">
-          <Logo size={34} />
-          <div>
-            <div className="login__title">ARC Admin Desk</div>
-            <div className="login__subtitle">Sign in to your workspace</div>
-          </div>
+    <div className="flex min-h-dvh items-center justify-center bg-canvas px-4">
+      <div className="w-full max-w-sm">
+        <div className="mb-6 flex flex-col items-center text-center">
+          <img src={ARC_LOGO_URL} alt="" className="mb-3 h-11 w-11 rounded-xl shadow-sm" />
+          <h1 className="text-lg font-semibold text-text">Admin Console</h1>
+          <p className="mt-1 text-sm text-text-muted">Sign in to your workspace</p>
         </div>
 
-        <form className="login__form" onSubmit={submit}>
-          <Field label="Email">
-            <Input
-              type="email"
-              autoComplete="username"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoFocus
-            />
-          </Field>
-          <Field label="Password">
-            <Input
-              type="password"
-              autoComplete="current-password"
-              placeholder="••••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </Field>
-
-          <Checkbox
-            checked={remember}
-            onChange={setRemember}
-            label="Keep me signed in (extended session)"
+        <form onSubmit={submit} className="flex flex-col gap-4 rounded-xl border border-border bg-surface-raised p-6 shadow-sm">
+          <TextInput
+            label="Email or username"
+            type="text"
+            autoComplete="username"
+            placeholder="you@example.com"
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            required
+            autoFocus
+          />
+          <TextInput
+            label="Password"
+            type="password"
+            autoComplete="current-password"
+            placeholder="••••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
           />
 
-          {error && <div className="login__error">{error}</div>}
+          <Checkbox checked={remember} onChange={(e) => setRemember(e.target.checked)} label="Keep me signed in" />
 
-          <Button type="submit" variant="primary" block loading={busy}>
+          {error && (
+            <div className="flex items-start gap-2 rounded-md border border-danger/30 bg-danger-bg/60 px-3 py-2 text-[13px] text-danger">
+              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+              {error}
+            </div>
+          )}
+
+          <Button type="submit" variant="primary" loading={busy} className="w-full">
             Sign in
           </Button>
-          <Link className="login__link" to="/forgot-password">
+          <Link to="/forgot-password" className="text-center text-[13px] text-text-muted hover:text-accent-700 dark:hover:text-accent-300">
             Forgot password?
           </Link>
         </form>
       </div>
-      <div className="login__footnote">ARC — capability-based platform</div>
     </div>
   );
 }

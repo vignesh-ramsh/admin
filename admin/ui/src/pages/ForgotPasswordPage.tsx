@@ -1,57 +1,50 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { MailCheck } from "lucide-react";
 import { Button } from "../components/Button";
-import { Field, Input } from "../components/Field";
-import { ApiError, requestPasswordReset } from "../api/client";
-import { Logo } from "../components/Logo";
-import "./login.css";
+import { TextInput } from "../components/Field";
+import { requestPasswordReset, ApiError } from "../api/client";
+import { ARC_LOGO_URL } from "../lib/assets";
 
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
+  const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // The server always returns the same generic message whether or not the
-  // email has an account (docs/arc.MD's authn design — a distinct message
-  // per case would itself be an account-enumeration oracle) — this page
-  // just displays whatever that message says, it never infers anything.
-  const [sent, setSent] = useState<string | null>(null);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      const result = await requestPasswordReset(email);
-      setSent(result.message);
+      await requestPasswordReset(email);
+      setSent(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Unable to send reset link. Please try again.");
+      setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="login">
-      <div className="login__card">
-        <div className="login__brand">
-          <Logo size={34} />
-          <div>
-            <div className="login__title">Reset your password</div>
-            <div className="login__subtitle">We'll email you a link to set a new one</div>
-          </div>
+    <div className="flex min-h-dvh items-center justify-center bg-canvas px-4">
+      <div className="w-full max-w-sm">
+        <div className="mb-6 flex flex-col items-center text-center">
+          <img src={ARC_LOGO_URL} alt="" className="mb-3 h-11 w-11 rounded-xl shadow-sm" />
+          <h1 className="text-lg font-semibold text-text">Reset your password</h1>
+          <p className="mt-1 text-sm text-text-muted">We'll email you a link if the account exists.</p>
         </div>
 
-        {sent ? (
-          <>
-            <div className="login__success">{sent}</div>
-            <Link className="login__link" to="/">
-              Back to sign in
-            </Link>
-          </>
-        ) : (
-          <form className="login__form" onSubmit={submit}>
-            <Field label="Email">
-              <Input
+        <div className="rounded-xl border border-border bg-surface-raised p-6 shadow-sm">
+          {sent ? (
+            <div className="flex flex-col items-center gap-2 py-4 text-center">
+              <MailCheck size={26} className="text-success" />
+              <p className="text-sm text-text">If an account exists for <strong>{email}</strong>, a reset link is on its way.</p>
+            </div>
+          ) : (
+            <form onSubmit={submit} className="flex flex-col gap-4">
+              <TextInput
+                label="Email"
                 type="email"
                 autoComplete="username"
                 placeholder="you@example.com"
@@ -60,20 +53,17 @@ export function ForgotPasswordPage() {
                 required
                 autoFocus
               />
-            </Field>
-
-            {error && <div className="login__error">{error}</div>}
-
-            <Button type="submit" variant="primary" block loading={busy}>
-              Send reset link
-            </Button>
-            <Link className="login__link" to="/">
-              Back to sign in
-            </Link>
-          </form>
-        )}
+              {error && <p className="text-[13px] text-danger">{error}</p>}
+              <Button type="submit" variant="primary" loading={busy} className="w-full">
+                Send reset link
+              </Button>
+            </form>
+          )}
+          <Link to="/login" className="mt-4 block text-center text-[13px] text-text-muted hover:text-accent-700 dark:hover:text-accent-300">
+            Back to sign in
+          </Link>
+        </div>
       </div>
-      <div className="login__footnote">ARC — capability-based platform</div>
     </div>
   );
 }

@@ -38,15 +38,13 @@ CAPABILITY = "admin"
 # The route the admin SPA is served under (arc.gateway.mount_spa). Must
 # match the Vite build's `base` in admin/ui/vite.config.ts exactly, or the
 # built index.html's asset URLs (/admin-desk/assets/...) won't resolve
-# through the mount.
+# through the mount. admin/ui/ is a from-scratch, separately designed
+# replacement for the original admin-desk SPA (since removed) — same
+# name and route restored on purpose, so every place that already refers
+# to "admin/ui" or "/admin-desk" (docs, arc new-plugin's scaffold text,
+# arc build's own ui/ discovery convention below) stayed correct with no
+# changes needed anywhere else.
 UI_PREFIX = "admin-desk"
-
-# The new admin console SPA (admin/ui-console) — a from-scratch, separately
-# designed replacement UI living alongside admin-desk, not instead of it.
-# Mounted at a different prefix (must match ui-console/vite.config.ts's
-# `base`); mount_spa supports multiple simultaneous SPA prefixes, so both
-# coexist with no interaction.
-CONSOLE_UI_PREFIX = "admin"
 
 
 class AdminProvider:
@@ -82,31 +80,23 @@ def register(kernel: Any) -> None:
     relay.register_api(Path(__file__).parent / "api")
 
     # Serve the built admin SPA at /admin-desk, if it's been built. The
-    # dist/ directory is a build artifact (gitignored, produced by
-    # `npm run build` in admin/ui) — a fresh checkout that hasn't built the
-    # UI yet has no dist/, and mount_spa hard-errors on a missing dir by
-    # design (docs/arc.MD §3.3's boot-time-not-request-time posture). So
-    # admin checks for it first and just skips the mount (with a boot
-    # advisory) when absent, rather than refusing to boot the whole plugin
-    # — the API surface above is fully usable without the UI, and the UI is
-    # a `cd admin/ui && npm install && npm run build` away.
+    # dist/ directory is a build artifact (gitignored) — a fresh checkout
+    # that hasn't built the UI yet has no dist/, and mount_spa hard-errors
+    # on a missing dir by design (docs/arc.MD §3.3's boot-time-not-request-
+    # time posture). So admin checks for it first and just skips the mount
+    # (with a boot advisory) when absent, rather than refusing to boot the
+    # whole plugin — the API surface above is fully usable without the UI.
+    # `arc build` builds it automatically (its ui/ discovery convention —
+    # see arc/cli.py's _build_frontends — needs no per-plugin wiring,
+    # every plugin's `<plugin>/ui/` is picked up the same way as long as
+    # it has a package.json); `cd plugins/admin/admin/ui && yarn install
+    # && yarn build` works too for a one-off manual build.
     ui_dist = Path(__file__).parent / "ui" / "dist"
     if ui_dist.is_dir():
         kernel.get("gateway").mount_spa(ui_dist, prefix=UI_PREFIX)
     else:
         kernel.advise(
-            f"admin: UI not built — /{UI_PREFIX} will 404 until you run "
-            f"`cd plugins/admin/admin/ui && npm install && npm run build`. "
-            f"The admin API endpoints are unaffected."
-        )
-
-    # Same pattern, second SPA: admin/ui-console's own build output.
-    console_dist = Path(__file__).parent / "ui-console" / "dist"
-    if console_dist.is_dir():
-        kernel.get("gateway").mount_spa(console_dist, prefix=CONSOLE_UI_PREFIX)
-    else:
-        kernel.advise(
-            f"admin: console UI not built — /{CONSOLE_UI_PREFIX} will 404 until you run "
-            f"`cd plugins/admin/admin/ui-console && yarn install && yarn build`. "
+            f"admin: UI not built — /{UI_PREFIX} will 404 until you run `arc build -p admin` "
+            f"(or `cd plugins/admin/admin/ui && yarn install && yarn build` directly). "
             f"The admin API endpoints are unaffected."
         )

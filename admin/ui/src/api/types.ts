@@ -201,14 +201,11 @@ export interface JobLogEntry {
   executor: "relay" | "lineup";
   job_type: "Scheduler" | "Task";
   queued_by: string | null;
-  // "Queued"/"Running" are new — a row now exists from enqueue time
-  // onward, not just after a worker finishes it (started_at/finished_at/
-  // duration_ms are correspondingly null until the job actually runs).
-  status: "Queued" | "Running" | "success" | "failed";
+  status: "success" | "failed";
   error: string | null;
-  started_at: string | null;
-  finished_at: string | null;
-  duration_ms: number | null;
+  started_at: string;
+  finished_at: string;
+  duration_ms: number;
 }
 
 /** admin.list_filer_settings() — one entry per known filer_* setting,

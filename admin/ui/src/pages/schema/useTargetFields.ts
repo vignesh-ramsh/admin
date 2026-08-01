@@ -47,16 +47,8 @@ export function useTargetFieldOptions(table: string | undefined | null): {
           return;
         }
         const opts: ComboOption[] = [];
-
-        // The primary key: a system table declares its own (primary_key:
-        // true); every other table gets `id` auto-injected.
         const declaredPk = schema.fields.find((f) => f.primary_key);
-        opts.push(
-          declaredPk
-            ? { value: declaredPk.name, label: declaredPk.name, sublabel: "primary key" }
-            : { value: "id", label: "id", sublabel: "primary key" }
-        );
-
+        opts.push(declaredPk ? { value: declaredPk.name, label: declaredPk.name, sublabel: "primary key" } : { value: "id", label: "id", sublabel: "primary key" });
         for (const f of schema.fields) {
           if (f.unique && f.is_column && !f.primary_key) {
             opts.push({ value: f.name, label: f.name, sublabel: `${f.type} · unique` });

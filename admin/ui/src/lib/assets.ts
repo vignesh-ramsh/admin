@@ -1,5 +1,5 @@
 /** Static asset URLs, resolved against Vite's configured `base` (the
- *  `/admin/` SPA mount prefix — see vite.config.ts) rather than the site
+ *  `/admin-desk/` SPA mount prefix — see vite.config.ts) rather than the site
  *  root. A literal `"/arc.svg"` in JSX is NOT rewritten by Vite the way
  *  index.html's own asset references are (that rewrite only happens at
  *  HTML-transform time); at runtime it always resolves against `/`, which

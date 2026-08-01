@@ -1,47 +1,72 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { Button as AgniButton } from "./agni/core/Button";
+import { forwardRef, type ButtonHTMLAttributes } from "react";
+import { Loader2 } from "lucide-react";
+import clsx from "clsx";
 
-/**
- * Thin adapter over the copied AgniUI Button (agni/core/Button.tsx) —
- * keeps this app's existing variant/size vocabulary so no call site needed
- * touching, while the real rendering/interaction is AgniUI's own component.
- */
-type Variant = "primary" | "secondary" | "danger" | "ghost";
+type Variant = "primary" | "secondary" | "ghost" | "danger";
+type Size = "sm" | "md";
 
-const CATEGORY: Record<Variant, "primary" | "secondary" | "danger" | "ghost"> = {
-  primary: "primary",
-  secondary: "secondary",
-  danger: "danger",
-  ghost: "ghost",
-};
-
-interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
-  size?: "sm" | "md";
-  block?: boolean;
+  size?: Size;
   loading?: boolean;
-  children: ReactNode;
+  icon?: React.ReactNode;
 }
 
-export function Button({
-  variant = "secondary",
-  size = "md",
-  block = false,
-  loading = false,
-  disabled,
-  children,
-  ...rest
-}: Props) {
+const VARIANTS: Record<Variant, string> = {
+  primary:
+    "bg-accent-action text-accent-fg hover:brightness-95 active:brightness-90 disabled:bg-accent-300 dark:disabled:bg-accent-900 shadow-sm",
+  secondary:
+    "bg-surface-raised text-text border border-border-strong hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50",
+  ghost: "text-text-muted hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-text disabled:opacity-50",
+  danger: "bg-danger text-white hover:opacity-90 disabled:opacity-50 shadow-sm",
+};
+
+const SIZES: Record<Size, string> = {
+  sm: "h-8 px-2.5 text-[13px] gap-1.5",
+  md: "h-9 px-3.5 text-sm gap-2",
+};
+
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { variant = "secondary", size = "md", loading, icon, disabled, className, children, ...rest },
+  ref,
+) {
   return (
-    <AgniButton
-      category={CATEGORY[variant]}
-      size={size}
-      block={block}
-      loading={loading}
-      disabled={disabled}
+    <button
+      ref={ref}
+      type="button"
+      disabled={disabled || loading}
+      className={clsx(
+        "inline-flex cursor-pointer items-center justify-center rounded-md font-medium transition-colors duration-150 disabled:cursor-not-allowed",
+        VARIANTS[variant],
+        SIZES[size],
+        className,
+      )}
       {...rest}
     >
+      {loading ? <Loader2 size={14} className="animate-spin" /> : icon}
       {children}
-    </AgniButton>
+    </button>
+  );
+});
+
+export function IconButton({
+  label,
+  icon,
+  className,
+  ...rest
+}: { label: string; icon: React.ReactNode } & ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      className={clsx(
+        "inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-text-muted transition-colors hover:bg-neutral-100 hover:text-text disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-neutral-800",
+        className,
+      )}
+      {...rest}
+    >
+      {icon}
+    </button>
   );
 }

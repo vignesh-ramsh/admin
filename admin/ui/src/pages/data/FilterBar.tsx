@@ -1,11 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Plus, Search, X } from "lucide-react";
 import type { FieldMeta, TableSchema } from "../../api/types";
-import { Button } from "../../components/Button";
-import { IconSearch } from "../../layout/icons";
+import { Button, IconButton } from "../../components/Button";
+import { Select, TextInput } from "../../components/Field";
+import { useDebounce } from "../../hooks/useDebounce";
 
-/* A single-condition filter, deliberately matching the bounded Query
-   Engine's own vocabulary (docs/arc.MD §3.11): flat operators, implicit
-   AND, no OR/NOT grouping. */
+/* Multiple simultaneous (field, operator, value) conditions, ANDed
+   together — arc.relay.list's `filters` dict already supports this
+   server-side (one entry per column, each an {op: operand} clause), so
+   there's no reason to limit the UI to a single condition the way the
+   old app did. Vocabulary matches the bounded Query Engine exactly
+   (docs/arc.MD §3.11): flat operators, implicit AND, no OR/NOT grouping. */
 
 const OPERATORS = [
   { value: "eq", label: "equals" },
@@ -23,116 +28,122 @@ const OPERATORS = [
   { value: "not_in", label: "not in (comma-separated)" },
   { value: "range", label: "range (between)" },
   { value: "is_null", label: "is empty" },
-];
+] as const;
 
 const LIST_OPS = new Set(["in", "not_in"]);
 
-export type Filters = Record<string, unknown> | null;
+let seq = 0;
+interface Condition {
+  key: number;
+  field: string;
+  op: string;
+  value: string;
+  rangeMax: string;
+}
 
-export function FilterBar({
-  schema,
-  onApply,
-}: {
-  schema: TableSchema;
-  onApply: (filters: Filters) => void;
-}) {
-  const columns: FieldMeta[] = [
-    ...schema.fields.filter((f) => f.is_column),
-    ...schema.system_fields.filter((f) => f.is_column),
-  ];
-  const [field, setField] = useState(columns[0]?.name ?? "");
-  const [op, setOp] = useState("eq");
-  const [value, setValue] = useState("");
-  const [rangeMax, setRangeMax] = useState("");
+function blankCondition(field: string): Condition {
+  return { key: ++seq, field, op: "eq", value: "", rangeMax: "" };
+}
 
-  const apply = () => {
-    if (!field) return;
-    if (op === "is_null") {
-      onApply({ [field]: { is_null: true } });
-      return;
+function toFilters(conditions: Condition[]): Record<string, unknown> | null {
+  const out: Record<string, unknown> = {};
+  for (const c of conditions) {
+    if (!c.field) continue;
+    if (c.op === "is_null") {
+      out[c.field] = { is_null: true };
+      continue;
     }
-    if (op === "range") {
-      if (value === "" || rangeMax === "") {
-        onApply(null);
-        return;
-      }
-      onApply({ [field]: { range: [value, rangeMax] } });
-      return;
+    if (c.op === "range") {
+      if (c.value === "" || c.rangeMax === "") continue;
+      out[c.field] = { range: [c.value, c.rangeMax] };
+      continue;
     }
-    if (LIST_OPS.has(op)) {
-      const list = value.split(",").map((s) => s.trim()).filter(Boolean);
-      if (list.length === 0) {
-        onApply(null);
-        return;
-      }
-      onApply({ [field]: { [op]: list } });
-      return;
+    if (LIST_OPS.has(c.op)) {
+      const list = c.value.split(",").map((s) => s.trim()).filter(Boolean);
+      if (list.length === 0) continue;
+      out[c.field] = { [c.op]: list };
+      continue;
     }
-    if (value === "") {
-      onApply(null);
-      return;
-    }
-    onApply({ [field]: { [op]: value } });
-  };
+    if (c.value === "") continue;
+    out[c.field] = { [c.op]: c.value };
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
 
-  const clear = () => {
-    setValue("");
-    setRangeMax("");
-    onApply(null);
-  };
+export function FilterBar({ schema, onChange }: { schema: TableSchema; onChange: (filters: Record<string, unknown> | null) => void }) {
+  const columns: FieldMeta[] = [...schema.fields.filter((f) => f.is_column), ...schema.system_fields.filter((f) => f.is_column)];
+  const [conditions, setConditions] = useState<Condition[]>([]);
+  const debounced = useDebounce(conditions, 350);
+
+  useEffect(() => {
+    onChange(toFilters(debounced));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debounced]);
+
+  const update = (key: number, patch: Partial<Condition>) =>
+    setConditions((cur) => cur.map((c) => (c.key === key ? { ...c, ...patch } : c)));
+  const remove = (key: number) => setConditions((cur) => cur.filter((c) => c.key !== key));
+  const add = () => setConditions((cur) => [...cur, blankCondition(columns[0]?.name ?? "")]);
+  const clearAll = () => setConditions([]);
+
+  if (columns.length === 0) return null;
 
   return (
-    <div className="filterbar">
-      <select className="select" style={{ width: 170 }} value={field} onChange={(e) => setField(e.target.value)}>
-        {columns.map((c) => (
-          <option key={c.name} value={c.name}>
-            {c.name}
-          </option>
-        ))}
-      </select>
-      <select className="select" style={{ width: 190 }} value={op} onChange={(e) => setOp(e.target.value)}>
-        {OPERATORS.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      {op === "range" ? (
-        <>
-          <input
-            className="input"
-            style={{ width: 110 }}
-            placeholder="min"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && apply()}
-          />
-          <input
-            className="input"
-            style={{ width: 110 }}
-            placeholder="max"
-            value={rangeMax}
-            onChange={(e) => setRangeMax(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && apply()}
-          />
-        </>
+    <div className="mb-3 flex flex-col gap-2 rounded-lg border border-border bg-surface p-2.5">
+      {conditions.length === 0 ? (
+        <div className="flex items-center justify-between">
+          <p className="flex items-center gap-1.5 text-[13px] text-text-faint">
+            <Search size={13} /> No filters applied.
+          </p>
+          <Button size="sm" variant="ghost" icon={<Plus size={14} />} onClick={add}>
+            Add filter
+          </Button>
+        </div>
       ) : (
-        <input
-          className="input"
-          style={{ flex: 1, minWidth: 120 }}
-          placeholder={op === "is_null" ? "—" : LIST_OPS.has(op) ? "value1, value2, …" : "value"}
-          value={value}
-          disabled={op === "is_null"}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && apply()}
-        />
+        <>
+          {conditions.map((c) => (
+            <div key={c.key} className="flex flex-wrap items-center gap-2">
+              <Select className="!h-8 w-40" value={c.field} onChange={(e) => update(c.key, { field: e.target.value })}>
+                {columns.map((col) => (
+                  <option key={col.name} value={col.name}>
+                    {col.name}
+                  </option>
+                ))}
+              </Select>
+              <Select className="!h-8 w-48" value={c.op} onChange={(e) => update(c.key, { op: e.target.value })}>
+                {OPERATORS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              {c.op === "range" ? (
+                <>
+                  <TextInput className="!h-8 w-28" placeholder="min" value={c.value} onChange={(e) => update(c.key, { value: e.target.value })} />
+                  <TextInput className="!h-8 w-28" placeholder="max" value={c.rangeMax} onChange={(e) => update(c.key, { rangeMax: e.target.value })} />
+                </>
+              ) : (
+                <TextInput
+                  className="!h-8 min-w-[140px] flex-1"
+                  placeholder={c.op === "is_null" ? "—" : LIST_OPS.has(c.op) ? "value1, value2, …" : "value"}
+                  value={c.value}
+                  disabled={c.op === "is_null"}
+                  onChange={(e) => update(c.key, { value: e.target.value })}
+                />
+              )}
+              <IconButton label="Remove filter" icon={<X size={14} />} onClick={() => remove(c.key)} />
+            </div>
+          ))}
+          <div className="flex items-center gap-2 pt-0.5">
+            <Button size="sm" variant="ghost" icon={<Plus size={14} />} onClick={add}>
+              Add condition
+            </Button>
+            <Button size="sm" variant="ghost" onClick={clearAll}>
+              Clear all
+            </Button>
+          </div>
+        </>
       )}
-      <Button variant="secondary" size="sm" onClick={apply}>
-        <IconSearch /> Apply
-      </Button>
-      <Button variant="ghost" size="sm" onClick={clear}>
-        Clear
-      </Button>
     </div>
   );
 }

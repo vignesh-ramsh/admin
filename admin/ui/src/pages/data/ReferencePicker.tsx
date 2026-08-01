@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { call } from "../../api/client";
 import type { FieldMeta, Row, TableMeta, TableSchema } from "../../api/types";
 import { Combobox, type ComboOption } from "../../components/Combobox";
+import { useDebounce } from "../../hooks/useDebounce";
 
-/* A field's `target` is a schema FILE STEM ("Department"), while every
-   data endpoint takes the PHYSICAL table name ("department") — so the stem
-   has to be resolved before it can be queried. Cached once per page load;
+/* A field's `target` is a schema FILE STEM ("Department"), while every data
+   endpoint takes the PHYSICAL table name ("department") — so the stem has
+   to be resolved before it can be queried. Cached once per page load;
    schemas don't change under a running process anyway. */
 let metaPromise: Promise<TableMeta[]> | null = null;
 function loadTableMeta(): Promise<TableMeta[]> {
@@ -29,18 +30,18 @@ interface Props {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
+  label?: string;
   /** Overrides field.target's stem->physical resolution with an already-
    *  known physical table name. Used for a child table's `parent` field
-   *  (type REFERENCE_UUID): psqldb fills that field's FK target in at
+   *  (REFERENCE_UUID): psqldb fills that field's FK target in at
    *  migration/DDL time and never writes it back to the client-visible
    *  Field, so field.target is always null there — the caller resolves it
-   *  instead via TableMeta/TableSchema's `parent_table` and passes it in. */
+   *  instead via TableSchema.parent_table and passes it in. */
   targetTable?: string | null;
 }
 
-export function ReferencePicker({ field, value, onChange, disabled, targetTable }: Props) {
+export function ReferencePicker({ field, value, onChange, disabled, label, targetTable }: Props) {
   const [schema, setSchema] = useState<TableSchema | null>(null);
-  // The physical table this picker searches — null until resolved.
   const [target, setTarget] = useState<string | null>(null);
   const stem = field.target;
 
@@ -49,12 +50,7 @@ export function ReferencePicker({ field, value, onChange, disabled, targetTable 
     const resolve = targetTable
       ? Promise.resolve(targetTable)
       : stem
-        ? loadTableMeta().then(
-            (meta) =>
-              // Fall back to the stem itself: for a system table the stem
-              // and the physical name are identical (e.g. "_users").
-              meta.find((m) => m.name === stem)?.table ?? stem
-          )
+        ? loadTableMeta().then((meta) => meta.find((m) => m.name === stem)?.table ?? stem)
         : null;
     if (!resolve) return;
     resolve
@@ -74,89 +70,104 @@ export function ReferencePicker({ field, value, onChange, disabled, targetTable 
     };
   }, [stem, targetTable]);
 
-  // The column to search and display against.
-  const labelField =
-    field.target_field ||
-    schema?.fields.find((f) => f.unique && f.is_column)?.name ||
-    "id";
+  const labelField = field.target_field || schema?.fields.find((f) => f.unique && f.is_column)?.name || "id";
 
-  // When target_field is set, the stored value IS the natural key already
-  // (human-readable) — nothing to resolve. Otherwise the stored value is
-  // the target row's raw `id`, which is meaningless to show as-is; look up
-  // that one row so the closed input can show its labelField instead of a
-  // bare UUID. Without this, an already-set reference only ever showed its
-  // real label once the dropdown was reopened and the row happened to
-  // surface in the unfiltered/searched list.
-  const [resolvedLabel, setResolvedLabel] = useState<string | null>(null);
+  // The current value's own label, resolved once so a closed picker never
+  // just shows a bare UUID — same "resolve the one selected row" gap the
+  // old app's version fixed.
+  const [resolvedOption, setResolvedOption] = useState<ComboOption | null>(null);
   useEffect(() => {
-    if (!value || !target || field.target_field) {
-      setResolvedLabel(null);
+    if (!value || !target) {
+      setResolvedOption(null);
+      return;
+    }
+    if (field.target_field) {
+      // The stored value IS the natural key already — nothing to resolve.
+      setResolvedOption({ value, label: value });
       return;
     }
     let cancelled = false;
     call<Row[]>("list_rows", { table: target, filters: { id: { eq: value } }, limit: 1 }, { method: "QUERY" })
       .then((rows) => {
         if (cancelled) return;
-        const label = rows[0]?.[labelField];
-        setResolvedLabel(label != null ? String(label) : null);
+        const row = rows[0];
+        const lbl = row ? row[labelField] : null;
+        setResolvedOption({ value, label: lbl != null ? String(lbl) : value });
       })
       .catch(() => {
-        if (!cancelled) setResolvedLabel(null);
+        if (!cancelled) setResolvedOption({ value, label: value });
       });
     return () => {
       cancelled = true;
     };
   }, [value, target, labelField, field.target_field]);
 
-  const search = useCallback(
-    async (query: string): Promise<ComboOption[]> => {
-      if (!target) return [];
-      // `contains` is only meaningful for text columns; for anything else
-      // (or a UUID label) just list the first page unfiltered.
-      const labelMeta = schema?.fields.find((f) => f.name === labelField);
-      const textual =
-        !labelMeta || ["STRING", "TEXT", "EMAIL", "PHONE", "SELECT"].includes(labelMeta.type);
-      const filters =
-        query.trim() && textual ? { [labelField]: { contains: query.trim() } } : null;
+  const [query, setQuery] = useState("");
+  const debouncedQuery = useDebounce(query, 300);
+  const [searchResults, setSearchResults] = useState<ComboOption[]>([]);
+  const [loading, setLoading] = useState(false);
 
-      const rows = await call<Row[]>("list_rows", { table: target, filters, limit: 20 }, { method: "QUERY" });
-      return rows.map((r) => {
-        const stored = field.target_field ? r[field.target_field] : r.id;
-        const label = r[labelField];
-        // A second, human-meaningful column (the first non-unique text
-        // field) makes rows distinguishable when the key alone is cryptic.
-        const contextField = schema?.fields.find(
-          (f) => f.is_column && !f.unique && ["STRING", "TEXT"].includes(f.type)
-        )?.name;
-        const context = contextField ? r[contextField] : null;
-        const storedStr = String(stored ?? "");
-        const labelStr = String(label ?? r.id ?? "");
-        // Eyebrow: extra context if it ADDS anything, else the raw value
-        // actually stored when it differs from the label (e.g. a UUID).
-        // Never repeat the label back — that's just noise.
-        const contextStr = context != null ? String(context) : "";
-        const sublabel =
-          contextStr && contextStr !== labelStr
-            ? contextStr
-            : storedStr !== labelStr
-              ? `${storedStr.slice(0, 8)}…`
-              : undefined;
-        return { value: storedStr, label: labelStr, sublabel };
+  useEffect(() => {
+    if (!target) {
+      setSearchResults([]);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    const labelMeta = schema?.fields.find((f) => f.name === labelField);
+    const textual = !labelMeta || ["STRING", "TEXT", "EMAIL", "PHONE", "SELECT"].includes(labelMeta.type);
+    const filters = debouncedQuery.trim() && textual ? { [labelField]: { contains: debouncedQuery.trim() } } : null;
+    call<Row[]>("list_rows", { table: target, filters, limit: 20 }, { method: "QUERY" })
+      .then((rows) => {
+        if (cancelled) return;
+        const contextField = schema?.fields.find((f) => f.is_column && !f.unique && ["STRING", "TEXT"].includes(f.type))?.name;
+        setSearchResults(
+          rows.map((r) => {
+            const stored = field.target_field ? r[field.target_field] : r.id;
+            const lbl = r[labelField];
+            const context = contextField ? r[contextField] : null;
+            const storedStr = String(stored ?? "");
+            const labelStr = String(lbl ?? r.id ?? "");
+            const contextStr = context != null ? String(context) : "";
+            const sublabel =
+              contextStr && contextStr !== labelStr
+                ? contextStr
+                : storedStr !== labelStr
+                  ? `${storedStr.slice(0, 8)}…`
+                  : undefined;
+            return { value: storedStr, label: labelStr, sublabel };
+          }),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setSearchResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
-    },
-    [target, labelField, field.target_field, schema]
-  );
+    return () => {
+      cancelled = true;
+    };
+  }, [target, debouncedQuery, labelField, field.target_field, schema]);
 
-  const label = stem ?? target ?? "target";
-  return (
+  const options: ComboOption[] =
+    resolvedOption && !searchResults.some((o) => o.value === resolvedOption.value) ? [resolvedOption, ...searchResults] : searchResults;
+
+  const targetLabel = stem ?? target ?? "target";
+  const picker = (
     <Combobox
-      value={value}
-      displayValue={resolvedLabel ?? undefined}
-      onChange={onChange}
-      onSearch={search}
-      disabled={disabled || (!stem && !targetTable)}
-      placeholder={stem || targetTable ? `Search ${label}…` : "no target table"}
-      emptyText={`No matching rows in ${label}`}
+      label={label}
+      value={value || null}
+      onChange={(v) => onChange(v ?? "")}
+      options={options}
+      query={query}
+      onQueryChange={setQuery}
+      loading={loading}
+      placeholder={stem || targetTable ? `Search ${targetLabel}…` : "no target table"}
+      clearable
     />
   );
+
+  if (!disabled) return picker;
+  return <div className="pointer-events-none opacity-60">{picker}</div>;
 }

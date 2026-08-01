@@ -1,30 +1,37 @@
-import { Tabs as AgniTabs } from "./agni/navigation/Tabs";
+import { NavLink } from "react-router-dom";
+import clsx from "clsx";
 
-/**
- * Thin adapter over the copied AgniUI Tabs (agni/navigation/Tabs.tsx) —
- * keeps this app's existing {id,label}[]/active/onChange vocabulary
- * (AgniUI's own uses {key,label}[]/value/onChange) so its one call site
- * (JobsPage) didn't need touching.
- */
 export interface TabItem {
-  id: string;
+  to: string;
   label: string;
+  end?: boolean;
 }
 
-export function Tabs({
-  tabs,
-  active,
-  onChange,
-}: {
-  tabs: TabItem[];
-  active: string;
-  onChange: (id: string) => void;
-}) {
+/** URL-driven tabs — each tab is a real route, so the active tab survives
+ *  refresh/back-forward/deep-linking instead of living in local state. */
+export function RouteTabs({ items }: { items: TabItem[] }) {
   return (
-    <AgniTabs
-      tabs={tabs.map((t) => ({ key: t.id, label: t.label }))}
-      value={active}
-      onChange={onChange}
-    />
+    <div className="mb-5 flex items-center gap-1 border-b border-border">
+      {items.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          end={item.end}
+          className={({ isActive }) =>
+            clsx(
+              "relative -mb-px cursor-pointer px-3 py-2.5 text-[13px] font-medium transition-colors",
+              isActive ? "text-accent-700 dark:text-accent-300" : "text-text-muted hover:text-text",
+            )
+          }
+        >
+          {({ isActive }) => (
+            <>
+              {item.label}
+              {isActive && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-accent-600" />}
+            </>
+          )}
+        </NavLink>
+      ))}
+    </div>
   );
 }

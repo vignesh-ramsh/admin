@@ -9,7 +9,6 @@ import {
   FolderOpen,
   ListChecks,
   Settings2,
-  FlaskConical,
   type LucideIcon,
 } from "lucide-react";
 
@@ -49,10 +48,6 @@ export const NAV: NavGroup[] = [
       { to: "/jobs", label: "Jobs", icon: ListChecks },
       { to: "/settings", label: "Settings & Secrets", icon: Settings2 },
     ],
-  },
-  {
-    label: "Lab",
-    items: [{ to: "/theme-lab", label: "Theme Lab", icon: FlaskConical }],
   },
 ];
 

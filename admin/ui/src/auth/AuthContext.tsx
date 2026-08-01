@@ -10,7 +10,7 @@ interface AuthApi {
   email: string | null;
   username: string | null;
   fullName: string | null;
-  login: (email: string, password: string, sessionType: "Fixed" | "Extended") => Promise<void>;
+  login: (identifier: string, password: string, sessionType: "Fixed" | "Extended") => Promise<void>;
   logout: () => Promise<void>;
   onUnauthorized: () => void;
 }
@@ -23,8 +23,18 @@ export function useAuth(): AuthApi {
   return ctx;
 }
 
+function applyServerTheme(
+  theme: string | null,
+  setPresetName: (name: string, opts?: { persist?: boolean }) => void,
+) {
+  // setPresetName itself resolves an unrecognized/legacy value down to a
+  // real preset (theme/ThemeContext.tsx's resolvePresetName) — this only
+  // needs to skip the call entirely when there's no server value at all.
+  if (theme) setPresetName(theme, { persist: false });
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { setTheme } = useTheme();
+  const { setPresetName } = useTheme();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<api.Profile | null>(null);
 
@@ -38,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((result) => {
         if (cancelled) return;
         setProfile(result);
-        if (result) setTheme(result.theme);
+        if (result) applyServerTheme(result.theme, setPresetName);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -49,10 +59,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const login = async (email: string, password: string, sessionType: "Fixed" | "Extended") => {
-    const result = await api.login(email, password, sessionType);
+  const login = async (identifier: string, password: string, sessionType: "Fixed" | "Extended") => {
+    const isEmail = identifier.includes("@");
+    const result = await api.login({
+      [isEmail ? "email" : "username"]: identifier,
+      password,
+      session_type: sessionType,
+    });
     setProfile(result);
-    setTheme(result.theme);
+    applyServerTheme(result.theme, setPresetName);
   };
 
   const logout = async () => {

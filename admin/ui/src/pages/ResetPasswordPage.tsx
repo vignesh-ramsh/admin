@@ -1,107 +1,86 @@
 import { useState, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { CheckCircle2 } from "lucide-react";
 import { Button } from "../components/Button";
-import { Field, Input } from "../components/Field";
-import { ApiError, resetPassword } from "../api/client";
-import { Logo } from "../components/Logo";
-import "./login.css";
+import { TextInput } from "../components/Field";
+import { resetPassword, ApiError } from "../api/client";
+import { ARC_LOGO_URL } from "../lib/assets";
 
 export function ResetPasswordPage() {
   const [params] = useSearchParams();
-  const token = params.get("token");
-
+  const navigate = useNavigate();
+  const token = params.get("token") ?? "";
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     if (password !== confirm) {
-      setError("Passwords don't match.");
+      setError("Passwords do not match.");
       return;
     }
     setBusy(true);
     try {
-      await resetPassword(token!, password);
+      await resetPassword(token, password);
       setDone(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Unable to reset password. Please try again.");
+      setError(err instanceof ApiError ? err.message : "This reset link is invalid or has expired.");
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className="login">
-      <div className="login__card">
-        <div className="login__brand">
-          <Logo size={34} />
-          <div>
-            <div className="login__title">Set a new password</div>
-            <div className="login__subtitle">
-              {token ? "Choose a new password for your account" : "This reset link is missing its token"}
-            </div>
-          </div>
+    <div className="flex min-h-dvh items-center justify-center bg-canvas px-4">
+      <div className="w-full max-w-sm">
+        <div className="mb-6 flex flex-col items-center text-center">
+          <img src={ARC_LOGO_URL} alt="" className="mb-3 h-11 w-11 rounded-xl shadow-sm" />
+          <h1 className="text-lg font-semibold text-text">Set a new password</h1>
         </div>
 
-        {!token ? (
-          <>
-            <div className="login__error">
-              This link is missing its reset token — copy the full link from your email, or request a new one.
+        <div className="rounded-xl border border-border bg-surface-raised p-6 shadow-sm">
+          {done ? (
+            <div className="flex flex-col items-center gap-3 py-4 text-center">
+              <CheckCircle2 size={26} className="text-success" />
+              <p className="text-sm text-text">Your password has been reset. All existing sessions were signed out.</p>
+              <Button variant="primary" onClick={() => navigate("/login")} className="mt-1 w-full">
+                Continue to sign in
+              </Button>
             </div>
-            <Link className="login__link" to="/forgot-password">
-              Request a new link
-            </Link>
-          </>
-        ) : done ? (
-          <>
-            <div className="login__success">
-              Your password has been updated. Every existing session was signed out — sign in again with your new
-              password.
-            </div>
-            <Link className="login__link" to="/">
-              Back to sign in
-            </Link>
-          </>
-        ) : (
-          <form className="login__form" onSubmit={submit}>
-            <Field label="New password">
-              <Input
+          ) : (
+            <form onSubmit={submit} className="flex flex-col gap-4">
+              <TextInput
+                label="New password"
                 type="password"
                 autoComplete="new-password"
-                placeholder="••••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 autoFocus
               />
-            </Field>
-            <Field label="Confirm new password">
-              <Input
+              <TextInput
+                label="Confirm new password"
                 type="password"
                 autoComplete="new-password"
-                placeholder="••••••••••"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 required
               />
-            </Field>
-
-            {error && <div className="login__error">{error}</div>}
-
-            <Button type="submit" variant="primary" block loading={busy}>
-              Reset password
-            </Button>
-            <Link className="login__link" to="/">
-              Back to sign in
-            </Link>
-          </form>
-        )}
+              {error && <p className="text-[13px] text-danger">{error}</p>}
+              <Button type="submit" variant="primary" loading={busy} className="w-full">
+                Reset password
+              </Button>
+            </form>
+          )}
+          <Link to="/login" className="mt-4 block text-center text-[13px] text-text-muted hover:text-accent-700 dark:hover:text-accent-300">
+            Back to sign in
+          </Link>
+        </div>
       </div>
-      <div className="login__footnote">ARC — capability-based platform</div>
     </div>
   );
 }

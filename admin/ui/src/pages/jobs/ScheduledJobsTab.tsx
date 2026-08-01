@@ -1,140 +1,91 @@
-import { useCallback, useEffect, useState } from "react";
-import { call, ApiError } from "../../api/client";
+import { useCallback, useMemo, useState } from "react";
+import { RefreshCw, Search } from "lucide-react";
+import { call } from "../../api/client";
 import type { ScheduledJob } from "../../api/types";
-import { useAuth } from "../../auth/AuthContext";
+import { useAsync } from "../../hooks/useAsync";
+import { useDebounce } from "../../hooks/useDebounce";
+import { usePageSearchFocus } from "../../hooks/usePageSearchFocus";
 import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
-import { Select } from "../../components/Field";
-import { Loading, EmptyState, ErrorState } from "../../components/States";
-import { DataTable } from "../../components/agni/data/DataTable";
-import { Pagination } from "../../components/agni/data/Pagination";
-import { IconRefresh, IconSearch } from "../../layout/icons";
-import { formatWhen } from "../shared/datetime";
+import { ErrorBlock } from "../../components/States";
+import { DataTable, Pagination, type Column } from "../../components/Table";
+import { formatDateTime } from "../shared/datetime";
 
-/* Live config, not history (docs/arc.MD §3.15) — small N in practice (one
-   entry per @arc.relay.task(cron=...) anywhere in the system), so search
-   and pagination both happen client-side against the one already-fetched
+const PAGE_SIZE = 25;
+
+/* Live config, not history — small N in practice (one entry per
+   @arc.relay.task(cron=...) anywhere in the system), so search and
+   pagination both happen client-side against the one already-fetched
    list rather than round-tripping to the server for either. */
 export function ScheduledJobsTab() {
-  const { onUnauthorized } = useAuth();
-  const [all, setAll] = useState<ScheduledJob[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [q, setQ] = useState("");
-  const [limit, setLimit] = useState(25);
+  const [qInput, setQInput] = useState("");
+  const q = useDebounce(qInput, 300);
   const [offset, setOffset] = useState(0);
+  const searchRef = usePageSearchFocus();
 
-  const handleErr = useCallback(
-    (err: unknown) => {
-      if (err instanceof ApiError && err.status === 401) {
-        onUnauthorized();
-        return true;
-      }
-      return false;
-    },
-    [onUnauthorized]
+  const loader = useCallback(() => call<ScheduledJob[]>("list_scheduled_jobs", {}, { method: "GET" }), []);
+  const { data, loading, error, reload } = useAsync(loader, []);
+  const all = data ?? [];
+
+  const filtered = useMemo(
+    () => all.filter((s) => s.task_name.toLowerCase().includes(q.trim().toLowerCase())),
+    [all, q],
   );
+  const paged = filtered.slice(offset, offset + PAGE_SIZE);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    call<ScheduledJob[]>("list_scheduled_jobs", {}, { method: "GET" })
-      .then(setAll)
-      .catch((err) => {
-        if (!handleErr(err)) setError(err instanceof ApiError ? err.message : "Failed to load scheduled jobs");
-      })
-      .finally(() => setLoading(false));
-  }, [handleErr]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const filtered = all.filter((s) => s.task_name.toLowerCase().includes(q.trim().toLowerCase()));
-  const paged = filtered.slice(offset, offset + limit);
+  const columns: Column<ScheduledJob>[] = [
+    { key: "task_name", header: "Task", render: (r) => r.task_name, mono: true },
+    { key: "queue", header: "Queue", render: (r) => <Badge tone="accent">{r.queue}</Badge> },
+    { key: "cron", header: "Cron", render: (r) => r.cron, mono: true },
+    { key: "last_run_at", header: "Last run", render: (r) => formatDateTime(r.last_run_at) },
+    {
+      key: "last_status",
+      header: "Result",
+      render: (r) =>
+        r.last_status === null ? <span className="text-text-faint">never run</span> : (
+          <Badge tone={r.last_status === "success" ? "success" : "danger"}>{r.last_status}</Badge>
+        ),
+    },
+  ];
 
   return (
-    <>
-      <div className="list-toolbar">
-        <div className="search">
-          <IconSearch />
+    <div className="flex h-full flex-col">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative w-full max-w-xs">
+          <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint" />
           <input
-            className="search__input"
+            ref={searchRef}
+            className="h-9 w-full rounded-md border border-border-strong bg-surface pl-8 pr-3 text-sm text-text placeholder:text-text-faint focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/25"
             placeholder="Search by task name…"
-            value={q}
+            value={qInput}
             onChange={(e) => {
+              setQInput(e.target.value);
               setOffset(0);
-              setQ(e.target.value);
             }}
           />
         </div>
-        <Button variant="secondary" size="sm" onClick={load}>
-          <IconRefresh /> Refresh
+        <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />} onClick={reload}>
+          Refresh
         </Button>
       </div>
 
-      <div className="card">
-        {loading ? (
-          <Loading message="Loading scheduled jobs…" />
-        ) : error ? (
-          <ErrorState message={error} />
-        ) : all.length === 0 ? (
-          <EmptyState
-            title="No scheduled jobs"
-            message="No task anywhere declares a cron= schedule, or lineup isn't installed."
-          />
-        ) : filtered.length === 0 ? (
-          <EmptyState title="No matches" message={`Nothing matches “${q}”.`} />
-        ) : (
+      {error ? (
+        <ErrorBlock message={error} onRetry={reload} />
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col">
           <DataTable
-            rowKey="task_name"
+            columns={columns}
             rows={paged}
-            columns={[
-              { key: "task_name", label: "Task", render: (v: string) => <span className="mono truncate" title={v}>{v}</span> },
-              { key: "queue", label: "Queue", width: 110, render: (v: string) => <Badge tone="accent">{v}</Badge> },
-              { key: "cron", label: "Cron", width: 150, render: (v: string) => <span className="mono">{v}</span> },
-              { key: "last_run_at", label: "Last run", width: 190, render: (v: string) => <span className="muted">{formatWhen(v)}</span> },
-              {
-                key: "last_status",
-                label: "Result",
-                width: 100,
-                render: (v: string | null) =>
-                  v === null ? <span className="muted">never run</span> : <Badge tone={v === "success" ? "success" : "danger"}>{v}</Badge>,
-              },
-            ]}
+            rowKey={(r) => r.task_name}
+            loading={loading}
+            emptyLabel={q ? `Nothing matches "${q}".` : "No task anywhere declares a cron= schedule, or lineup isn't installed."}
+            fillHeight
           />
-        )}
-
-        {filtered.length > 0 && (
-          <div className="pager">
-            <div className="inline">
-              <span className="muted" style={{ fontSize: 12.5 }}>
-                Rows per page
-              </span>
-              <Select
-                value={String(limit)}
-                onChange={(e) => {
-                  setOffset(0);
-                  setLimit(Number(e.target.value));
-                }}
-                style={{ width: 80, height: 30 }}
-              >
-                {[10, 25, 50].map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <Pagination
-              page={Math.floor(offset / limit) + 1}
-              pageCount={Math.max(1, Math.ceil(filtered.length / limit))}
-              onChange={(p) => setOffset((p - 1) * limit)}
-              totalLabel={`${offset + 1}–${Math.min(offset + limit, filtered.length)} of ${filtered.length}`}
-            />
-          </div>
-        )}
-      </div>
-    </>
+          {filtered.length > 0 && (
+            <Pagination offset={offset} limit={PAGE_SIZE} total={filtered.length} onChange={setOffset} />
+          )}
+        </div>
+      )}
+    </div>
   );
 }

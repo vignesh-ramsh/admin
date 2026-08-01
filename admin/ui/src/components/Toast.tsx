@@ -1,66 +1,88 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
-import { Toast as AgniToast } from "./agni/feedback/Toast";
+import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
 
-/**
- * Keeps this app's existing ToastProvider/useToast API (context, auto-
- * dismiss stack) — AgniUI's own Toast component is stateless/presentational
- * by design ("drive visibility from your own store"), so the stack/timer
- * logic here is unchanged, only each toast's own rendering now comes from
- * the copied AgniUI component instead of the old hand-rolled markup.
- */
 type ToastKind = "success" | "error" | "info";
-interface Toast {
+interface ToastItem {
   id: number;
   kind: ToastKind;
-  title?: string;
   message: string;
 }
 
 interface ToastApi {
-  success: (message: string, title?: string) => void;
-  error: (message: string, title?: string) => void;
-  info: (message: string, title?: string) => void;
+  show: (message: string, kind?: ToastKind) => void;
+  success: (message: string) => void;
+  error: (message: string) => void;
 }
 
 const ToastContext = createContext<ToastApi | null>(null);
 
 export function useToast(): ToastApi {
   const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error("useToast must be used within <ToastProvider>");
+  if (!ctx) throw new Error("useToast must be used within ToastProvider");
   return ctx;
 }
 
-let nextId = 1;
+const ICONS: Record<ToastKind, typeof Info> = {
+  success: CheckCircle2,
+  error: AlertCircle,
+  info: Info,
+};
+
+const STYLES: Record<ToastKind, string> = {
+  success: "border-success/30 text-success [&_svg]:text-success",
+  error: "border-danger/30 text-danger [&_svg]:text-danger",
+  info: "border-accent-300 text-accent-700 dark:text-accent-300 [&_svg]:text-accent-600",
+};
+
+let idSeq = 0;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [items, setItems] = useState<ToastItem[]>([]);
 
-  const remove = useCallback((id: number) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+  const dismiss = useCallback((id: number) => {
+    setItems((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const push = useCallback(
-    (kind: ToastKind, message: string, title?: string) => {
-      const id = nextId++;
-      setToasts((prev) => [...prev, { id, kind, message, title }]);
-      setTimeout(() => remove(id), 4500);
+  const show = useCallback(
+    (message: string, kind: ToastKind = "info") => {
+      const id = ++idSeq;
+      setItems((prev) => [...prev, { id, kind, message }]);
+      setTimeout(() => dismiss(id), 5000);
     },
-    [remove]
+    [dismiss],
   );
 
   const api: ToastApi = {
-    success: (m, t) => push("success", m, t),
-    error: (m, t) => push("error", m, t),
-    info: (m, t) => push("info", m, t),
+    show,
+    success: (message) => show(message, "success"),
+    error: (message) => show(message, "error"),
   };
 
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <div className="toast-stack">
-        {toasts.map((t) => (
-          <AgniToast key={t.id} tone={t.kind} title={t.title} message={t.message} onClose={() => remove(t.id)} />
-        ))}
+      <div className="fixed bottom-4 right-4 z-100 flex w-full max-w-sm flex-col gap-2">
+        {items.map((item) => {
+          const Icon = ICONS[item.kind];
+          return (
+            <div
+              key={item.id}
+              role="status"
+              className={`toast-in flex items-start gap-2.5 rounded-lg border bg-surface-raised px-3.5 py-3 text-sm shadow-lg shadow-black/5 ${STYLES[item.kind]}`}
+            >
+              <Icon size={17} className="mt-0.5 shrink-0" />
+              <p className="flex-1 text-text">{item.message}</p>
+              <button
+                type="button"
+                onClick={() => dismiss(item.id)}
+                aria-label="Dismiss"
+                className="shrink-0 cursor-pointer text-text-faint hover:text-text-muted"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          );
+        })}
       </div>
     </ToastContext.Provider>
   );

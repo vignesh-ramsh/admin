@@ -1,188 +1,134 @@
-import { useCallback, useEffect, useState } from "react";
-import { call, ApiError } from "../../api/client";
+import { useCallback, useState } from "react";
+import { RefreshCw, Search } from "lucide-react";
+import { call } from "../../api/client";
 import type { JobLogEntry } from "../../api/types";
-import { useAuth } from "../../auth/AuthContext";
+import { useAsync } from "../../hooks/useAsync";
+import { useDebounce } from "../../hooks/useDebounce";
+import { usePageSearchFocus } from "../../hooks/usePageSearchFocus";
 import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { Select } from "../../components/Field";
-import { Loading, EmptyState, ErrorState } from "../../components/States";
-import { DataTable } from "../../components/agni/data/DataTable";
-import { Pagination } from "../../components/agni/data/Pagination";
-import { IconRefresh, IconSearch } from "../../layout/icons";
-import { formatWhen } from "../shared/datetime";
+import { ErrorBlock } from "../../components/States";
+import { DataTable, Pagination, type Column } from "../../components/Table";
+import { formatDateTime } from "../shared/datetime";
 
-// Queued/Running are new lifecycle states (_job_log now gets a row at
-// enqueue time, updated in place as the job runs, rather than only ever
-// getting one row after it finished) — success/failed are unchanged.
-const STATUS_TONE: Record<string, "neutral" | "success" | "warning" | "danger" | "accent"> = {
-  Queued: "neutral",
-  Running: "warning",
-  success: "success",
-  failed: "danger",
-};
+const PAGE_SIZE = 25;
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms} ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
 
 export function ExecutionLogTab() {
-  const { onUnauthorized } = useAuth();
-  const [rows, setRows] = useState<JobLogEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [taskName, setTaskName] = useState("");
+  const [taskNameInput, setTaskNameInput] = useState("");
+  const taskName = useDebounce(taskNameInput, 300);
   const [status, setStatus] = useState("");
   const [jobType, setJobType] = useState("");
   const [executor, setExecutor] = useState("");
-  const [limit, setLimit] = useState(25);
   const [offset, setOffset] = useState(0);
+  const searchRef = usePageSearchFocus();
 
-  const handleErr = useCallback(
-    (err: unknown) => {
-      if (err instanceof ApiError && err.status === 401) {
-        onUnauthorized();
-        return true;
-      }
-      return false;
-    },
-    [onUnauthorized]
+  const loader = useCallback(
+    () =>
+      call<JobLogEntry[]>(
+        "list_job_log",
+        {
+          task_name: taskName.trim() || null,
+          status: status || null,
+          job_type: jobType || null,
+          executor: executor || null,
+          limit: PAGE_SIZE,
+          offset,
+        },
+        // KNOWN BACKEND BUG (admin/api/jobs_api.py list_job_log): limit/
+        // offset aren't coerced to int before hitting arc.relay.list(), so
+        // over GET/QUERY they arrive as strings and asyncpg 500s. POST
+        // sends a real JSON body, so they arrive as real numbers — this
+        // sidesteps the bug without touching the Python file.
+        { method: "POST" },
+      ),
+    [taskName, status, jobType, executor, offset],
   );
 
-  const load = useCallback(() => {
-    setLoading(true);
-    setError(null);
-    call<JobLogEntry[]>(
-      "list_job_log",
-      {
-        task_name: taskName.trim() || null,
-        status: status || null,
-        job_type: jobType || null,
-        executor: executor || null,
-        limit,
-        offset,
-      },
-      { method: "GET" }
-    )
-      .then(setRows)
-      .catch((err) => {
-        if (!handleErr(err)) setError(err instanceof ApiError ? err.message : "Failed to load job log");
-      })
-      .finally(() => setLoading(false));
-  }, [handleErr, taskName, status, jobType, executor, limit, offset]);
+  const { data, loading, error, reload } = useAsync(loader, [taskName, status, jobType, executor, offset]);
+  const rows = data ?? [];
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  const onFilterChange = (setter: (v: string) => void) => (v: string) => {
+    setter(v);
+    setOffset(0);
+  };
 
-  const hasMore = rows.length === limit;
+  const columns: Column<JobLogEntry>[] = [
+    { key: "task_name", header: "Task", render: (r) => r.task_name, mono: true },
+    { key: "queue", header: "Queue", render: (r) => r.queue, mono: true },
+    { key: "executor", header: "Executor", render: (r) => r.executor },
+    { key: "job_type", header: "Job type", render: (r) => <Badge tone={r.job_type === "Scheduler" ? "accent" : "neutral"}>{r.job_type}</Badge> },
+    { key: "status", header: "Status", render: (r) => <Badge tone={r.status === "success" ? "success" : "danger"}>{r.status}</Badge> },
+    {
+      key: "error",
+      header: "Error",
+      render: (r) => (
+        <span className="block max-w-[220px] truncate text-text-muted" title={r.error ?? undefined}>
+          {r.error ?? "—"}
+        </span>
+      ),
+    },
+    { key: "started_at", header: "Started", render: (r) => formatDateTime(r.started_at) },
+    { key: "finished_at", header: "Finished", render: (r) => formatDateTime(r.finished_at) },
+    { key: "duration_ms", header: "Duration", align: "right", render: (r) => formatDuration(r.duration_ms) },
+  ];
 
   return (
-    <>
-      <div className="list-toolbar">
-        <div className="search">
-          <IconSearch />
+    <div className="flex h-full flex-col">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative w-full max-w-xs">
+          <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint" />
           <input
-            className="search__input"
+            ref={searchRef}
+            className="h-9 w-full rounded-md border border-border-strong bg-surface pl-8 pr-3 text-sm text-text placeholder:text-text-faint focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/25"
             placeholder="Search by task name…"
-            value={taskName}
+            value={taskNameInput}
             onChange={(e) => {
+              setTaskNameInput(e.target.value);
               setOffset(0);
-              setTaskName(e.target.value);
             }}
           />
         </div>
-        <Select
-          value={status}
-          onChange={(e) => {
-            setOffset(0);
-            setStatus(e.target.value);
-          }}
-          style={{ width: 130 }}
-        >
+        <Select value={status} onChange={(e) => onFilterChange(setStatus)(e.target.value)} className="!w-auto">
           <option value="">Any status</option>
-          <option value="Queued">Queued</option>
-          <option value="Running">Running</option>
           <option value="success">Success</option>
           <option value="failed">Failed</option>
         </Select>
-        <Select
-          value={jobType}
-          onChange={(e) => {
-            setOffset(0);
-            setJobType(e.target.value);
-          }}
-          style={{ width: 140 }}
-        >
+        <Select value={jobType} onChange={(e) => onFilterChange(setJobType)(e.target.value)} className="!w-auto">
           <option value="">Any job type</option>
           <option value="Task">Task</option>
           <option value="Scheduler">Scheduler</option>
         </Select>
-        <Select
-          value={executor}
-          onChange={(e) => {
-            setOffset(0);
-            setExecutor(e.target.value);
-          }}
-          style={{ width: 130 }}
-        >
+        <Select value={executor} onChange={(e) => onFilterChange(setExecutor)(e.target.value)} className="!w-auto">
           <option value="">Any executor</option>
           <option value="relay">relay</option>
           <option value="lineup">lineup</option>
         </Select>
-        <Button variant="secondary" size="sm" onClick={load}>
-          <IconRefresh /> Refresh
+        <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />} onClick={reload}>
+          Refresh
         </Button>
       </div>
 
-      <div className="card">
-        {loading ? (
-          <Loading message="Loading execution log…" />
-        ) : error ? (
-          <ErrorState message={error} />
-        ) : rows.length === 0 ? (
-          <EmptyState title="No matching runs" message="Nothing has executed yet, or nothing matches these filters." />
-        ) : (
+      {error ? (
+        <ErrorBlock message={error} onRetry={reload} />
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col">
           <DataTable
-            rowKey="id"
+            columns={columns}
             rows={rows}
-            columns={[
-              { key: "task_name", label: "Task", width: "22%", render: (v: string) => <span className="mono truncate" title={v}>{v}</span> },
-              { key: "queue", label: "Queue", width: 90, render: (v: string) => <span className="mono">{v}</span> },
-              { key: "job_type", label: "Job type", width: 100, render: (v: string) => <Badge tone={v === "Scheduler" ? "accent" : "neutral"}>{v}</Badge> },
-              { key: "executor", label: "Executor", width: 90, render: (v: string) => <span className="mono muted">{v}</span> },
-              { key: "queued_by", label: "Queued by", width: 110, render: (v: string | null) => <span className="mono muted">{v ?? "—"}</span> },
-              { key: "status", label: "Status", width: 90, render: (v: string) => <Badge tone={STATUS_TONE[v] ?? "danger"}>{v}</Badge> },
-              { key: "finished_at", label: "Finished", width: 160, render: (v: string | null) => <span className="muted">{formatWhen(v)}</span> },
-              { key: "duration_ms", label: "Duration", width: 80, align: "right", render: (v: number | null) => <span className="mono muted">{v == null ? "—" : `${v} ms`}</span> },
-              { key: "error", label: "Error", render: (v: string | null) => <span className="truncate" title={v ?? undefined}>{v ?? "—"}</span> },
-            ]}
+            rowKey={(r) => r.id}
+            loading={loading}
+            emptyLabel="Nothing has executed yet, or nothing matches these filters."
+            fillHeight
           />
-        )}
-
-        <div className="pager">
-          <div className="inline">
-            <span className="muted" style={{ fontSize: 12.5 }}>
-              Rows per page
-            </span>
-            <Select
-              value={String(limit)}
-              onChange={(e) => {
-                setOffset(0);
-                setLimit(Number(e.target.value));
-              }}
-              style={{ width: 80, height: 30 }}
-            >
-              {[25, 50, 100].map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </Select>
-          </div>
-          <Pagination
-            page={Math.floor(offset / limit) + 1}
-            pageCount={hasMore ? Math.floor(offset / limit) + 2 : Math.floor(offset / limit) + 1}
-            onChange={(p) => setOffset((p - 1) * limit)}
-            totalLabel={rows.length === 0 ? "0" : `${offset + 1}–${offset + rows.length}`}
-          />
+          <Pagination offset={offset} limit={PAGE_SIZE} total={rows.length < PAGE_SIZE ? offset + rows.length : null} onChange={setOffset} />
         </div>
-      </div>
-    </>
+      )}
+    </div>
   );
 }

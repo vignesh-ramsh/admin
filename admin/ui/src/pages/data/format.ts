@@ -1,16 +1,10 @@
-import type { FieldMeta, TableSchema } from "../../api/types";
+import { call } from "../../api/client";
+import type { FieldMeta, FilerFileRow, Row, TableSchema } from "../../api/types";
 
 /* Columns psqldb always supplies itself and strips from any write payload
    (psqldb/__init__.py _SYSTEM_COLUMN_NAMES) — never editable. `parent`/
    `idx` are deliberately NOT in this set: a child row must set them. */
-export const SYSTEM_STRIPPED = new Set([
-  "id",
-  "created_at",
-  "updated_at",
-  "created_by",
-  "updated_by",
-  "_state",
-]);
+export const SYSTEM_STRIPPED = new Set(["id", "created_at", "updated_at", "created_by", "updated_by", "_state"]);
 
 /* Tables whose writes admin routes through dedicated endpoints instead
    (mirrors data_api._PROTECTED_WRITE_TABLES) — browsable, not editable. */
@@ -18,29 +12,20 @@ export const PROTECTED_TABLES = new Set(["_users", "_roles", "_sessions", "_acce
 
 /** Fields a user may actually set on a write. */
 export function editableFields(schema: TableSchema): FieldMeta[] {
-  const extras = schema.child
-    ? schema.system_fields.filter((f) => f.name === "parent" || f.name === "idx")
-    : [];
-  const own = schema.fields.filter(
-    (f) => f.is_column && !f.primary_key && !SYSTEM_STRIPPED.has(f.name)
-  );
+  const extras = schema.child ? schema.system_fields.filter((f) => f.name === "parent" || f.name === "idx") : [];
+  const own = schema.fields.filter((f) => f.is_column && !f.primary_key && !SYSTEM_STRIPPED.has(f.name));
   return [...extras, ...own];
 }
 
 /** Columns worth showing in the list view — TABLE fields aren't columns at
  *  all, and a field can opt itself OUT of the table view entirely via its
- *  own schema-declared `list: false` (docs/admin-ui-ux-review.md #4;
- *  psqldb.fields.Field.list, default true — a verbose JSON/MULTIFILE blob
- *  is exactly the kind of field a schema author would turn this off for,
- *  while still leaving it fully editable in the row editor). */
+ *  own schema-declared `list: false`. */
 export function listColumns(schema: TableSchema, max = 6): FieldMeta[] {
   return schema.fields.filter((f) => f.is_column && f.list).slice(0, max);
 }
 
 /** Human-readable cell text for the list view. `fieldType`, when given,
- *  is used ONLY to special-case MULTIFILE — checked by type, not by
- *  shape (Array.isArray alone would also mislabel a plain JSON column
- *  that happens to hold an array as "N files"). */
+ *  is used ONLY to special-case MULTIFILE. */
 export function formatCell(value: unknown, fieldType?: string): string {
   if (value === null || value === undefined) return "—";
   if (typeof value === "boolean") return value ? "Yes" : "No";
@@ -49,7 +34,6 @@ export function formatCell(value: unknown, fieldType?: string): string {
   }
   if (typeof value === "object") return JSON.stringify(value);
   const s = String(value);
-  // ISO timestamp -> compact local-ish display
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) return s.slice(0, 16).replace("T", " ");
   return s;
 }
@@ -69,4 +53,46 @@ export function toInputValue(field: FieldMeta, value: unknown): string {
 export function shortId(value: unknown): string {
   const s = String(value ?? "");
   return s.length > 12 ? `${s.slice(0, 8)}…` : s;
+}
+
+/** A resolved FILE/MULTIFILE entry — filename + best-effort servable url. */
+export interface FilerLookup {
+  filename: string;
+  url: string | null;
+  status?: string;
+}
+
+/* FILE/MULTIFILE fields only ever store filer's own file_id — meaningless
+   to a human on its own. Resolves it to a filename (and, best-effort, a
+   servable url) via the generic Data Browser's own list_rows against the
+   raw "filerfile" table (file_id is an exact, indexed lookup there), then
+   a second best-effort call to list_filer_files (by filename) to pick up
+   its ready-made signed/public `url` — the same enrichment the Files tab
+   itself relies on, reused here rather than duplicated. Cached per file_id
+   for the lifetime of the tab: file rows don't change shape once written. */
+const filerCache = new Map<string, Promise<FilerLookup | null>>();
+
+export function resolveFilerFile(fileId: string | null | undefined): Promise<FilerLookup | null> {
+  if (!fileId) return Promise.resolve(null);
+  let p = filerCache.get(fileId);
+  if (!p) {
+    p = call<Row[]>("list_rows", { table: "filerfile", filters: { file_id: { eq: fileId } }, limit: 1 }, { method: "QUERY" })
+      .then(async (rows) => {
+        const row = rows[0];
+        if (!row) return null;
+        const filename = row.original_filename != null ? String(row.original_filename) : fileId;
+        const status = row.status != null ? String(row.status) : undefined;
+        let url: string | null = null;
+        try {
+          const files = await call<FilerFileRow[]>("list_filer_files", { q: filename, limit: 5 }, { method: "GET" });
+          url = files.find((f) => f.file_id === fileId)?.url ?? null;
+        } catch {
+          /* best-effort — the raw filerfile row is still enough to show a name */
+        }
+        return { filename, url, status };
+      })
+      .catch(() => null);
+    filerCache.set(fileId, p);
+  }
+  return p;
 }

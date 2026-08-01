@@ -1,166 +1,144 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Menu, Search, LogOut } from "lucide-react";
+import clsx from "clsx";
+import { NAV } from "./nav";
 import { useAuth } from "../auth/AuthContext";
-import { Logo } from "../components/Logo";
-import { Switch } from "../components/agni/forms/Switch";
 import { useTheme } from "../theme/ThemeContext";
-import {
-  IconHealth,
-  IconData,
-  IconUsers,
-  IconRoles,
-  IconSessions,
-  IconKeys,
-  IconSchema,
-  IconSettings,
-  IconJobs,
-  IconFiles,
-  IconLogout,
-} from "./icons";
-import { GlobalSearch } from "./GlobalSearch";
-import "./layout.css";
+import { ThemePicker } from "../components/ThemePicker";
+import { CommandPalette } from "./CommandPalette";
+import { IconButton } from "../components/Button";
+import { ARC_LOGO_URL } from "../lib/assets";
 
-interface NavEntry {
-  to: string;
-  label: string;
-  icon: (props: { size?: number }) => JSX.Element;
+function initials(name: string | null, email: string | null): string {
+  const src = name || email || "?";
+  const parts = src.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return src.slice(0, 2).toUpperCase();
 }
 
-const NAV: { section: string; items: NavEntry[] }[] = [
-  {
-    section: "Overview",
-    items: [{ to: "/health", label: "Health", icon: IconHealth }],
-  },
-  {
-    section: "Data",
-    items: [
-      { to: "/data", label: "Data Browser", icon: IconData },
-      { to: "/schema", label: "Schema Builder", icon: IconSchema },
-    ],
-  },
-  {
-    section: "Access",
-    items: [
-      { to: "/users", label: "Users", icon: IconUsers },
-      { to: "/roles", label: "Roles", icon: IconRoles },
-      { to: "/sessions", label: "Sessions", icon: IconSessions },
-      { to: "/access-keys", label: "Access Keys", icon: IconKeys },
-    ],
-  },
-  {
-    section: "System",
-    items: [
-      { to: "/files", label: "File Manager", icon: IconFiles },
-      { to: "/jobs", label: "Jobs", icon: IconJobs },
-      { to: "/settings", label: "Settings & Secrets", icon: IconSettings },
-    ],
-  },
-];
-
 export function AppLayout() {
-  const { email, logout } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { fullName, email, logout } = useAuth();
+  const { presetName } = useTheme();
+  const navigate = useNavigate();
   const location = useLocation();
-  const initials = (email ?? "?").slice(0, 2);
-  // Data Browser and Schema Builder each manage their own layout — a
-  // side panel + content pane sharing exactly the page's own height
-  // (.workspace, shared/shared.css) — so neither should be padded or
-  // width-capped by the standard content wrapper; each owns its own
-  // padding instead. Unaffected by removing the topbar above.
-  const flush = location.pathname.startsWith("/schema") || location.pathname.startsWith("/data");
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
-  // Below layout.css's mobile breakpoint, .sidebar becomes an off-canvas
-  // drawer (docs/admin-ui-ux-review.md #1.3 — there was previously no
-  // narrow-viewport story at all, a permanently fixed-width sidebar).
-  // Irrelevant above the breakpoint: .sidebar-scrim/.mobile-menu-btn are
-  // display:none there, so this state never visibly does anything.
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  useEffect(() => setMobileNavOpen(false), [location.pathname]);
+  useEffect(() => setMobileOpen(false), [location.pathname]);
 
-  return (
-    <div className="shell">
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen(true);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  const sidebarContent = (
+    <>
+      <div className="flex items-center gap-2 px-4 py-4">
+        <img src={ARC_LOGO_URL} alt="" className="h-7 w-7 shrink-0 rounded-md" />
+        <span className="text-[15px] font-semibold text-text">Admin Console</span>
+      </div>
+
       <button
         type="button"
-        className="mobile-menu-btn"
-        onClick={() => setMobileNavOpen(true)}
-        aria-label="Open navigation menu"
+        onClick={() => setPaletteOpen(true)}
+        className="mx-3 mb-3 flex cursor-pointer items-center gap-2 rounded-md border border-border-strong bg-surface px-2.5 py-1.5 text-[13px] text-text-faint hover:bg-neutral-100 dark:hover:bg-neutral-800"
       >
-        <i className="ph ph-list" aria-hidden="true" />
+        <Search size={14} />
+        Search
+        <kbd className="ml-auto rounded border border-border px-1 text-[10px]">⌘K</kbd>
       </button>
-      {mobileNavOpen && <div className="sidebar-scrim" onClick={() => setMobileNavOpen(false)} />}
 
-      <aside className={`sidebar ${mobileNavOpen ? "sidebar--open" : ""}`}>
-        <div className="sidebar__brand">
-          <Logo size={26} />
-          <span className="sidebar__brand-text">Admin Desk</span>
-          <button
-            type="button"
-            className="sidebar__close"
-            onClick={() => setMobileNavOpen(false)}
-            aria-label="Close navigation menu"
-          >
-            <i className="ph ph-x" aria-hidden="true" />
-          </button>
-        </div>
-        <div className="sidebar__search">
-          <GlobalSearch />
-        </div>
-        <nav className="sidebar__nav">
-          {NAV.map((group) => (
-            <div key={group.section}>
-              <div className="sidebar__section">{group.section}</div>
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    className={({ isActive }) => `nav-item ${isActive ? "nav-item--active" : ""}`}
-                  >
-                    <Icon />
-                    {item.label}
-                  </NavLink>
-                );
-              })}
+      <nav className="scrollbar-thin flex-1 overflow-y-auto px-3 pb-3">
+        {NAV.map((group) => (
+          <div key={group.label} className="mb-4">
+            <p className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wider text-text-faint">{group.label}</p>
+            <div className="flex flex-col gap-0.5">
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    clsx(
+                      "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13.5px] font-medium transition-colors",
+                      isActive
+                        ? "bg-accent-50 text-accent-700 dark:bg-accent-950/50 dark:text-accent-300"
+                        : "text-text-muted hover:bg-neutral-100 hover:text-text dark:hover:bg-neutral-800",
+                    )
+                  }
+                >
+                  <item.icon size={16} className="shrink-0" />
+                  {item.label}
+                </NavLink>
+              ))}
             </div>
-          ))}
-        </nav>
-
-        <div className="sidebar__footer">
-          <div className="theme-toggle theme-toggle--sidebar">
-            <i className={theme === "dark" ? "ph ph-moon-stars" : "ph ph-sun"} aria-hidden="true" />
-            <span className="theme-toggle__label">{theme === "dark" ? "Dark mode" : "Light mode"}</span>
-            <Switch
-              checked={theme === "dark"}
-              onChange={toggleTheme}
-              size="sm"
-              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            />
           </div>
+        ))}
+      </nav>
 
-          <div className="user-chip user-chip--sidebar" title={email ?? undefined}>
-            <span className="user-chip__avatar">{initials}</span>
-            <span className="user-chip__email">{email}</span>
+      {/* Theme control — moved here from the (now removed) top header. */}
+      <div className="flex items-center gap-2 border-t border-border px-3 py-2.5">
+        <ThemePicker />
+        <span className="ml-1 truncate text-[12px] text-text-faint">{presetName}</span>
+      </div>
+
+      <div className="border-t border-border p-3">
+        <div className="flex items-center gap-2.5 rounded-md px-1.5 py-1.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-100 text-[12px] font-semibold text-accent-700 dark:bg-accent-900 dark:text-accent-300">
+            {initials(fullName, email)}
           </div>
-
-          <button className="btn btn--ghost btn--sm sidebar__signout" onClick={logout} title="Sign out">
-            <IconLogout size={16} />
-            Sign out
-          </button>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[13px] font-medium text-text">{fullName || email}</p>
+            <p className="truncate text-[12px] text-text-faint">{email}</p>
+          </div>
+          <IconButton
+            label="Sign out"
+            icon={<LogOut size={15} />}
+            onClick={async () => {
+              await logout();
+              navigate("/login");
+            }}
+          />
         </div>
-      </aside>
+      </div>
+    </>
+  );
 
-      <div className="main">
-        <main className={`content ${flush ? "content--flush" : ""}`}>
-          {flush ? (
-            <Outlet />
-          ) : (
-            <div className="content__inner">
-              <Outlet />
-            </div>
-          )}
+  return (
+    <div className="flex h-dvh overflow-hidden bg-canvas">
+      {/* Desktop sidebar */}
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-surface md:flex">{sidebarContent}</aside>
+
+      {/* Mobile off-canvas sidebar */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-40 flex md:hidden">
+          <div className="fixed inset-0 bg-neutral-950/40" onClick={() => setMobileOpen(false)} />
+          <aside className="relative flex w-72 max-w-[80vw] flex-col border-r border-border bg-surface">{sidebarContent}</aside>
+        </div>
+      )}
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile-only nav trigger (the desktop header is gone). */}
+        <button
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Open navigation"
+          className="absolute left-3 top-3 z-30 inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-border bg-surface text-text-muted shadow-sm md:hidden"
+        >
+          <Menu size={18} />
+        </button>
+        <main className="scrollbar-thin flex min-h-0 flex-1 flex-col overflow-y-auto p-5 pt-14 md:p-6 md:pt-6">
+          <Outlet />
         </main>
       </div>
+
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
 }

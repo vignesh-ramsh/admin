@@ -1,25 +1,33 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
+
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/inter/700.css";
+import "@fontsource/jetbrains-mono/400.css";
+import "@fontsource/jetbrains-mono/500.css";
+
+import "./index.css";
 import App from "./App.tsx";
+import { ThemeProvider } from "./theme/ThemeContext";
 import { AuthProvider } from "./auth/AuthContext";
 import { ToastProvider } from "./components/Toast";
-import { ThemeProvider } from "./theme/ThemeContext";
-import "./index.css";
-import "./components/components.css";
+import { SaveShortcutProvider } from "./hooks/useSaveShortcut";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    {/* basename matches the Gateway SPA mount prefix (/admin-desk) so
-        react-router's paths line up with where the app is actually served. */}
     <BrowserRouter basename="/admin-desk">
       <ThemeProvider>
-        <ToastProvider>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
-        </ToastProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <SaveShortcutProvider>
+              <App />
+            </SaveShortcutProvider>
+          </ToastProvider>
+        </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
-  </StrictMode>
+  </StrictMode>,
 );

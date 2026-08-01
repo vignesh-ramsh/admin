@@ -1,10 +1,22 @@
-/** The one date/time display format used across the whole app
- * (docs/admin-ui-ux-review.md #1.1 — three different formats used to be
- * live simultaneously: this sliced-ISO style, `toLocaleString()`'s
- * locale-dependent DD/MM/YYYY, and ad hoc inline `new Date(...)
- * .toLocaleString()` calls). Deterministic regardless of the viewer's
- * browser locale — a timestamp reads the same for every admin. */
-export function formatWhen(value: string | null | undefined): string {
-  if (!value) return "—";
-  return value.slice(0, 16).replace("T", " ");
+/** Single consistent date/time formatter for the Users/Roles/Sessions/Access
+ *  Keys pages — the old app's documented bug (docs/admin-ui-ux-review.md
+ *  §1.1/§6.2) was three different, disagreeing date formats across pages. */
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** Heuristic flag for obviously test/scratch accounts (docs/admin-ui-ux-review.md
+ *  §4.3) — a data-hygiene gap the old app documented but never fixed. */
+export function isTestAccount(email: string | null | undefined, username: string | null | undefined): boolean {
+  const needle = /test|scratch/i;
+  return needle.test(email ?? "") || needle.test(username ?? "");
 }

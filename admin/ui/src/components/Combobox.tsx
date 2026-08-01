@@ -1,254 +1,146 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import "./combobox.css";
-
-/* A searchable select. Two modes:
-   - static  : pass `options`, filtered client-side as you type.
-   - async   : pass `onSearch`, debounced, for lists too big to ship
-               (e.g. rows of a referenced table).
-   Keyboard: ArrowUp/Down to move, Enter to pick, Escape to close.
-
-   The menu renders in a PORTAL with fixed positioning, anchored to the
-   input. It has to: the field editor's container is `overflow: hidden`
-   (for its rounded corners) and a modal body is `overflow-y: auto`, both
-   of which clip an absolutely-positioned menu — so an in-flow dropdown is
-   only ever partly visible inside them. Fixed + portal escapes every
-   ancestor, and the menu flips above the input when there isn't room
-   below. */
+import { useEffect, useId, useRef, useState } from "react";
+import { ChevronsUpDown, Check, Loader2 } from "lucide-react";
+import clsx from "clsx";
+import { FieldShell } from "./Field";
 
 export interface ComboOption {
   value: string;
   label: string;
-  /** Small eyebrow line under the label (e.g. the owning plugin). */
   sublabel?: string;
-  /** Right-aligned mono detail (e.g. the raw value actually stored). */
-  hint?: string;
-}
-
-interface Props {
-  value: string;
-  onChange: (value: string) => void;
-  options?: ComboOption[];
-  onSearch?: (query: string) => Promise<ComboOption[]>;
-  placeholder?: string;
-  emptyText?: string;
-  disabled?: boolean;
-  /** Closed-state text to show instead of the raw `value` — for callers
-   *  whose stored value (e.g. a UUID) isn't human-readable on its own. */
-  displayValue?: string;
-}
-
-const MENU_MAX_H = 280;
-
-interface Anchor {
-  top: number;
-  left: number;
-  width: number;
-  up: boolean;
 }
 
 export function Combobox({
+  label,
+  hint,
+  error,
   value,
   onChange,
   options,
-  onSearch,
-  placeholder,
-  emptyText = "No matches",
-  disabled,
-  displayValue,
-}: Props) {
+  query,
+  onQueryChange,
+  loading,
+  placeholder = "Select…",
+  clearable,
+}: {
+  label?: string;
+  hint?: string;
+  error?: string;
+  value: string | null;
+  onChange: (value: string | null) => void;
+  options: ComboOption[];
+  query: string;
+  onQueryChange: (q: string) => void;
+  loading?: boolean;
+  placeholder?: string;
+  clearable?: boolean;
+}) {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [asyncOpts, setAsyncOpts] = useState<ComboOption[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [active, setActive] = useState(0);
-  const [anchor, setAnchor] = useState<Anchor | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const fieldId = useId();
+  const selected = options.find((o) => o.value === value);
 
-  const measure = useCallback(() => {
-    const el = inputRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const below = window.innerHeight - r.bottom;
-    // Flip up only if there genuinely isn't room below AND there's more room above.
-    const up = below < MENU_MAX_H && r.top > below;
-    setAnchor({
-      top: up ? r.top - 4 : r.bottom + 4,
-      left: r.left,
-      width: r.width,
-      up,
-    });
-  }, []);
-
-  useLayoutEffect(() => {
-    if (open) measure();
-  }, [open, measure]);
-
-  // Keep the menu glued to the input while anything scrolls or resizes.
   useEffect(() => {
     if (!open) return;
-    const onMove = () => measure();
-    window.addEventListener("scroll", onMove, true);
-    window.addEventListener("resize", onMove);
-    return () => {
-      window.removeEventListener("scroll", onMove, true);
-      window.removeEventListener("resize", onMove);
+    const onDocClick = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
     };
-  }, [open, measure]);
-
-  // Close on outside click — the menu is portalled, so it must be checked
-  // separately from the input's own wrapper.
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (inputRef.current?.parentElement?.contains(t)) return;
-      if (menuRef.current?.contains(t)) return;
-      setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
   }, [open]);
 
-  // Async search, debounced.
-  useEffect(() => {
-    if (!onSearch || !open) return;
-    let cancelled = false;
-    setLoading(true);
-    const t = setTimeout(() => {
-      onSearch(query)
-        .then((res) => {
-          if (!cancelled) setAsyncOpts(res);
-        })
-        .catch(() => {
-          if (!cancelled) setAsyncOpts([]);
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-    }, 180);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [query, open, onSearch]);
-
-  const shown = useMemo(() => {
-    if (onSearch) return asyncOpts;
-    const q = query.trim().toLowerCase();
-    const all = options ?? [];
-    if (!q) return all;
-    return all.filter(
-      (o) =>
-        o.label.toLowerCase().includes(q) ||
-        o.value.toLowerCase().includes(q) ||
-        (o.sublabel ?? "").toLowerCase().includes(q)
-    );
-  }, [options, onSearch, asyncOpts, query]);
-
-  useEffect(() => setActive(0), [shown.length]);
-
-  const pick = (opt: ComboOption) => {
-    onChange(opt.value);
-    setQuery("");
-    setOpen(false);
-  };
-
-  const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setOpen(true);
-      setActive((a) => Math.min(a + 1, shown.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActive((a) => Math.max(a - 1, 0));
-    } else if (e.key === "Enter") {
-      if (open && shown[active]) {
-        e.preventDefault();
-        pick(shown[active]);
-      }
-    } else if (e.key === "Escape") {
-      setOpen(false);
-    }
-  };
-
-  const menu =
-    open && anchor
-      ? createPortal(
-          <div
-            ref={menuRef}
-            className="combo__menu"
-            style={{
-              top: anchor.top,
-              left: anchor.left,
-              width: anchor.width,
-              maxHeight: MENU_MAX_H,
-              transform: anchor.up ? "translateY(-100%)" : undefined,
-            }}
-          >
-            {loading ? (
-              <div className="combo__msg">Searching…</div>
-            ) : shown.length === 0 ? (
-              <div className="combo__msg">{emptyText}</div>
-            ) : (
-              shown.map((o, i) => (
-                <button
-                  key={o.value}
-                  className={`combo__opt ${i === active ? "combo__opt--active" : ""} ${
-                    o.value === value ? "combo__opt--selected" : ""
-                  }`}
-                  onMouseEnter={() => setActive(i)}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    pick(o);
-                  }}
-                >
-                  <span className="combo__text">
-                    <span className="combo__label">{o.label}</span>
-                    {o.sublabel && <span className="combo__sub">{o.sublabel}</span>}
-                  </span>
-                  {o.hint && <span className="combo__hint">{o.hint}</span>}
-                </button>
-              ))
-            )}
-          </div>,
-          document.body
-        )
-      : null;
-
   return (
-    <div className="combo">
-      <input
-        ref={inputRef}
-        className="input combo__input"
-        value={open ? query : (displayValue ?? value)}
-        placeholder={placeholder}
-        disabled={disabled}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-        }}
-        onFocus={() => {
-          setOpen(true);
-          setQuery("");
-        }}
-        onKeyDown={onKey}
-      />
-      {value && !disabled && (
-        <button
-          className="combo__clear"
+    <FieldShell label={label} htmlFor={fieldId} hint={hint} error={error}>
+      <div ref={rootRef} className="relative">
+        <div
+          className={clsx(
+            "flex h-9 cursor-text items-center gap-1.5 rounded-md border border-border-strong bg-surface px-2.5 text-sm focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-accent-500/25",
+            error && "border-danger",
+          )}
           onClick={() => {
-            onChange("");
-            setQuery("");
+            setOpen(true);
+            document.getElementById(fieldId)?.focus();
           }}
-          tabIndex={-1}
-          aria-label="Clear"
         >
-          <i className="ph ph-x" style={{ fontSize: 13 }} />
-        </button>
-      )}
-      {menu}
-    </div>
+          <input
+            id={fieldId}
+            value={open ? query : (selected?.label ?? query)}
+            placeholder={selected ? selected.label : placeholder}
+            onChange={(e) => {
+              onQueryChange(e.target.value);
+              setOpen(true);
+              setActiveIdx(0);
+            }}
+            onFocus={() => setOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setActiveIdx((i) => Math.min(i + 1, options.length - 1));
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setActiveIdx((i) => Math.max(i - 1, 0));
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                const opt = options[activeIdx];
+                if (opt) {
+                  onChange(opt.value);
+                  onQueryChange("");
+                  setOpen(false);
+                }
+              } else if (e.key === "Escape") {
+                setOpen(false);
+              }
+            }}
+            className="min-w-0 flex-1 bg-transparent text-text outline-none placeholder:text-text-faint"
+            autoComplete="off"
+          />
+          {loading && <Loader2 size={14} className="animate-spin text-text-faint" />}
+          {clearable && value && (
+            <button
+              type="button"
+              aria-label="Clear selection"
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange(null);
+                onQueryChange("");
+              }}
+              className="cursor-pointer text-text-faint hover:text-text"
+            >
+              ×
+            </button>
+          )}
+          <ChevronsUpDown size={14} className="shrink-0 text-text-faint" />
+        </div>
+        {open && (
+          <div className="scrollbar-thin absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-border bg-surface-raised py-1 shadow-lg shadow-black/10">
+            {options.length === 0 && !loading && (
+              <p className="px-3 py-2 text-[13px] text-text-faint">No matches.</p>
+            )}
+            {options.map((opt, idx) => (
+              <button
+                type="button"
+                key={opt.value}
+                onClick={() => {
+                  onChange(opt.value);
+                  onQueryChange("");
+                  setOpen(false);
+                }}
+                className={clsx(
+                  "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-1.5 text-left text-sm",
+                  idx === activeIdx ? "bg-accent-50 dark:bg-accent-950/40" : "hover:bg-neutral-50 dark:hover:bg-neutral-900/50",
+                )}
+                onMouseEnter={() => setActiveIdx(idx)}
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-text">{opt.label}</span>
+                  {opt.sublabel && <span className="block truncate text-xs text-text-faint">{opt.sublabel}</span>}
+                </span>
+                {opt.value === value && <Check size={14} className="shrink-0 text-accent-600" />}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </FieldShell>
   );
 }

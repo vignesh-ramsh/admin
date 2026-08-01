@@ -1,21 +1,16 @@
 import { useState } from "react";
+import { Copy, Check } from "lucide-react";
 import { call } from "../../api/client";
 import type { MigrationPlan } from "../../api/types";
 import { useAsync } from "../../hooks/useAsync";
 import { Modal } from "../../components/Modal";
 import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
-import { Loading, ErrorState, EmptyState } from "../../components/States";
+import { LoadingBlock, ErrorBlock, EmptyState } from "../../components/States";
 
-export function MigrationPreviewModal({ plugin, onClose }: { plugin: string; onClose: () => void }) {
-  const { data: plan, loading, error } = useAsync<MigrationPlan>(
-    () => call("preview_migration_plan", { plugin }, { method: "GET" }),
-    [plugin]
-  );
-  const { data: cmd } = useAsync<{ command: string }>(
-    () => call("get_migrate_command", { plugin }, { method: "GET" }),
-    [plugin]
-  );
+export function MigrationPreviewModal({ plugin, table, onClose }: { plugin: string; table?: string; onClose: () => void }) {
+  const { data: plan, loading, error } = useAsync<MigrationPlan>(() => call("preview_migration_plan", { plugin, table }, { method: "GET" }), [plugin, table]);
+  const { data: cmd } = useAsync<{ command: string }>(() => call("get_migrate_command", { plugin, table }, { method: "GET" }), [plugin, table]);
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -30,34 +25,24 @@ export function MigrationPreviewModal({ plugin, onClose }: { plugin: string; onC
   };
 
   return (
-    <Modal
-      title={`Migration preview — ${plugin}`}
-      onClose={onClose}
-      wide
-      footer={<Button variant="secondary" onClick={onClose}>Close</Button>}
-    >
-      {loading && <Loading message="Diffing schemas against the database…" />}
-      {error && <ErrorState message={error} />}
+    <Modal title={`Migration preview — ${plugin}`} onClose={onClose} size="lg" footer={<Button variant="secondary" onClick={onClose}>Close</Button>}>
+      {loading && <LoadingBlock label="Diffing schemas against the database…" />}
+      {error && <ErrorBlock message={error} />}
 
       {plan && (
-        <div className="row-gap">
+        <div className="flex flex-col gap-4">
           {plan.empty ? (
-            <EmptyState
-              title="No changes"
-              message="The live database already matches every registered schema and patch for this plugin."
-            />
+            <EmptyState title="No changes" description="The live database already matches every registered schema and patch for this plugin." />
           ) : (
-            <div className="plan">
+            <div className="flex flex-col gap-2">
               {plan.ops.map((op, i) => (
-                <div className="plan__op" key={i}>
-                  <Badge tone={op.destructive ? "danger" : "success"}>
-                    {op.destructive ? "destructive" : "safe"}
-                  </Badge>
-                  <div className="plan__op-body">
-                    <div className="plan__op-desc">{op.description}</div>
-                    <div className="plan__op-meta muted">
+                <div key={i} className="flex items-start gap-2.5 rounded-md border border-border bg-surface p-2.5">
+                  <Badge tone={op.destructive ? "danger" : "success"}>{op.destructive ? "destructive" : "safe"}</Badge>
+                  <div className="min-w-0">
+                    <p className="text-[13px] text-text">{op.description}</p>
+                    <p className="text-xs text-text-faint">
                       {op.table} · {op.source}
-                    </div>
+                    </p>
                   </div>
                 </div>
               ))}
@@ -65,37 +50,35 @@ export function MigrationPreviewModal({ plugin, onClose }: { plugin: string; onC
           )}
 
           {plan.warnings.length > 0 && (
-            <div className="plan__warnings">
+            <div className="flex flex-col gap-1.5">
               {plan.warnings.map((w, i) => (
-                <div key={i} className="plan__warning">
+                <p key={i} className="rounded-md border border-warning/25 bg-warning-bg/50 px-2.5 py-1.5 text-xs text-warning">
                   {w}
-                </div>
+                </p>
               ))}
             </div>
           )}
 
-          <div className="apply-note">
-            <div className="apply-note__title">To apply every pending change at once</div>
-            <p className="muted" style={{ margin: "4px 0 10px" }}>
-              For a single table, use the <strong>Apply Now</strong> button in that table's editor
-              instead — it applies immediately and takes effect in this server process with no
-              restart. To apply everything pending across every table/plugin in one pass, run the
-              real migration yourself:
+          <div className="rounded-md border border-border bg-neutral-50 p-3 dark:bg-neutral-900/40">
+            <p className="mb-1 text-[13px] font-semibold text-text">To apply every pending change at once</p>
+            <p className="mb-2.5 text-[13px] text-text-muted">
+              For a single table, use <strong>Apply Now</strong> in that table's editor instead — it applies immediately, live in this server
+              process, no restart. To apply everything pending across every table/plugin in one pass, run the real migration yourself:
             </p>
-            <div className="cmd">
-              <code className="cmd__text mono">{cmd?.command ?? "…"}</code>
-              <Button variant="secondary" size="sm" onClick={copy}>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 truncate rounded-md border border-border-strong bg-surface px-2.5 py-1.5 font-mono text-[12.5px] text-text">
+                {cmd?.command ?? "…"}
+              </code>
+              <Button variant="secondary" size="sm" icon={copied ? <Check size={14} /> : <Copy size={14} />} onClick={copy}>
                 {copied ? "Copied" : "Copy"}
               </Button>
             </div>
-            <div className="warn-note" style={{ marginTop: 10 }}>
-              Running ARC processes (this server, other Gateway workers, lineup
-              worker/scheduler) notice the applied changes on their own within a few seconds —
-              the schema-version watcher reconciles them automatically. <code>arc reload</code>{" "}
-              pushes it instantly; <code>arc ps</code> lists the registered processes. Only a
-              process running without the reload bridge (older code, plain scripts) needs a
-              restart — and <em>code</em> changes always do (<code>arc restart</code>).
-            </div>
+            <p className="mt-2.5 text-xs text-text-faint">
+              Running ARC processes (this server, other Gateway workers, lineup worker/scheduler) notice applied changes on their own within a few
+              seconds — the schema-version watcher reconciles automatically. <code className="font-mono">arc reload</code> pushes it instantly;{" "}
+              <code className="font-mono">arc ps</code> lists registered processes. Only a process running without the reload bridge needs a
+              restart — and code changes always do (<code className="font-mono">arc restart</code>).
+            </p>
           </div>
         </div>
       )}

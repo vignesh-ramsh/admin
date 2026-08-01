@@ -103,10 +103,7 @@ export function validateField(field: FieldMeta, raw: string | boolean): string |
   return null;
 }
 
-export function validateValues(
-  fields: FieldMeta[],
-  values: Record<string, string | boolean>
-): Errors {
+export function validateValues(fields: FieldMeta[], values: Record<string, string | boolean>): Errors {
   const errors: Errors = {};
   for (const f of fields) {
     const err = validateField(f, values[f.name] ?? "");

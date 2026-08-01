@@ -1,93 +1,178 @@
-import {
-  Children,
-  isValidElement,
-  type InputHTMLAttributes,
-  type SelectHTMLAttributes,
-  type TextareaHTMLAttributes,
-  type ReactNode,
-} from "react";
-import { Input as AgniInput } from "./agni/forms/Input";
-import { Select as AgniSelect } from "./agni/forms/Select";
-import { Textarea as AgniTextarea } from "./agni/forms/Textarea";
+import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import clsx from "clsx";
 
-/**
- * Thin adapters over the copied AgniUI form components (agni/forms/) —
- * every call site in this app still passes a native event-based onChange
- * and (for Select) plain <option> children, so nothing else needed to
- * change; the real rendering/interaction is AgniUI's own component.
- */
+const CONTROL_CLASS =
+  "w-full rounded-md border border-border-strong bg-surface px-2.5 text-sm text-text placeholder:text-text-faint transition-colors focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/25 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-text-faint dark:disabled:bg-neutral-900";
 
-export function Field({
+export function FieldShell({
   label,
+  htmlFor,
+  required,
   hint,
+  error,
   children,
+  inline,
 }: {
   label?: string;
+  htmlFor?: string;
+  required?: boolean;
   hint?: string;
+  error?: string;
   children: ReactNode;
+  inline?: boolean;
 }) {
   return (
-    <div className="field">
-      {label && <label className="field__label">{label}</label>}
+    <div className={clsx("flex flex-col gap-1.5", inline && "flex-row items-center gap-2.5")}>
+      {label && (
+        <label htmlFor={htmlFor} className="text-[13px] font-medium text-text-muted">
+          {label}
+          {required && <span className="ml-0.5 text-danger">*</span>}
+        </label>
+      )}
       {children}
-      {hint && <span className="field__hint">{hint}</span>}
+      {error ? (
+        <p className="text-xs text-danger">{error}</p>
+      ) : hint ? (
+        <p className="text-xs text-text-faint">{hint}</p>
+      ) : null}
     </div>
   );
 }
 
-export function Input({
-  value,
-  onChange,
-  ...rest
-}: InputHTMLAttributes<HTMLInputElement>) {
+interface TextInputProps extends InputHTMLAttributes<HTMLInputElement> {
+  label?: string;
+  hint?: string;
+  error?: string;
+  mono?: boolean;
+}
+
+export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function TextInput(
+  { label, hint, error, mono, className, id, required, ...rest },
+  ref,
+) {
+  const autoId = useId();
+  const fieldId = id ?? autoId;
   return (
-    <AgniInput
-      value={value as string}
-      onChange={(_v, e) => onChange && e && onChange(e)}
-      {...(rest as any)}
-    />
+    <FieldShell label={label} htmlFor={fieldId} hint={hint} error={error} required={required}>
+      <input
+        ref={ref}
+        id={fieldId}
+        className={clsx(CONTROL_CLASS, "h-9", mono && "font-mono text-[13px]", error && "border-danger", className)}
+        aria-invalid={!!error}
+        {...rest}
+      />
+    </FieldShell>
+  );
+});
+
+interface TextAreaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
+  label?: string;
+  hint?: string;
+  error?: string;
+  mono?: boolean;
+}
+
+export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function TextArea(
+  { label, hint, error, mono, className, id, required, rows = 4, ...rest },
+  ref,
+) {
+  const autoId = useId();
+  const fieldId = id ?? autoId;
+  return (
+    <FieldShell label={label} htmlFor={fieldId} hint={hint} error={error} required={required}>
+      <textarea
+        ref={ref}
+        id={fieldId}
+        rows={rows}
+        className={clsx(CONTROL_CLASS, "py-2 leading-relaxed", mono && "font-mono text-[13px]", error && "border-danger", className)}
+        aria-invalid={!!error}
+        {...rest}
+      />
+    </FieldShell>
+  );
+});
+
+interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+  label?: string;
+  hint?: string;
+  error?: string;
+}
+
+export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
+  { label, hint, error, className, id, required, children, ...rest },
+  ref,
+) {
+  const autoId = useId();
+  const fieldId = id ?? autoId;
+  return (
+    <FieldShell label={label} htmlFor={fieldId} hint={hint} error={error} required={required}>
+      <select
+        ref={ref}
+        id={fieldId}
+        className={clsx(CONTROL_CLASS, "h-9 cursor-pointer bg-surface pr-8", error && "border-danger", className)}
+        aria-invalid={!!error}
+        {...rest}
+      >
+        {children}
+      </select>
+    </FieldShell>
+  );
+});
+
+export function Checkbox({
+  label,
+  className,
+  id,
+  ...rest
+}: InputHTMLAttributes<HTMLInputElement> & { label: ReactNode }) {
+  const autoId = useId();
+  const fieldId = id ?? autoId;
+  return (
+    <label htmlFor={fieldId} className="inline-flex cursor-pointer items-center gap-2 text-sm text-text">
+      <input
+        id={fieldId}
+        type="checkbox"
+        className={clsx(
+          "h-4 w-4 cursor-pointer rounded border-border-strong text-accent-600 focus:ring-2 focus:ring-accent-500/25 accent-[var(--accent-600)]",
+          className,
+        )}
+        {...rest}
+      />
+      {label}
+    </label>
   );
 }
 
-export function Textarea({
-  value,
+export function Switch({
+  checked,
   onChange,
-  ...rest
-}: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return (
-    <AgniTextarea
-      value={value as string}
-      onChange={(_v, e) => onChange && e && onChange(e)}
-      {...(rest as any)}
-    />
-  );
-}
-
-export function Select({
-  value,
-  onChange,
-  children,
+  label,
   disabled,
-  style,
-}: SelectHTMLAttributes<HTMLSelectElement>) {
-  const options = Children.toArray(children)
-    .filter(isValidElement)
-    .map((child: any) => ({
-      value: String(child.props.value ?? ""),
-      label: String(child.props.children ?? child.props.value ?? ""),
-    }));
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label?: string;
+  disabled?: boolean;
+}) {
   return (
-    <AgniSelect
-      value={value as string}
-      options={options}
-      disabled={disabled}
-      style={style}
-      onChange={(v) => {
-        if (!onChange) return;
-        // Native call sites read e.target.value — a plain object with that
-        // shape is enough, nothing here reads any other event field.
-        onChange({ target: { value: v } } as unknown as React.ChangeEvent<HTMLSelectElement>);
-      }}
-    />
+    <label className={clsx("inline-flex items-center gap-2 text-sm text-text", disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer")}>
+      <span
+        role="switch"
+        aria-checked={checked}
+        onClick={() => !disabled && onChange(!checked)}
+        className={clsx(
+          "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+          checked ? "bg-accent-600" : "bg-neutral-300 dark:bg-neutral-700",
+        )}
+      >
+        <span
+          className={clsx(
+            "absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform",
+            checked ? "left-[18px]" : "left-0.5",
+          )}
+        />
+      </span>
+      {label}
+    </label>
   );
 }
