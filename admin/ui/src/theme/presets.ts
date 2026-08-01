@@ -70,7 +70,7 @@ export const BUILTIN_PRESETS: ThemePreset[] = [
     info: "#2563EB",
   },
   {
-    name: "Late Night",
+    name: "Blue Night",
     appearance: "dark",
     canvas: "#060B2E",
     surface: "#0C1340",

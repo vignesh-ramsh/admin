@@ -1,7 +1,7 @@
 import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
 import clsx from "clsx";
 
-const CONTROL_CLASS =
+export const CONTROL_CLASS =
   "w-full rounded-md border border-border-strong bg-surface px-2.5 text-sm text-text placeholder:text-text-faint transition-colors focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/25 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:text-text-faint dark:disabled:bg-neutral-900";
 
 export function FieldShell({

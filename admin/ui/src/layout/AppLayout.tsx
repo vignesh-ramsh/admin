@@ -1,14 +1,24 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Menu, Search, LogOut } from "lucide-react";
+import { Menu, Search, Palette, LogOut } from "lucide-react";
 import clsx from "clsx";
 import { NAV } from "./nav";
 import { useAuth } from "../auth/AuthContext";
 import { useTheme } from "../theme/ThemeContext";
-import { ThemePicker } from "../components/ThemePicker";
+import { ThemePickerModal } from "../components/ThemePickerModal";
 import { CommandPalette } from "./CommandPalette";
 import { IconButton } from "../components/Button";
 import { ARC_LOGO_URL } from "../lib/assets";
+
+/** Bare-letter shortcuts (no modifier) must never fire while the user is
+ *  actually typing somewhere — the same guard a Gmail-style "c"-for-
+ *  compose shortcut needs. Cmd/Ctrl+K doesn't need this (that chord is
+ *  vanishingly unlikely mid-typing and browsers already reserve it). */
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
+}
 
 function initials(name: string | null, email: string | null): string {
   const src = name || email || "?";
@@ -24,6 +34,7 @@ export function AppLayout() {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [themeModalOpen, setThemeModalOpen] = useState(false);
 
   useEffect(() => setMobileOpen(false), [location.pathname]);
 
@@ -32,6 +43,11 @@ export function AppLayout() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPaletteOpen(true);
+        return;
+      }
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === "t" && !isEditableTarget(e.target)) {
+        e.preventDefault();
+        setThemeModalOpen(true);
       }
     };
     document.addEventListener("keydown", onKey);
@@ -84,8 +100,14 @@ export function AppLayout() {
 
       {/* Theme control — moved here from the (now removed) top header. */}
       <div className="flex items-center gap-2 border-t border-border px-3 py-2.5">
-        <ThemePicker />
+        <IconButton
+          label="Choose a theme"
+          icon={<Palette size={15} />}
+          onClick={() => setThemeModalOpen(true)}
+          className="border border-border-strong bg-surface"
+        />
         <span className="ml-1 truncate text-[12px] text-text-faint">{presetName}</span>
+        <kbd className="ml-auto rounded border border-border px-1 text-[10px] text-text-faint">T</kbd>
       </div>
 
       <div className="border-t border-border p-3">
@@ -139,6 +161,7 @@ export function AppLayout() {
       </div>
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+      <ThemePickerModal open={themeModalOpen} onClose={() => setThemeModalOpen(false)} />
     </div>
   );
 }
