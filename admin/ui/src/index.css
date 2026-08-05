@@ -126,6 +126,20 @@
   html[data-theme="dark"] {
     color-scheme: dark;
   }
+  /* color-scheme alone only hints "use the UA's dark palette" for a native
+     <select>'s dropdown popup — that popup is OS/browser chrome, outside
+     this app's own paint tree, so it's not affected by any bg-* utility on
+     the <select> itself (those only ever painted the closed control).
+     Some browsers' dark UA palette for it isn't reliably dark regardless.
+     Setting <option> background/color explicitly is the one part of that
+     popup every major engine (Chrome, Firefox, Edge) actually honors —
+     matching it to --surface-raised/--text makes it the same color
+     Combobox's own (fully custom, non-native) dropdown panel already uses,
+     instead of leaving it to whatever the browser's own dark chrome is. */
+  select option {
+    background-color: var(--surface-raised);
+    color: var(--text);
+  }
   body {
     @apply bg-canvas text-text antialiased;
     font-feature-settings: "cv11", "ss01";
