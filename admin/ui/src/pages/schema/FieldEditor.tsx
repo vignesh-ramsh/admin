@@ -202,7 +202,7 @@ export function FieldEditor({ fields, system, tableMeta, onChange }: Props) {
               <col style={{ width: "44px" }} />
               <col style={{ width: "44px" }} />
               <col style={{ width: "44px" }} />
-              <col style={{ width: "32px" }} />
+              <col style={{ width: "52px" }} />
             </colgroup>
             <thead className="bg-neutral-50 text-[11px] font-semibold uppercase tracking-wide text-text-faint dark:bg-neutral-900/40">
               <tr>
