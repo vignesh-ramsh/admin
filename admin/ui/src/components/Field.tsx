@@ -1,4 +1,19 @@
-import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from "react";
+import {
+  Children,
+  forwardRef,
+  isValidElement,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type InputHTMLAttributes,
+  type OptionHTMLAttributes,
+  type ReactElement,
+  type ReactNode,
+  type TextareaHTMLAttributes,
+} from "react";
+import { Check, ChevronsUpDown } from "lucide-react";
 import clsx from "clsx";
 
 export const CONTROL_CLASS =
@@ -167,33 +182,147 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
   );
 });
 
-interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, "size"> {
+interface SelectProps {
   label?: string;
   hint?: string;
   error?: string;
   size?: ControlSize;
+  className?: string;
+  id?: string;
+  required?: boolean;
+  disabled?: boolean;
+  value: string;
+  onChange: (e: { target: { value: string } }) => void;
+  /** Same contract as a native <select>'s children — plain <option
+   *  value=...>label</option> elements (optionally produced via .map). */
+  children: ReactNode;
 }
 
-export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
-  { label, hint, error, size = "md", className, id, required, children, ...rest },
+interface SelectOption {
+  value: string;
+  label: ReactNode;
+  disabled?: boolean;
+}
+
+/* A native <select>'s OPEN dropdown popup is OS/browser chrome — outside
+   this app's paint tree, so nothing here can style the hover/highlight
+   color an OS gives its native option list (confirmed: color-scheme and
+   <option> background/color both only affect the popup's resting state,
+   never its hover/active highlight, which stays whatever blue-ish system
+   color the OS itself uses no matter what CSS is set). Combobox already
+   solved this the only way that's actually solvable: don't use a native
+   select at all — render the trigger and the open list as plain styled
+   elements, where hover/active states are ordinary CSS this app fully
+   controls. This IS that same pattern, applied to Select, so both look
+   and behave identically instead of one being permanently at the mercy
+   of the OS. children is read as plain <option> elements (not a new
+   `options` prop) so every existing call site needed zero changes. */
+export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select(
+  { label, hint, error, size = "md", className, id, required, disabled, value, onChange, children },
   ref,
 ) {
   const autoId = useId();
   const fieldId = id ?? autoId;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  const options = useMemo<SelectOption[]>(
+    () =>
+      Children.toArray(children)
+        .filter(
+          (child): child is ReactElement<OptionHTMLAttributes<HTMLOptionElement>> =>
+            isValidElement(child) && child.type === "option",
+        )
+        .map((child) => ({
+          value: String(child.props.value ?? ""),
+          label: child.props.children,
+          disabled: child.props.disabled,
+        })),
+    [children],
+  );
+  const selected = options.find((o) => o.value === value);
+
+  useEffect(() => {
+    if (!open) return;
+    setActiveIdx(Math.max(0, options.findIndex((o) => o.value === value)));
+    const onDocClick = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const commit = (v: string) => {
+    onChange({ target: { value: v } });
+    setOpen(false);
+  };
+
   return (
     <FieldShell label={label} htmlFor={fieldId} hint={hint} error={error} required={required}>
-      <div className={className}>
+      <div ref={rootRef} className={clsx("relative", className)}>
         <ControlBox size={size} error={error}>
-          <select
+          <button
             ref={ref}
+            type="button"
             id={fieldId}
-            className="h-full w-full min-w-0 flex-1 cursor-pointer bg-transparent px-2.5 pr-8 text-sm text-text outline-none disabled:cursor-not-allowed disabled:text-text-faint"
+            disabled={disabled}
+            aria-haspopup="listbox"
+            aria-expanded={open}
             aria-invalid={!!error}
-            {...rest}
+            onClick={() => setOpen((v) => !v)}
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                if (!open) setOpen(true);
+                else setActiveIdx((i) => Math.min(i + 1, options.length - 1));
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                if (!open) setOpen(true);
+                else setActiveIdx((i) => Math.max(i - 1, 0));
+              } else if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                if (!open) setOpen(true);
+                else {
+                  const opt = options[activeIdx];
+                  if (opt && !opt.disabled) commit(opt.value);
+                }
+              } else if (e.key === "Escape") {
+                setOpen(false);
+              }
+            }}
+            className="flex h-full w-full min-w-0 flex-1 cursor-pointer items-center justify-between gap-1.5 bg-transparent px-2.5 text-left text-sm text-text outline-none disabled:cursor-not-allowed disabled:text-text-faint"
           >
-            {children}
-          </select>
+            <span className="min-w-0 truncate">{selected?.label}</span>
+            <ChevronsUpDown size={14} className="shrink-0 text-text-faint" />
+          </button>
         </ControlBox>
+        {open && (
+          <div
+            role="listbox"
+            className="scrollbar-thin absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-border bg-surface-raised py-1 shadow-lg shadow-black/10"
+          >
+            {options.map((opt, idx) => (
+              <button
+                type="button"
+                key={opt.value}
+                role="option"
+                aria-selected={opt.value === value}
+                disabled={opt.disabled}
+                onClick={() => commit(opt.value)}
+                onMouseEnter={() => setActiveIdx(idx)}
+                className={clsx(
+                  "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-1.5 text-left text-sm disabled:cursor-not-allowed disabled:text-text-faint",
+                  idx === activeIdx ? "bg-accent-50 dark:bg-accent-950/40" : "hover:bg-neutral-50 dark:hover:bg-neutral-900/50",
+                )}
+              >
+                <span className="truncate text-text">{opt.label}</span>
+                {opt.value === value && <Check size={14} className="shrink-0 text-accent-600" />}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </FieldShell>
   );

@@ -16,6 +16,7 @@ import { ErrorBlock, LoadingBlock } from "../../components/States";
 import { useToast } from "../../components/Toast";
 import { useCursorList } from "../../hooks/useCursorList";
 import { formatCell, listColumns, PROTECTED_TABLES, shortId } from "./format";
+import { SearchTermPills } from "./SearchBar";
 
 export interface DataTableOutletContext {
   table: string;
@@ -269,6 +270,8 @@ export function DataTableView() {
           setConfirmingBulkDelete(true);
         }}
       />
+
+      <SearchTermPills terms={search} onChange={setSearch} />
 
       {rowsError ? (
         <ErrorBlock message={rowsError} onRetry={loadRows} />

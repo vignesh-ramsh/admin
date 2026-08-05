@@ -1,20 +1,18 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import { Search, X } from "lucide-react";
 import clsx from "clsx";
 
 const AUTO_APPLY_MS = 1000;
-/** Only the first committed term renders as its own pill — any more than
- *  that collapse into a single "+N" chip (the box has bounded width, and a
- *  pill-per-term list would overflow fast). Clicking "+N" opens a dropdown
- *  listing every term, each independently removable. */
-const MAX_INLINE_PILLS = 1;
 
-/** Tag-input search box — matches Combobox.tsx's own bordered-box styling.
- *  Whatever's typed auto-commits as a new search term AUTO_APPLY_MS after
- *  the user stops typing (no need to press Enter) — Enter still commits
- *  immediately for anyone who doesn't want to wait. Every term is OR'd
- *  against every list-view column server-side (data_api.py's
- *  _search_where). */
+/** Plain committing search input — matches Combobox.tsx's own bordered-box
+ *  styling. Whatever's typed auto-commits as a new search term
+ *  AUTO_APPLY_MS after the user stops typing (no need to press Enter) —
+ *  Enter still commits immediately for anyone who doesn't want to wait.
+ *  Every term is OR'd against every list-view column server-side
+ *  (data_api.py's _search_where). Committed terms render as pills in
+ *  SearchTermPills below, not inline here — this box only ever shows what
+ *  you're currently typing, so it can't itself grow/overflow as terms
+ *  pile up. */
 export function SearchBar({
   terms,
   onChange,
@@ -25,8 +23,6 @@ export function SearchBar({
   className?: string;
 }) {
   const [draft, setDraft] = useState("");
-  const [overflowOpen, setOverflowOpen] = useState(false);
-  const overflowRef = useRef<HTMLDivElement>(null);
 
   const commit = () => {
     setDraft((current) => {
@@ -46,17 +42,6 @@ export function SearchBar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, terms]);
 
-  useEffect(() => {
-    if (!overflowOpen) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) setOverflowOpen(false);
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [overflowOpen]);
-
-  const removeAt = (idx: number) => onChange(terms.filter((_, i) => i !== idx));
-
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -65,9 +50,6 @@ export function SearchBar({
       onChange(terms.slice(0, -1));
     }
   };
-
-  const inlinePills = terms.slice(0, MAX_INLINE_PILLS);
-  const overflowCount = terms.length - inlinePills.length;
 
   return (
     <div
@@ -80,37 +62,6 @@ export function SearchBar({
       }}
     >
       <Search size={14} className="shrink-0 text-text-faint" />
-      {inlinePills.map((term, idx) => (
-        <SearchPill key={`${term}-${idx}`} term={term} onRemove={() => removeAt(idx)} />
-      ))}
-      {overflowCount > 0 && (
-        <div ref={overflowRef} className="relative shrink-0">
-          <button
-            type="button"
-            onClick={() => setOverflowOpen((v) => !v)}
-            className="cursor-pointer rounded-full bg-accent-50 px-2 py-0.5 text-xs font-medium text-accent-700 hover:bg-accent-100 dark:bg-accent-950/50 dark:text-accent-300 dark:hover:bg-accent-900"
-          >
-            +{overflowCount}
-          </button>
-          {overflowOpen && (
-            <div className="absolute left-0 z-30 mt-1 w-56 overflow-hidden rounded-md border border-border bg-surface-raised py-1 shadow-lg shadow-black/20">
-              {terms.map((term, idx) => (
-                <div key={`${term}-${idx}`} className="flex items-center justify-between gap-2 px-3 py-1.5 text-[13px] text-text">
-                  <span className="min-w-0 truncate">{term}</span>
-                  <button
-                    type="button"
-                    aria-label={`Remove search term "${term}"`}
-                    onClick={() => removeAt(idx)}
-                    className="shrink-0 cursor-pointer rounded p-0.5 text-text-faint hover:bg-neutral-100 hover:text-text dark:hover:bg-neutral-800"
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
       <input
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
@@ -120,16 +71,36 @@ export function SearchBar({
         aria-label="Search"
         className="min-w-[60px] flex-1 bg-transparent text-text outline-none placeholder:text-text-faint"
       />
-      {terms.length > 0 && (
-        <button
-          type="button"
-          aria-label="Clear all search terms"
-          onClick={() => onChange([])}
-          className="shrink-0 cursor-pointer rounded p-0.5 text-text-faint hover:bg-neutral-100 hover:text-text dark:hover:bg-neutral-800"
-        >
-          <X size={13} />
-        </button>
-      )}
+    </div>
+  );
+}
+
+/** Committed search terms, as a pill strip that sits between the toolbar
+ *  and the table (DataTableView.tsx) — not inside SearchBar's own input
+ *  box, so the box's width never has to accommodate them. Horizontally
+ *  scrollable with the scrollbar itself hidden (.scrollbar-none) once
+ *  terms overflow the available width, rather than wrapping the table
+ *  down across multiple lines or growing the strip's own height. Renders
+ *  nothing when there are no terms, so the table only shifts down while
+ *  a search is actually active. */
+export function SearchTermPills({ terms, onChange }: { terms: string[]; onChange: (terms: string[]) => void }) {
+  if (terms.length === 0) return null;
+  const removeAt = (idx: number) => onChange(terms.filter((_, i) => i !== idx));
+
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      <div className="scrollbar-none flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
+        {terms.map((term, idx) => (
+          <SearchPill key={`${term}-${idx}`} term={term} onRemove={() => removeAt(idx)} />
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => onChange([])}
+        className="shrink-0 cursor-pointer whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium text-text-faint hover:bg-neutral-100 hover:text-text dark:hover:bg-neutral-800"
+      >
+        Clear all
+      </button>
     </div>
   );
 }

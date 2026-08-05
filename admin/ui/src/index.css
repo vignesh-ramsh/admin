@@ -227,6 +227,18 @@
     background-color: var(--neutral-700);
   }
 
+  /* Fully hides the scrollbar (unlike .scrollbar-thin, which still shows a
+     thin one) while the element stays scrollable — e.g. the search-term
+     pill strip above Data Browser's table, which needs horizontal scroll
+     when terms overflow without a visible bar competing with the pills
+     for such a shallow row's height. */
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
   /* Continuous tone slider (Theme Lab prototype) — scoped to this one
      class, doesn't affect any other <input type="range"> in the app. The
      gradient track is painted via inline style per-instance; this just
