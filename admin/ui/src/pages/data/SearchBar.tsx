@@ -107,13 +107,13 @@ export function SearchTermPills({ terms, onChange }: { terms: string[]; onChange
 
 function SearchPill({ term, onRemove }: { term: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-50 py-0.5 pl-2 pr-1 text-xs font-medium text-accent-700 dark:bg-accent-950/50 dark:text-accent-300">
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent-100 py-0.5 pl-2 pr-1 text-xs font-medium text-accent-700 dark:bg-accent-900/50 dark:text-accent-300">
       {term}
       <button
         type="button"
         aria-label={`Remove search term "${term}"`}
         onClick={onRemove}
-        className="cursor-pointer rounded-full p-0.5 text-accent-600 hover:bg-accent-100 dark:text-accent-400 dark:hover:bg-accent-900"
+        className="cursor-pointer rounded-full p-0.5 text-accent-600 hover:bg-accent-200 dark:text-accent-400 dark:hover:bg-accent-800"
       >
         <X size={11} />
       </button>
