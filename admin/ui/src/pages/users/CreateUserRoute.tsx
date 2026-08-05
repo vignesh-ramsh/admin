@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { Copy, Check, AlertTriangle } from "lucide-react";
 import { call, ApiError } from "../../api/client";
-import type { Role } from "../../api/types";
+import type { Role, RowPage } from "../../api/types";
 import { useAsync } from "../../hooks/useAsync";
 import { Modal } from "../../components/Modal";
 import { Button } from "../../components/Button";
@@ -21,8 +21,8 @@ export function CreateUserRoute() {
   const { reload } = useOutletContext<{ reload: () => void }>();
   const toast = useToast();
 
-  const { data: rolesData } = useAsync<Role[]>(() => call<Role[]>("list_roles", {}, { method: "GET" }));
-  const roles = rolesData ?? [];
+  const { data: rolesPage } = useAsync<RowPage>(() => call<RowPage>("list_roles", { limit: 500 }, { method: "GET" }));
+  const roles = (rolesPage?.rows ?? []) as unknown as Role[];
 
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");

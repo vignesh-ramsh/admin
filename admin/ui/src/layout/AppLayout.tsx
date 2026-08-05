@@ -54,6 +54,31 @@ export function AppLayout() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
+  // One delegated listener for the whole app — every .scrollbar-thin region
+  // (sidebars, tables, modal bodies, the new row-preview panels, ...) gets
+  // "thumb only visible while actually scrolling" for free, no per-
+  // component wiring. `scroll` doesn't bubble, so this has to listen in
+  // the CAPTURE phase to see it at all; it still fires once per scrolled
+  // element regardless of where in the tree that element lives (including
+  // a Modal's portaled content, which renders under document.body, outside
+  // this component's own DOM subtree).
+  useEffect(() => {
+    const timers = new WeakMap<Element, ReturnType<typeof window.setTimeout>>();
+    const onScroll = (e: Event) => {
+      const el = e.target;
+      if (!(el instanceof Element) || !el.classList.contains("scrollbar-thin")) return;
+      el.classList.add("is-scrolling");
+      const prev = timers.get(el);
+      if (prev !== undefined) window.clearTimeout(prev);
+      timers.set(
+        el,
+        window.setTimeout(() => el.classList.remove("is-scrolling"), 800),
+      );
+    };
+    document.addEventListener("scroll", onScroll, true);
+    return () => document.removeEventListener("scroll", onScroll, true);
+  }, []);
+
   const sidebarContent = (
     <>
       <div className="flex items-center gap-2 px-4 py-4">

@@ -22,6 +22,8 @@ reimplemented here.
 
 import arc
 
+from admin.api._pagination import cursor_page
+
 # key -> (kind, secret). Single source of truth for both what
 # list_filer_settings() reads and what set_filer_settings() is allowed to
 # write — a key absent from this dict is never touched in either
@@ -117,51 +119,52 @@ async def list_filer_files(
     storage: str | None = None,
     private: bool | str | None = None,
     q: str | None = None,
+    after: str | None = None,
     limit: int | str = 50,
-    offset: int | str = 0,
-) -> list[dict]:
-    """Every row enriched with a ready-to-use `url` (signed if private,
-    plain if public, null if the file isn't currently servable) —
-    Superuser already sees the raw row via the generic Data Browser
-    (table="filerfile"); this is the same data, purpose-shaped for a
-    preview/download UI instead of a raw grid.
+) -> dict:
+    """Cursor-paginated — {rows, next_cursor, total} — every row enriched
+    with a ready-to-use `url` (signed if private, plain if public, null if
+    the file isn't currently servable). Superuser already sees the raw row
+    via the generic Data Browser (table="filerfile"); this is the same
+    data, purpose-shaped for a preview/download UI instead of a raw grid.
 
-    `q` matches EITHER original_filename OR path (docs/admin-ui-ux-
-    review.md #5 — the Files tab used to have two separate boxes for
-    these). The bounded Query Engine's `filters` dict is AND-only across
-    columns with no OR between two different fields, so this one query
-    goes through the raw-SQL escape hatch instead (arc.MD §3.4) — still
-    fully parameterized, no string-formatting of any caller value."""
-    where: list[str] = []
-    params: list = []
+    `status`/`storage`/`private` are plain equality filters (the Query
+    Engine's own `filters` dict, via admin._pagination.cursor_page). `q`
+    matches EITHER original_filename OR path (docs/admin-ui-ux-review.md
+    #5 — the Files tab used to have two separate boxes for these) — the
+    bounded Query Engine's `filters` dict is AND-only across columns with
+    no OR between two different fields, so only this one condition goes
+    through cursor_page's extra_where raw-SQL hook instead (arc.MD §3.4) —
+    still fully parameterized, no string-formatting of any caller value."""
+    filters: dict = {}
     if status:
-        params.append(status)
-        where.append(f"status = ${len(params)}")
+        filters["status"] = status
     if storage:
-        params.append(storage)
-        where.append(f"storage = ${len(params)}")
+        filters["storage"] = storage
     if private is not None and private != "":
-        params.append(_as_bool(private))
-        where.append(f"private = ${len(params)}")
-    if q:
-        params.append(f"%{_escape_like(q)}%")
-        where.append(
-            f"(original_filename ILIKE ${len(params)} ESCAPE '\\' OR path ILIKE ${len(params)} ESCAPE '\\')"
-        )
+        filters["private"] = _as_bool(private)
 
-    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
-    # limit/offset arrive as plain query-string strings when this is
-    # called via GET (relay's kwarg merging never coerces beyond that —
-    # the same documented limitation file_upload's `private` and filer's
-    # own `serve_file`'s `exp` already had to work around) — asyncpg
-    # rejects a numeric STRING outright rather than silently accepting
-    # it, which is what actually surfaced this.
-    params.extend([int(limit), int(offset)])
-    query = (
-        f'SELECT * FROM "filerfile" {where_sql} '
-        f"ORDER BY created_at DESC LIMIT ${len(params) - 1} OFFSET ${len(params)}"
+    extra_where, extra_params = "", []
+    if q:
+        extra_where = "(original_filename ILIKE $1 ESCAPE '\\' OR path ILIKE $1 ESCAPE '\\')"
+        extra_params = [f"%{_escape_like(q)}%"]
+
+    # limit arrives as a plain query-string string when this is called via
+    # GET (relay's kwarg merging never coerces beyond that — the same
+    # documented limitation file_upload's `private` and filer's own
+    # `serve_file`'s `exp` already had to work around) — asyncpg rejects a
+    # numeric STRING outright rather than silently accepting it.
+    rows, next_cursor, total = await cursor_page(
+        "filerfile",
+        arc.psqldb.schema("filerfile"),
+        fields=arc.relay.all_columns("filerfile"),
+        filters=filters or None,
+        order_by=("created_at", True),
+        after=after,
+        limit=int(limit),
+        extra_where=extra_where,
+        extra_params=extra_params,
     )
-    rows = await arc.relay.sql(query, *params)
     out = []
     for row in rows:
         url = (
@@ -170,7 +173,7 @@ async def list_filer_files(
             else None
         )
         out.append({**row, "url": url})
-    return out
+    return {"rows": out, "next_cursor": next_cursor, "total": total}
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { ChevronsUpDown, Check, Loader2 } from "lucide-react";
 import clsx from "clsx";
-import { FieldShell } from "./Field";
+import { CONTROL_HEIGHT, FieldShell, type ControlSize } from "./Field";
 
 export interface ComboOption {
   value: string;
@@ -21,6 +21,7 @@ export function Combobox({
   loading,
   placeholder = "Select…",
   clearable,
+  size = "md",
 }: {
   label?: string;
   hint?: string;
@@ -33,6 +34,13 @@ export function Combobox({
   loading?: boolean;
   placeholder?: string;
   clearable?: boolean;
+  /** Matches TextInput/Select's own `size` — shares the identical
+   *  CONTROL_HEIGHT value so a Combobox sitting in the same row as a
+   *  "sm" TextInput/Select (e.g. a REFERENCE field's target-table
+   *  picker next to the Name/Type columns) can never end up a few
+   *  pixels taller than its neighbors the way a separately-authored
+   *  "h-9" here once did. */
+  size?: ControlSize;
 }) {
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -54,9 +62,11 @@ export function Combobox({
       <div ref={rootRef} className="relative">
         <div
           className={clsx(
-            "flex h-9 cursor-text items-center gap-1.5 rounded-md border border-border-strong bg-surface px-2.5 text-sm focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-accent-500/25",
-            error && "border-danger",
+            "flex cursor-text items-center gap-1.5 overflow-hidden rounded-md border bg-surface text-sm transition-colors focus-within:border-accent-500 focus-within:ring-2 focus-within:ring-accent-500/25",
+            size === "sm" ? "h-8 px-2" : "h-9 px-2.5",
+            error ? "border-danger" : "border-border-strong",
           )}
+          style={{ height: CONTROL_HEIGHT[size] }}
           onClick={() => {
             setOpen(true);
             document.getElementById(fieldId)?.focus();

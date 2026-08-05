@@ -1,5 +1,5 @@
 import { call } from "../../api/client";
-import type { FieldMeta, FilerFileRow, Row, TableSchema } from "../../api/types";
+import type { FieldMeta, FilerFileRow, RowPage, TableSchema } from "../../api/types";
 
 /* Columns psqldb always supplies itself and strips from any write payload
    (psqldb/__init__.py _SYSTEM_COLUMN_NAMES) — never editable. `parent`/
@@ -76,15 +76,16 @@ export function resolveFilerFile(fileId: string | null | undefined): Promise<Fil
   if (!fileId) return Promise.resolve(null);
   let p = filerCache.get(fileId);
   if (!p) {
-    p = call<Row[]>("list_rows", { table: "filerfile", filters: { file_id: { eq: fileId } }, limit: 1 }, { method: "QUERY" })
-      .then(async (rows) => {
-        const row = rows[0];
+    p = call<RowPage>("list_rows", { table: "filerfile", filters: { file_id: { eq: fileId } }, limit: 1 }, { method: "QUERY" })
+      .then(async (page) => {
+        const row = page.rows[0];
         if (!row) return null;
         const filename = row.original_filename != null ? String(row.original_filename) : fileId;
         const status = row.status != null ? String(row.status) : undefined;
         let url: string | null = null;
         try {
-          const files = await call<FilerFileRow[]>("list_filer_files", { q: filename, limit: 5 }, { method: "GET" });
+          const filesPage = await call<RowPage>("list_filer_files", { q: filename, limit: 5 }, { method: "GET" });
+          const files = filesPage.rows as unknown as FilerFileRow[];
           url = files.find((f) => f.file_id === fileId)?.url ?? null;
         } catch {
           /* best-effort — the raw filerfile row is still enough to show a name */

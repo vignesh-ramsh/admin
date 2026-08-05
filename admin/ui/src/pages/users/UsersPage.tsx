@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useNavigate, Outlet } from "react-router-dom";
 import { Plus, Search, FlaskConical } from "lucide-react";
 import { call } from "../../api/client";
 import type { User } from "../../api/types";
-import { useAsync } from "../../hooks/useAsync";
 import { useDebounce } from "../../hooks/useDebounce";
 import { usePageSearchFocus } from "../../hooks/usePageSearchFocus";
+import { useCursorList, type CursorPage } from "../../hooks/useCursorList";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
 import { TextInput } from "../../components/Field";
 import { DataTable, type Column } from "../../components/Table";
+import { InfiniteScroll } from "../../components/InfiniteScroll";
 import { Badge, StatusBadge } from "../../components/Badge";
 import { ErrorBlock } from "../../components/States";
 import { formatDateTime, isTestAccount } from "../shared/datetime";
@@ -20,12 +21,16 @@ export function UsersPage() {
   const debouncedSearch = useDebounce(search, 300);
   const searchRef = usePageSearchFocus();
 
-  const { data, loading, error, reload } = useAsync<User[]>(
-    () => call<User[]>("list_users", debouncedSearch ? { q: debouncedSearch } : {}, { method: "GET" }),
+  const fetchPage = useCallback(
+    (cursor: string | null, limit: number) =>
+      call<CursorPage<User>>("list_users", { q: debouncedSearch || null, after: cursor, limit }, { method: "GET" }),
     [debouncedSearch],
   );
-
-  const rows = data ?? [];
+  const { rows, loading, hasMore, loadingMore, total, error, reload, loadMore } = useCursorList<User>({
+    fetchPage,
+    rowKey: (u) => u.id,
+    deps: [debouncedSearch],
+  });
 
   const columns: Column<User>[] = [
     {
@@ -77,15 +82,18 @@ export function UsersPage() {
         }
       />
 
-      <div className="relative mb-4 max-w-xs">
-        <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint" />
-        <TextInput
-          ref={searchRef}
-          placeholder="Search by email…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-8"
-        />
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="relative max-w-xs flex-1">
+          <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint" />
+          <TextInput
+            ref={searchRef}
+            placeholder="Search by email…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <span className="text-[13px] text-text-faint">{total !== null ? `${rows.length} of ${total}` : `${rows.length} users`}</span>
       </div>
 
       {error ? (
@@ -100,6 +108,7 @@ export function UsersPage() {
             emptyLabel="No users found."
             onRowClick={(u) => navigate(u.id)}
             fillHeight
+            footer={<InfiniteScroll hasMore={hasMore} loading={loadingMore} onReachEnd={loadMore} />}
           />
         </div>
       )}

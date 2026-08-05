@@ -10,9 +10,12 @@ changed_by is returned as the raw UUID, same as every other admin
 endpoint returning a *_by column — resolving it to an email is the UI's
 job (useUserDirectory), not duplicated server-side per endpoint."""
 
+from datetime import datetime, timezone
+
 import arc
 
 from admin._paths import require_known_plugin
+from admin.api._pagination import PaginationError, decode_cursor, encode_cursor
 
 # One shared redaction set/helper for every admin endpoint that can return
 # rows off authn's tables — the Data Browser's read path (data_api) applies
@@ -60,25 +63,44 @@ async def list_audit_tables(plugin: str) -> list[str]:
     return [r["table"] for r in rows]
 
 
+def _parse_cursor_changed_at(raw: object) -> datetime:
+    """The cursor's "v" is changed_at round-tripped through JSON — a real
+    datetime coming back as an ISO string, the same reason admin._coerce
+    exists at all for every psqldb-backed table. _audit_{plugin} has no
+    TableSchema for _pagination.cursor_page's own coerce_value(field, ...)
+    to key off, so this is the one-column-only equivalent, inlined here
+    rather than pulled in for a single field."""
+    dt = datetime.fromisoformat(str(raw))
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+
 @arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_audit_entries(
     plugin: str,
     table: str | None = None,
     row_id: str | None = None,
+    after: str | None = None,
     limit: int = 50,
-    offset: int = 0,
-) -> list[dict]:
+) -> dict:
+    """Cursor-paginated — {rows, next_cursor, total}, same shape every
+    other list endpoint in admin returns, but hand-rolled rather than
+    built on admin._pagination.cursor_page: that helper requires a real
+    psqldb TableSchema (arc.psqldb.schema(table)), and _audit_{plugin}
+    tables — raw-SQL bootstrap structure, docs/arc.MD §3.9 — have none.
+    Reuses cursor_page's own encode_cursor/decode_cursor primitives (both
+    schema-independent) for the keyset itself: (changed_at, id) DESC,
+    newest first, tie-broken by id the same way every other cursor in this
+    app is."""
     audit_table = _audit_table(plugin)
     if not await _table_exists(audit_table):
         arc.relay.throw(f"plugin '{plugin}' has no audit trail", status=404, code="no_audit_table")
 
-    # GET/QUERY calls arrive with limit/offset as plain strings (relay's
-    # kwarg merging never coerces past string) — same fix as
-    # filer_admin_api.py's list_filer_files.
+    # limit arrives as a plain query-string string over GET/QUERY (relay's
+    # kwarg merging never coerces beyond that) — same fix already applied
+    # elsewhere in admin (filer_admin_api.py, jobs_api.py, ...).
     limit = int(limit)
-    offset = int(offset)
 
-    where = []
+    where: list[str] = []
     params: list = []
     if table:
         params.append(table)
@@ -86,16 +108,39 @@ async def list_audit_entries(
     if row_id:
         params.append(row_id)
         where.append(f"row_id = ${len(params)}")
-    where_clause = f"WHERE {' AND '.join(where)}" if where else ""
-    params.extend([limit, offset])
 
+    count_where = f"WHERE {' AND '.join(where)}" if where else ""
+    total = await arc.relay.sql_val(f'SELECT count(*) FROM "{audit_table}" {count_where}', *params)
+
+    if after is not None:
+        try:
+            raw_v, cursor_id = decode_cursor(after)
+        except PaginationError as exc:
+            arc.relay.throw(str(exc), status=400, code="bad_cursor")
+        cursor_changed_at = _parse_cursor_changed_at(raw_v)
+        n = len(params)
+        # DESC (newest first) — the tuple-comparison direction is `<`,
+        # mirroring cursor_page's own op-per-direction convention.
+        where.append(f"(changed_at < ${n + 1} OR (changed_at = ${n + 1} AND id < ${n + 2}))")
+        params.extend([cursor_changed_at, cursor_id])
+
+    where_clause = f"WHERE {' AND '.join(where)}" if where else ""
+    params.append(limit + 1)
     query = (
         f'SELECT id, "table", row_id, changes, changed_by, changed_at '
         f'FROM "{audit_table}" {where_clause} '
-        f"ORDER BY changed_at DESC LIMIT ${len(params) - 1} OFFSET ${len(params)}"
+        f"ORDER BY changed_at DESC, id DESC LIMIT ${len(params)}"
     )
-    rows = await arc.relay.sql(query, *params)
-    return [
+    fetched = await arc.relay.sql(query, *params)
+
+    has_more = len(fetched) > limit
+    page_rows = fetched[:limit]
+    next_cursor = (
+        encode_cursor(page_rows[-1]["changed_at"], page_rows[-1]["id"])
+        if has_more and page_rows
+        else None
+    )
+    shaped = [
         {
             "id": str(r["id"]),
             "table": r["table"],
@@ -107,5 +152,6 @@ async def list_audit_entries(
             "changed_by": str(r["changed_by"]) if r["changed_by"] else None,
             "changed_at": r["changed_at"].isoformat(),
         }
-        for r in rows
+        for r in page_rows
     ]
+    return {"rows": shaped, "next_cursor": next_cursor, "total": total}

@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowRight, History } from "lucide-react";
 import { call } from "../../api/client";
 import type { AuditEntry } from "../../api/types";
-import { Button } from "../../components/Button";
+import { useCursorList, type CursorPage } from "../../hooks/useCursorList";
 import { Modal } from "../../components/Modal";
+import { InfiniteScroll } from "../../components/InfiniteScroll";
 import { ErrorBlock, LoadingBlock, EmptyState } from "../../components/States";
 import { resolveFilerFile, SYSTEM_STRIPPED } from "./format";
 
@@ -42,26 +43,26 @@ function formatDiffValue(v: unknown): string {
 }
 
 export function AuditHistoryPanel({ plugin, table, rowId }: { plugin: string; table: string; rowId: string }) {
-  const [entries, setEntries] = useState<AuditEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [offset, setOffset] = useState(0);
   const [openEntry, setOpenEntry] = useState<AuditEntry | null>(null);
-  const limit = 20;
 
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-    call<AuditEntry[]>("list_audit_entries", { plugin, table, row_id: rowId, limit, offset }, { method: "GET" })
-      .then(setEntries)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load audit history"))
-      .finally(() => setLoading(false));
-  }, [plugin, table, rowId, offset]);
+  const fetchPage = useCallback(
+    (cursor: string | null, limit: number) =>
+      call<CursorPage<AuditEntry>>("list_audit_entries", { plugin, table, row_id: rowId, after: cursor, limit }, { method: "GET" }),
+    [plugin, table, rowId],
+  );
+  const { rows: entries, loading, hasMore, loadingMore, total, error, loadMore } = useCursorList<AuditEntry>({
+    fetchPage,
+    rowKey: (e) => e.id,
+    deps: [plugin, table, rowId],
+  });
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="mb-3 flex shrink-0 items-center gap-1.5 text-[13px] font-semibold text-text">
-        <History size={14} /> Audit history
+      <div className="mb-3 flex shrink-0 items-center justify-between gap-1.5">
+        <span className="flex items-center gap-1.5 text-[13px] font-semibold text-text">
+          <History size={14} /> Audit history
+        </span>
+        {total !== null && <span className="text-[11px] text-text-faint">{entries.length} of {total}</span>}
       </div>
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto pr-1">
         {loading ? (
@@ -71,23 +72,16 @@ export function AuditHistoryPanel({ plugin, table, rowId }: { plugin: string; ta
         ) : entries.length === 0 ? (
           <EmptyState title="No changes recorded" description="This row has no audit history yet." bordered={false} />
         ) : (
-          <ul className="flex flex-col gap-2.5">
-            {entries.map((e) => (
-              <AuditEntryRow key={e.id} entry={e} onOpen={() => setOpenEntry(e)} />
-            ))}
-          </ul>
+          <>
+            <ul className="flex flex-col gap-2.5">
+              {entries.map((e) => (
+                <AuditEntryRow key={e.id} entry={e} onOpen={() => setOpenEntry(e)} />
+              ))}
+            </ul>
+            <InfiniteScroll hasMore={hasMore} loading={loadingMore} onReachEnd={loadMore} />
+          </>
         )}
       </div>
-      {entries.length > 0 && (
-        <div className="mt-3 flex shrink-0 items-center justify-between border-t border-border pt-2.5">
-          <Button variant="secondary" size="sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}>
-            Previous
-          </Button>
-          <Button variant="secondary" size="sm" disabled={entries.length < limit} onClick={() => setOffset(offset + limit)}>
-            Next
-          </Button>
-        </div>
-      )}
 
       {openEntry && <AuditEntryDetailModal entry={openEntry} onClose={() => setOpenEntry(null)} />}
     </div>

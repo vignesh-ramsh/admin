@@ -1,15 +1,17 @@
-import { useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { useNavigate, Outlet } from "react-router-dom";
 import { Plus, Trash2, Ban, Search } from "lucide-react";
 import { call, ApiError } from "../../api/client";
-import type { AccessKey, User } from "../../api/types";
+import type { AccessKey } from "../../api/types";
 import { useAsync } from "../../hooks/useAsync";
 import { useDebounce } from "../../hooks/useDebounce";
 import { usePageSearchFocus } from "../../hooks/usePageSearchFocus";
+import { useCursorList, type CursorPage } from "../../hooks/useCursorList";
 import { PageHeader } from "../../components/PageHeader";
 import { Button, IconButton } from "../../components/Button";
 import { TextInput } from "../../components/Field";
 import { DataTable, type Column } from "../../components/Table";
+import { InfiniteScroll } from "../../components/InfiniteScroll";
 import { Badge } from "../../components/Badge";
 import { ErrorBlock } from "../../components/States";
 import { ConfirmModal } from "../../components/Modal";
@@ -20,27 +22,26 @@ export function AccessKeysPage() {
   const navigate = useNavigate();
   const toast = useToast();
 
-  const { data: keys, loading, error, reload } = useAsync<AccessKey[]>(
-    () => call<AccessKey[]>("list_access_keys", {}, { method: "GET" }),
-  );
-  const { data: users } = useAsync<User[]>(() => call<User[]>("list_users", {}, { method: "GET" }));
-  const emailById = new Map((users ?? []).map((u) => [u.id, u.email]));
-
   const [qInput, setQInput] = useState("");
   const q = useDebounce(qInput, 300);
   const searchRef = usePageSearchFocus();
-  const rows = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    const all = keys ?? [];
-    if (!needle) return all;
-    return all.filter(
-      (k) =>
-        (k.label ?? "").toLowerCase().includes(needle) ||
-        k.key_prefix.toLowerCase().includes(needle) ||
-        (emailById.get(k.user) ?? k.user).toLowerCase().includes(needle),
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keys, q, users]);
+
+  const fetchPage = useCallback(
+    (cursor: string | null, limit: number) => call<CursorPage<AccessKey>>("list_access_keys", { q: q || null, after: cursor, limit }, { method: "GET" }),
+    [q],
+  );
+  const { rows: keys, loading, hasMore, loadingMore, total, error, reload, loadMore, patchByIds } = useCursorList<AccessKey>({
+    fetchPage,
+    rowKey: (k) => k.id,
+    deps: [q],
+  });
+
+  // id -> email, for every user in the system — same reasoning
+  // SessionsPage's own lookup gives (list_users itself is paginated now).
+  const { data: userEmails } = useAsync<{ id: string; email: string }[]>(
+    () => call<{ id: string; email: string }[]>("list_user_emails", {}, { method: "GET" }),
+  );
+  const emailById = new Map((userEmails ?? []).map((u) => [u.id, u.email]));
 
   const [revokePrefix, setRevokePrefix] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -50,8 +51,9 @@ export function AccessKeysPage() {
     setBusy(true);
     try {
       await call("revoke_access_key", { key_prefix: revokePrefix });
+      const target = keys.find((k) => k.key_prefix === revokePrefix);
+      if (target) patchByIds([target.id], { revoked_at: new Date().toISOString() });
       toast.success("Access key revoked.");
-      reload();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to revoke access key.");
     } finally {
@@ -122,22 +124,33 @@ export function AccessKeysPage() {
         }
       />
 
-      <div className="relative mb-4 max-w-xs">
-        <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint" />
-        <TextInput
-          ref={searchRef}
-          placeholder="Search by label, prefix, or user…"
-          value={qInput}
-          onChange={(e) => setQInput(e.target.value)}
-          className="pl-8"
-        />
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="relative max-w-xs flex-1">
+          <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint" />
+          <TextInput
+            ref={searchRef}
+            placeholder="Search by label, prefix, or user…"
+            value={qInput}
+            onChange={(e) => setQInput(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <span className="text-[13px] text-text-faint">{total !== null ? `${keys.length} of ${total}` : `${keys.length} keys`}</span>
       </div>
 
       {error ? (
         <ErrorBlock message={error} onRetry={reload} />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-          <DataTable columns={columns} rows={rows} rowKey={(k) => k.id} loading={loading} emptyLabel="No access keys found." fillHeight />
+          <DataTable
+            columns={columns}
+            rows={keys}
+            rowKey={(k) => k.id}
+            loading={loading}
+            emptyLabel="No access keys found."
+            fillHeight
+            footer={<InfiniteScroll hasMore={hasMore} loading={loadingMore} onReachEnd={loadMore} />}
+          />
         </div>
       )}
 
@@ -153,7 +166,7 @@ export function AccessKeysPage() {
         />
       )}
 
-      <Outlet context={{ reload, users: users ?? [] }} />
+      <Outlet context={{ reload }} />
     </div>
   );
 }

@@ -178,12 +178,39 @@
     animation: scale-in 150ms ease-out;
   }
 
+  /* Scroll-triggered visibility: the thumb is transparent at rest and only
+     painted while .is-scrolling is present (toggled by a single delegated
+     listener in AppLayout — see its own comment) — every .scrollbar-thin
+     region in the app gets this for free, no per-component wiring. WebKit/
+     Blink only: ::-webkit-scrollbar-thumb is the one hook that can key
+     visibility off a class at all. Firefox exposes no equivalent (its
+     scrollbar-color/scrollbar-width are static), so it falls back to an
+     always-thin, always-visible bar — a real cross-browser gap, not an
+     oversight. */
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: var(--neutral-300) transparent;
   }
   html[data-theme="dark"] .scrollbar-thin {
     scrollbar-color: var(--neutral-700) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 9999px;
+    transition: background-color 150ms ease-out;
+  }
+  .scrollbar-thin.is-scrolling::-webkit-scrollbar-thumb {
+    background-color: var(--neutral-300);
+  }
+  html[data-theme="dark"] .scrollbar-thin.is-scrolling::-webkit-scrollbar-thumb {
+    background-color: var(--neutral-700);
   }
 
   /* Continuous tone slider (Theme Lab prototype) — scoped to this one

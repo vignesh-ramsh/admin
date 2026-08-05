@@ -1,20 +1,9 @@
 import { useEffect, useState } from "react";
 import { call } from "../../api/client";
-import type { FieldMeta, Row, TableMeta, TableSchema } from "../../api/types";
+import type { FieldMeta, RowPage, TableSchema } from "../../api/types";
 import { Combobox, type ComboOption } from "../../components/Combobox";
 import { useDebounce } from "../../hooks/useDebounce";
-
-/* A field's `target` is a schema FILE STEM ("Department"), while every data
-   endpoint takes the PHYSICAL table name ("department") — so the stem has
-   to be resolved before it can be queried. Cached once per page load;
-   schemas don't change under a running process anyway. */
-let metaPromise: Promise<TableMeta[]> | null = null;
-function loadTableMeta(): Promise<TableMeta[]> {
-  if (!metaPromise) {
-    metaPromise = call<TableMeta[]>("list_table_meta", {}, { method: "GET" }).catch(() => [] as TableMeta[]);
-  }
-  return metaPromise;
-}
+import { loadTableMeta } from "./tableMeta";
 
 /* Picks a real row from the referenced table instead of asking someone to
    type a raw UUID / natural key by hand.
@@ -87,10 +76,10 @@ export function ReferencePicker({ field, value, onChange, disabled, label, targe
       return;
     }
     let cancelled = false;
-    call<Row[]>("list_rows", { table: target, filters: { id: { eq: value } }, limit: 1 }, { method: "QUERY" })
-      .then((rows) => {
+    call<RowPage>("list_rows", { table: target, filters: { id: { eq: value } }, limit: 1 }, { method: "QUERY" })
+      .then((page) => {
         if (cancelled) return;
-        const row = rows[0];
+        const row = page.rows[0];
         const lbl = row ? row[labelField] : null;
         setResolvedOption({ value, label: lbl != null ? String(lbl) : value });
       })
@@ -117,12 +106,12 @@ export function ReferencePicker({ field, value, onChange, disabled, label, targe
     const labelMeta = schema?.fields.find((f) => f.name === labelField);
     const textual = !labelMeta || ["STRING", "TEXT", "EMAIL", "PHONE", "SELECT"].includes(labelMeta.type);
     const filters = debouncedQuery.trim() && textual ? { [labelField]: { contains: debouncedQuery.trim() } } : null;
-    call<Row[]>("list_rows", { table: target, filters, limit: 20 }, { method: "QUERY" })
-      .then((rows) => {
+    call<RowPage>("list_rows", { table: target, filters, limit: 20 }, { method: "QUERY" })
+      .then((page) => {
         if (cancelled) return;
         const contextField = schema?.fields.find((f) => f.is_column && !f.unique && ["STRING", "TEXT"].includes(f.type))?.name;
         setSearchResults(
-          rows.map((r) => {
+          page.rows.map((r) => {
             const stored = field.target_field ? r[field.target_field] : r.id;
             const lbl = r[labelField];
             const context = contextField ? r[contextField] : null;

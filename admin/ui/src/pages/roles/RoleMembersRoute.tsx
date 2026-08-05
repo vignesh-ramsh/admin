@@ -1,6 +1,6 @@
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { call } from "../../api/client";
-import type { Role, User } from "../../api/types";
+import type { Role, RowPage, User } from "../../api/types";
 import { useAsync } from "../../hooks/useAsync";
 import { Modal } from "../../components/Modal";
 import { DataTable, type Column } from "../../components/Table";
@@ -15,10 +15,16 @@ export function RoleMembersRoute() {
   const role = roles.find((r) => r.id === roleId) ?? null;
   const close = () => navigate("/roles");
 
-  const { data, loading, error, reload } = useAsync<User[]>(
-    () => (role ? call<User[]>("list_users", { role: role.name }, { method: "GET" }) : Promise.resolve([])),
+  // A role's own member list is bounded by how many users can realistically
+  // carry one role (every user in the system, worst case) — a single
+  // generous page (limit=500) rather than full infinite scroll, matching
+  // the same "genuinely need close to everything, keep it simple" call
+  // this page's own outlet-context role list already makes.
+  const { data: page, loading, error, reload } = useAsync<RowPage>(
+    () => (role ? call<RowPage>("list_users", { role: role.name, limit: 500 }, { method: "GET" }) : Promise.resolve({ rows: [], next_cursor: null, total: 0 })),
     [role?.name],
   );
+  const data = (page?.rows ?? []) as unknown as User[];
 
   if (!role) {
     return (
@@ -36,12 +42,12 @@ export function RoleMembersRoute() {
   ];
 
   return (
-    <Modal title={`Members of ${role.name}`} subtitle={`${(data ?? []).length} user(s) with this role`} size="lg" onClose={close}>
+    <Modal title={`Members of ${role.name}`} subtitle={`${data.length} user(s) with this role`} size="lg" onClose={close}>
       {error && <ErrorBlock message={error} onRetry={reload} />}
       {!error && (
         <DataTable
           columns={columns}
-          rows={data ?? []}
+          rows={data}
           rowKey={(u) => u.id}
           loading={loading}
           emptyLabel="No users have this role."

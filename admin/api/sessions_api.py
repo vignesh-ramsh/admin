@@ -10,31 +10,59 @@ from datetime import datetime, timedelta, timezone
 import arc
 
 from admin._security import by_of
+from admin.api._pagination import cursor_page
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _escape_like(value: str) -> str:
+    """Same escaping the Query Engine's own `contains` operator does
+    (relay/query.py's _escape_like) — not imported since it's two lines
+    and internal, same call every other admin module with a raw-SQL
+    search already makes."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
-async def list_sessions(email: str | None = None) -> list[dict]:
+async def list_sessions(
+    email: str | None = None, q: str | None = None, after: str | None = None, limit: int = 50
+) -> dict:
+    """Cursor-paginated — {rows, next_cursor, total}, same shape every
+    other list endpoint now returns. `email` is an exact scope (a specific
+    user's own sessions); `q` is the admin screen's free-text search — IP
+    address, or the owning user's email — via the extra_where hook, since
+    matching against another table's column has no Query Engine filter
+    operator (docs/arc.MD §3.4)."""
     filters = None
     if email:
         user = await arc.relay.get("_users", {"email": email.strip().lower()}, ["id"])
         if user is None:
             arc.relay.throw("no such user", status=404, code="not_found")
         filters = {"user": user["id"]}
-    # Unfiltered (no email) this is "every session in the system" for a
-    # management screen — silently truncating it would just hide sessions,
-    # not make anything faster in a way the caller could notice.
-    rows = await arc.relay.list(
+
+    extra_where, extra_params = "", []
+    if q:
+        pattern = f"%{_escape_like(q)}%"
+        extra_where = (
+            "(ip_address ILIKE $1 ESCAPE '\\' OR "
+            "\"user\" IN (SELECT id FROM \"_users\" WHERE email ILIKE $1 ESCAPE '\\'))"
+        )
+        extra_params = [pattern]
+
+    rows, next_cursor, total = await cursor_page(
         "_sessions",
+        arc.psqldb.schema("_sessions"),
         fields=["id", "user", "session_type", "expires_at", "revoked_at", "ip_address", "last_seen_at"],
         filters=filters,
-        order_by=["-expires_at"],
-        limit=None,
+        order_by=("expires_at", True),
+        after=after,
+        limit=limit,
+        extra_where=extra_where,
+        extra_params=extra_params,
     )
-    return [
+    shaped = [
         {
             "id": str(r["id"]),
             "user": str(r["user"]),
@@ -46,6 +74,7 @@ async def list_sessions(email: str | None = None) -> list[dict]:
         }
         for r in rows
     ]
+    return {"rows": shaped, "next_cursor": next_cursor, "total": total}
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])

@@ -18,6 +18,8 @@ than erroring when it isn't."""
 
 import arc
 
+from admin.api._pagination import cursor_page
+
 
 @arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_scheduled_jobs() -> list[dict]:
@@ -55,9 +57,11 @@ async def list_job_log(
     job_type: str | None = None,
     executor: str | None = None,
     task_name: str | None = None,
+    after: str | None = None,
     limit: int = 50,
-    offset: int = 0,
-) -> list[dict]:
+) -> dict:
+    """Cursor-paginated — {rows, next_cursor, total}, same shape every
+    other list endpoint now returns."""
     filters: dict = {}
     if status:
         filters["status"] = status
@@ -67,15 +71,17 @@ async def list_job_log(
         filters["executor"] = executor
     if task_name:
         filters["task_name"] = {"contains": task_name}
-    # limit/offset arrive as plain query-string strings over GET/QUERY
-    # (relay's kwarg merging never coerces beyond that) — asyncpg rejects
-    # a numeric STRING outright. Same bug/fix already applied to
-    # filer_api.py, filer_admin_api.py, and audit_api.py this session.
-    return await arc.relay.list(
+    # limit arrives as a plain query-string string over GET/QUERY (relay's
+    # kwarg merging never coerces beyond that) — asyncpg rejects a numeric
+    # STRING outright. Same bug/fix already applied to filer_api.py,
+    # filer_admin_api.py, and audit_api.py this session.
+    rows, next_cursor, total = await cursor_page(
         "_job_log",
+        arc.psqldb.schema("_job_log"),
         fields=arc.relay.all_columns("_job_log"),
         filters=filters or None,
-        order_by=["-finished_at"],
+        order_by=("finished_at", True),
+        after=after,
         limit=int(limit),
-        offset=int(offset),
     )
+    return {"rows": rows, "next_cursor": next_cursor, "total": total}

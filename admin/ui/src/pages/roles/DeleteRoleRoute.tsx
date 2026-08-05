@@ -1,20 +1,25 @@
 import { useState } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { call, ApiError } from "../../api/client";
-import type { Role, User } from "../../api/types";
+import type { Role } from "../../api/types";
+import { useAsync } from "../../hooks/useAsync";
 import { ConfirmModal, Modal } from "../../components/Modal";
 import { useToast } from "../../components/Toast";
 
 export function DeleteRoleRoute() {
   const { roleId } = useParams<{ roleId: string }>();
   const navigate = useNavigate();
-  const { reload, roles, users } = useOutletContext<{ reload: () => void; roles: Role[]; users: User[] }>();
+  const { reload, roles } = useOutletContext<{ reload: () => void; roles: Role[] }>();
   const toast = useToast();
 
   const role = roles.find((r) => r.id === roleId) ?? null;
   const [busy, setBusy] = useState(false);
 
   const close = () => navigate("/roles");
+
+  const { data: memberCounts } = useAsync<Record<string, number>>(
+    () => call<Record<string, number>>("count_users_by_role", {}, { method: "GET" }),
+  );
 
   if (!role) {
     return (
@@ -24,7 +29,7 @@ export function DeleteRoleRoute() {
     );
   }
 
-  const memberCount = users.filter((u) => (u.has_roles ?? []).includes(role.name)).length;
+  const memberCount = memberCounts?.[role.name] ?? 0;
 
   const confirm = async () => {
     setBusy(true);

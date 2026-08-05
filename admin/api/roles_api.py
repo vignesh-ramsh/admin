@@ -12,18 +12,40 @@ import arc
 from psqldb.validation import ValidationError
 
 from admin._security import by_of
+from admin.api._pagination import cursor_page
+
+
+def _escape_like(value: str) -> str:
+    """Same escaping the Query Engine's own `contains` operator does
+    (relay/query.py's _escape_like) — not imported since it's two lines
+    and internal, same call every other admin module with a raw-SQL
+    search already makes."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 @arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
-async def list_roles() -> list[dict]:
-    # Genuinely "every role" — a management screen showing a truncated
-    # role list (some roles invisible past DEFAULT_LIST_LIMIT) would be
-    # actively broken, not just slow. all_columns(): _roles carries
-    # nothing sensitive, and the whole row is this function's own
-    # documented contract, not a curated subset.
-    return await arc.relay.list(
-        "_roles", fields=arc.relay.all_columns("_roles"), order_by=["name"], limit=None
+async def list_roles(q: str | None = None, after: str | None = None, limit: int = 50) -> dict:
+    """Cursor-paginated — {rows, next_cursor, total} — same shape every
+    other list endpoint now returns. `q` matches name OR description, the
+    bounded Query Engine's filters dict has no OR-across-columns operator
+    (docs/arc.MD §3.4), so it goes through the extra_where hook instead."""
+    extra_where, extra_params = "", []
+    if q:
+        pattern = f"%{_escape_like(q)}%"
+        extra_where = "(name ILIKE $1 ESCAPE '\\' OR description ILIKE $1 ESCAPE '\\')"
+        extra_params = [pattern]
+
+    rows, next_cursor, total = await cursor_page(
+        "_roles",
+        arc.psqldb.schema("_roles"),
+        fields=arc.relay.all_columns("_roles"),
+        order_by=("name", False),
+        after=after,
+        limit=limit,
+        extra_where=extra_where,
+        extra_params=extra_params,
     )
+    return {"rows": rows, "next_cursor": next_cursor, "total": total}
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])

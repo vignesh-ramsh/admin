@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import clsx from "clsx";
 import { Loader2, Inbox } from "lucide-react";
+import { Checkbox } from "./Field";
 
 export interface Column<T> {
   key: string;
@@ -9,6 +10,18 @@ export interface Column<T> {
   width?: string;
   align?: "left" | "right" | "center";
   mono?: boolean;
+}
+
+/** Row multi-select — adds a checkbox column. `selectedIds` holds the
+ *  rowKey() of every currently-checked row; `onToggleAll` only ever
+ *  affects the rows actually passed in `rows` (whatever's loaded so far
+ *  in an infinite-scroll list), never a blanket "every row matching the
+ *  current filter" — a bulk action always targets an explicit, visible
+ *  set of ids. */
+export interface SelectionProps {
+  selectedIds: Set<string>;
+  onToggle: (key: string) => void;
+  onToggleAll: () => void;
 }
 
 export function DataTable<T>({
@@ -21,6 +34,8 @@ export function DataTable<T>({
   onRowClick,
   selectedKey,
   fillHeight = false,
+  selection,
+  footer,
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -33,7 +48,15 @@ export function DataTable<T>({
   /** Grow to fill the parent's height and center the empty/loading state
    *  vertically (the parent must be a flex column with a bounded height). */
   fillHeight?: boolean;
+  selection?: SelectionProps;
+  /** Rendered inside the table's own scrolling container, right after the
+   *  last row — an infinite-scroll sentinel needs to live INSIDE this
+   *  overflow-auto div (not as a sibling after it) so it actually scrolls
+   *  into view along with the rows. */
+  footer?: ReactNode;
 }) {
+  const allChecked = selection ? rows.length > 0 && rows.every((r) => selection.selectedIds.has(rowKey(r))) : false;
+  const someChecked = selection ? rows.some((r) => selection.selectedIds.has(rowKey(r))) : false;
   // When there's nothing to show and we're asked to fill height, render a
   // big centered empty/loading state instead of a near-empty table — the
   // "no data" message lands in the middle of the container, not pinned to
@@ -65,12 +88,27 @@ export function DataTable<T>({
       <table className="w-full min-w-max border-collapse text-sm">
         <thead>
           <tr className="border-b border-border bg-neutral-50 dark:bg-neutral-900/60">
+            {selection && (
+              <th className="w-9 px-3 py-2">
+                <input
+                  type="checkbox"
+                  aria-label="Select all loaded rows"
+                  checked={allChecked}
+                  ref={(el) => {
+                    if (el) el.indeterminate = !allChecked && someChecked;
+                  }}
+                  onChange={() => selection.onToggleAll()}
+                  onClick={(e) => e.stopPropagation()}
+                  className="h-4 w-4 cursor-pointer rounded border-border-strong text-accent-600 focus:ring-2 focus:ring-accent-500/25 accent-[var(--accent-600)]"
+                />
+              </th>
+            )}
             {columns.map((col) => (
               <th
                 key={col.key}
                 style={{ width: col.width }}
                 className={clsx(
-                  "whitespace-nowrap px-3.5 py-2.5 text-left text-[12px] font-semibold uppercase tracking-wide text-text-faint",
+                  "whitespace-nowrap px-3 py-2 text-left text-[12px] font-semibold uppercase tracking-wide text-text-faint",
                   col.align === "right" && "text-right",
                   col.align === "center" && "text-center",
                 )}
@@ -83,14 +121,14 @@ export function DataTable<T>({
         <tbody>
           {loading && rows.length === 0 && (
             <tr>
-              <td colSpan={columns.length} className="px-3.5 py-14 text-center text-text-faint">
+              <td colSpan={columns.length + (selection ? 1 : 0)} className="px-3.5 py-14 text-center text-text-faint">
                 <Loader2 size={18} className="mx-auto animate-spin" />
               </td>
             </tr>
           )}
           {!loading && rows.length === 0 && (
             <tr>
-              <td colSpan={columns.length} className="px-3.5 py-14 text-center text-text-faint">
+              <td colSpan={columns.length + (selection ? 1 : 0)} className="px-3.5 py-14 text-center text-text-faint">
                 <Inbox size={22} className="mx-auto mb-2 opacity-50" />
                 {emptyLabel}
               </td>
@@ -108,11 +146,21 @@ export function DataTable<T>({
                   selectedKey === key && "bg-accent-50 dark:bg-accent-950/40",
                 )}
               >
+                {selection && (
+                  <td className="px-3 py-1.5" onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      label=""
+                      aria-label="Select row"
+                      checked={selection.selectedIds.has(key)}
+                      onChange={() => selection.onToggle(key)}
+                    />
+                  </td>
+                )}
                 {columns.map((col) => (
                   <td
                     key={col.key}
                     className={clsx(
-                      "whitespace-nowrap px-3.5 py-2.5 text-text",
+                      "whitespace-nowrap px-3 py-1.5 text-text",
                       col.mono && "font-mono text-[13px]",
                       col.align === "right" && "text-right",
                       col.align === "center" && "text-center",
@@ -126,56 +174,7 @@ export function DataTable<T>({
           })}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-export function Pagination({
-  offset,
-  limit,
-  total,
-  onChange,
-}: {
-  offset: number;
-  limit: number;
-  total: number | null;
-  onChange: (offset: number) => void;
-}) {
-  const page = Math.floor(offset / limit) + 1;
-  const pageCount = total !== null ? Math.max(1, Math.ceil(total / limit)) : null;
-  const canPrev = offset > 0;
-  const canNext = total === null ? true : offset + limit < total;
-
-  return (
-    <div className="flex items-center justify-between px-1 pt-3 text-[13px] text-text-muted">
-      <span>
-        {total !== null ? (
-          <>
-            {Math.min(offset + 1, total)}–{Math.min(offset + limit, total)} of {total}
-          </>
-        ) : (
-          <>Page {page}</>
-        )}
-      </span>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          disabled={!canPrev}
-          onClick={() => onChange(Math.max(0, offset - limit))}
-          className="cursor-pointer rounded-md border border-border-strong px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Previous
-        </button>
-        <span className="tabular-nums">{pageCount ? `${page} / ${pageCount}` : page}</span>
-        <button
-          type="button"
-          disabled={!canNext}
-          onClick={() => onChange(offset + limit)}
-          className="cursor-pointer rounded-md border border-border-strong px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Next
-        </button>
-      </div>
+      {footer}
     </div>
   );
 }

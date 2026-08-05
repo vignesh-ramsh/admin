@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Plus, Search, Trash2 } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Info, Plus, Search, Trash2 } from "lucide-react";
 import type { SchemaField, TableMeta } from "../../api/types";
 import { Button, IconButton } from "../../components/Button";
 import { Checkbox, Select, TextInput } from "../../components/Field";
@@ -40,11 +40,23 @@ function LocalCombobox({
   if (disabled) {
     return (
       <div className="pointer-events-none opacity-60">
-        <Combobox value={value || null} onChange={() => {}} options={[]} query="" onQueryChange={() => {}} placeholder={placeholder} clearable />
+        <Combobox size="sm" value={value || null} onChange={() => {}} options={[]} query="" onQueryChange={() => {}} placeholder={placeholder} clearable />
       </div>
     );
   }
-  return <Combobox value={value || null} onChange={onChange} options={filtered} query={query} onQueryChange={setQuery} placeholder={placeholder} clearable />;
+  return (
+    <Combobox size="sm" value={value || null} onChange={onChange} options={filtered} query={query} onQueryChange={setQuery} placeholder={placeholder} clearable />
+  );
+}
+
+/** lowercase, digits, and _ only — a schema field name is a physical
+ *  Postgres column, and psqldb.fields.parse_field enforces the same
+ *  ^[a-z][a-z0-9_]*$ rule server-side (defense in depth for a hand-edited
+ *  schema JSON) — sanitizing live here means a user never even sees the
+ *  rejection, the field just can't contain anything else in the first
+ *  place. */
+function sanitizeFieldName(raw: string): string {
+  return raw.toLowerCase().replace(/[^a-z0-9_]/g, "");
 }
 
 export function FieldEditor({ fields, system, tableMeta, onChange }: Props) {
@@ -58,32 +70,45 @@ export function FieldEditor({ fields, system, tableMeta, onChange }: Props) {
   // fields, so finding one by scanning top to bottom stops scaling. Only
   // shown once there's enough fields for it to matter; index `i` used by
   // update/remove always refers to the REAL position in `fields`, never
-  // the filtered list's position. IMPROVEMENT over the old app: group
-  // system vs custom fields and show a count, since UUID-prefixed system
-  // fields (AA00-AA14 style) used to be an undifferentiated flat list.
+  // the filtered list's position.
   const [filterQuery, setFilterQuery] = useState("");
   const q = filterQuery.trim().toLowerCase();
 
-  const isSystemField = (f: SchemaField) => f.type === "UUID" || f.primary_key;
-  const systemFields = fields.filter(isSystemField);
-  const customFields = fields.filter((f) => !isSystemField(f));
-  const [showSystem, setShowSystem] = useState(false);
+  // Field name AND data type both searchable — typing "reference" or "int"
+  // filters down to every field of that type, not just a name substring.
+  const matches = (f: SchemaField) =>
+    !q || f.name.toLowerCase().includes(q) || f.id.toLowerCase().includes(q) || f.type.toLowerCase().includes(q);
+  const visibleFields = fields.filter(matches);
 
-  const matches = (f: SchemaField) => !q || f.name.toLowerCase().includes(q) || f.id.toLowerCase().includes(q);
-  const visibleCustom = customFields.filter(matches);
-  const visibleSystem = systemFields.filter(matches);
+  // Every <td> shares the same padding, and a native <table> stretches
+  // every cell in a <tr> to that row's tallest cell automatically — a
+  // REFERENCE field's two side-by-side comboboxes or a DECIMAL's
+  // precision/scale pair can't make just THEIR row taller than a plain
+  // STRING field's row, and every row is guaranteed the same height as
+  // every other row by the browser's table layout algorithm itself,
+  // rather than by hand-matching an h-11 class on every branch.
+  const th = "border-b border-r border-border px-2.5 py-2 text-left last:border-r-0";
+  const td = "border-b border-r border-border px-2.5 py-2 align-middle last:border-r-0";
+  const tdCenter = "border-b border-r border-border px-2.5 py-2 text-center align-middle last:border-r-0";
 
   const row = (f: SchemaField) => {
     const i = fields.indexOf(f);
     return (
-      <div className="grid grid-cols-[52px_0.75fr_128px_1.25fr_44px_44px_44px_32px] items-center gap-2 border-b border-border px-2 py-2 last:border-0" key={f.id || i}>
-        <span className="truncate font-mono text-[11px] text-text-faint">{f.id}</span>
-        <div className="min-w-0">
-          <TextInput className="!h-8" placeholder="field_name" value={f.name} onChange={(e) => update(i, { name: e.target.value })} />
-        </div>
-        <div className="min-w-0">
+      <tr key={f.id || i}>
+        <td className={td}>
+          <span className="truncate font-mono text-[11px] text-text-faint">{f.id}</span>
+        </td>
+        <td className={td}>
+          <TextInput
+            size="sm"
+            placeholder="field_name"
+            value={f.name}
+            onChange={(e) => update(i, { name: sanitizeFieldName(e.target.value) })}
+          />
+        </td>
+        <td className={td}>
           <Select
-            className="!h-8"
+            size="sm"
             value={f.type}
             onChange={(e) =>
               update(i, {
@@ -103,92 +128,138 @@ export function FieldEditor({ fields, system, tableMeta, onChange }: Props) {
               </option>
             ))}
           </Select>
-        </div>
-        {/* min-w-0 is load-bearing: without it, a grid item's default
-            min-width is its content's min-content size. REFERENCE's two
-            side-by-side comboboxes need more min-content width than every
-            other field type's single input, so this cell's 1fr track (and
-            every other track sharing this row's grid) would recompute —
-            and only THIS row's — the instant you picked Reference, visibly
-            shifting the Name/Type columns relative to every other row. */}
-        <div className="min-w-0">
+        </td>
+        <td className={td}>
           <FieldConfig field={f} tableMeta={tableMeta} onChange={(patch) => update(i, patch)} />
-        </div>
-        <Checkbox
-          label=""
-          className="mx-auto"
-          checked={!!f.required}
-          onChange={(e) => update(i, { required: e.target.checked })}
-          aria-label="Required"
-        />
-        <Checkbox label="" className="mx-auto" checked={!!f.unique} onChange={(e) => update(i, { unique: e.target.checked })} aria-label="Unique" />
-        <Checkbox
-          label=""
-          className="mx-auto"
-          checked={f.list !== false}
-          onChange={(e) => update(i, { list: e.target.checked })}
-          aria-label="Show in list view"
-          title="Show this column in Data Browser's table/list view — always still editable in the row editor either way"
-        />
-        <IconButton label="Remove field" icon={<Trash2 size={15} />} onClick={() => remove(i)} />
-      </div>
+        </td>
+        <td className={tdCenter}>
+          <Checkbox label="" checked={!!f.required} onChange={(e) => update(i, { required: e.target.checked })} aria-label="Required" />
+        </td>
+        <td className={tdCenter}>
+          <Checkbox label="" checked={!!f.unique} onChange={(e) => update(i, { unique: e.target.checked })} aria-label="Unique" />
+        </td>
+        <td className={tdCenter}>
+          <Checkbox
+            label=""
+            checked={f.list !== false}
+            onChange={(e) => update(i, { list: e.target.checked })}
+            aria-label="Show in list view"
+            title="Show this column in Data Browser's table/list view — always still editable in the row editor either way"
+          />
+        </td>
+        <td className="px-2.5 py-2 text-center align-middle">
+          <IconButton label="Remove field" icon={<Trash2 size={15} />} onClick={() => remove(i)} />
+        </td>
+      </tr>
     );
   };
 
   return (
-    <div className="rounded-lg border border-border">
-      {fields.length > 8 && (
-        <div className="flex items-center gap-2 border-b border-border bg-neutral-50 px-3 py-2 dark:bg-neutral-900/40">
-          <Search size={14} className="text-text-faint" />
-          <input
-            className="flex-1 bg-transparent text-[13px] text-text outline-none placeholder:text-text-faint"
-            placeholder={`Filter ${fields.length} fields by name or id…`}
-            value={filterQuery}
-            onChange={(e) => setFilterQuery(e.target.value)}
-          />
-        </div>
-      )}
-
-      <div className="grid grid-cols-[52px_0.75fr_128px_1.25fr_44px_44px_44px_32px] gap-2 border-b border-border bg-neutral-50 px-2 py-2 text-[11px] font-semibold uppercase tracking-wide text-text-faint dark:bg-neutral-900/40">
-        <span>ID</span>
-        <span>Name</span>
-        <span>Type</span>
-        <span>Configuration</span>
-        <span className="text-center">Req</span>
-        <span className="text-center">Uniq</span>
-        <span className="text-center" title="Show this column in Data Browser's table/list view">
-          List
-        </span>
-        <span />
+    <div className="flex flex-col gap-3">
+      <div className="flex items-start gap-2 rounded-lg border border-warning/25 bg-warning-bg/50 px-3 py-2.5">
+        <Info size={14} className="mt-0.5 shrink-0 text-warning" />
+        <p className="text-[11px] leading-relaxed text-warning">
+          Every table needs at least one <strong>Unique</strong> field (or a Unique Together group below). Field names:
+          lowercase letters, digits, and underscores only — no spaces, capitals, or symbols. Saving applies the change
+          immediately, live — <strong>some type changes can cause data loss, so always take a backup before saving one.</strong>
+        </p>
       </div>
 
-      {fields.length === 0 && <p className="px-3 py-6 text-center text-[13px] text-text-faint">No fields yet — add the table's first field below.</p>}
-      {fields.length > 0 && visibleCustom.length === 0 && visibleSystem.length === 0 && (
-        <p className="px-3 py-6 text-center text-[13px] text-text-faint">No fields match "{filterQuery}".</p>
-      )}
+      <div className="overflow-hidden rounded-lg border border-border">
+        {fields.length > 8 && (
+          <div className="flex items-center gap-2 border-b border-border bg-neutral-50 px-3 py-2 dark:bg-neutral-900/40">
+            <Search size={14} className="text-text-faint" />
+            <input
+              className="flex-1 bg-transparent text-[13px] text-text outline-none placeholder:text-text-faint"
+              placeholder={`Filter ${fields.length} fields by name or type…`}
+              value={filterQuery}
+              onChange={(e) => setFilterQuery(e.target.value)}
+            />
+          </div>
+        )}
 
-      {visibleCustom.map(row)}
+        {fields.length === 0 && <p className="px-3 py-6 text-center text-[13px] text-text-faint">No fields yet — add the table's first field below.</p>}
+        {fields.length > 0 && visibleFields.length === 0 && (
+          <p className="px-3 py-6 text-center text-[13px] text-text-faint">No fields match "{filterQuery}".</p>
+        )}
 
-      {visibleSystem.length > 0 && (
-        <div>
-          <button
-            type="button"
-            onClick={() => setShowSystem((s) => !s)}
-            className="flex w-full cursor-pointer items-center gap-1.5 border-t border-border bg-neutral-50 px-3 py-2 text-left text-[12px] font-medium text-text-muted dark:bg-neutral-900/40"
-          >
-            {showSystem ? "▾" : "▸"} System fields ({visibleSystem.length})
-          </button>
-          {showSystem && visibleSystem.map(row)}
+        {(fields.length === 0 || visibleFields.length > 0) && (
+          // table-layout: fixed makes every column's width a fixed
+          // contract (the <colgroup> below), independent of any cell's
+          // content — the same reason REFERENCE's two comboboxes or a
+          // DECIMAL's precision/scale pair used to need a hand-written
+          // min-w-0 escape hatch under CSS Grid. Under a table that
+          // concern doesn't exist: no cell's content can ever widen its
+          // own column relative to any other row's. border-collapse
+          // merges every shared cell edge into one crisp 1px line instead
+          // of doubling up wherever two bordered boxes used to touch.
+          <table className="w-full table-fixed border-collapse text-sm">
+            <colgroup>
+              <col style={{ width: "52px" }} />
+              <col style={{ width: "22%" }} />
+              <col style={{ width: "150px" }} />
+              <col />
+              <col style={{ width: "44px" }} />
+              <col style={{ width: "44px" }} />
+              <col style={{ width: "44px" }} />
+              <col style={{ width: "32px" }} />
+            </colgroup>
+            <thead className="bg-neutral-50 text-[11px] font-semibold uppercase tracking-wide text-text-faint dark:bg-neutral-900/40">
+              <tr>
+                <th className={th}>ID</th>
+                <th className={th}>Name</th>
+                <th className={th}>Type</th>
+                <th className={th}>Configuration</th>
+                <th className={`${th} text-center`}>Req</th>
+                <th className={`${th} text-center`}>Uniq</th>
+                <th className={`${th} text-center`} title="Show this column in Data Browser's table/list view">
+                  List
+                </th>
+                <th className="border-b border-border px-2.5 py-2" />
+              </tr>
+            </thead>
+            <tbody>{visibleFields.map(row)}</tbody>
+          </table>
+        )}
+
+        <div className="border-t border-border p-2.5">
+          <Button variant="secondary" size="sm" icon={<Plus size={14} />} onClick={add}>
+            Add field
+          </Button>
         </div>
-      )}
-
-      <div className="border-t border-border p-2.5">
-        <Button variant="secondary" size="sm" icon={<Plus size={14} />} onClick={add}>
-          Add field
-        </Button>
       </div>
     </div>
   );
+}
+
+/** N sub-inputs sharing one Configuration cell, evenly split — flex-1
+ *  divides available width by however many <ConfigSlot>s are actually
+ *  rendered, so this is "evenly distribute by input count" for free: one
+ *  slot gets 100%, two slots get 50/50, three would get a third each,
+ *  with no per-branch width math to keep in sync. min-w-0 on each slot
+ *  is load-bearing (see ConfigSlot). A lone control that skips this
+ *  wrapper entirely (OptionsInput, the plain default branch) already
+ *  gets the full cell width for free, since ControlBox itself has no
+ *  width constraint of its own. */
+function ConfigRow({ children }: { children: ReactNode }) {
+  return <div className="flex items-center gap-1.5">{children}</div>;
+}
+
+/** min-w-0 is load-bearing, not decorative: a flex item's default min-
+ *  width is its content's min-content size, and a Combobox's own min-
+ *  width is "auto" on top of that — neither bottoms out at the inner
+ *  input's own min-w-0 the way a plain block child would. Without this,
+ *  two side-by-side slots (REFERENCE's pair of comboboxes, DECIMAL's
+ *  precision/scale) refuse to shrink below their content size, overflow
+ *  the cell, and — since Combobox's root is `position: relative` —
+ *  visually and functionally sit on TOP of the Req/Uniq/List checkboxes
+ *  to the right (position:relative paints above static siblings
+ *  regardless of DOM order), making them unclickable. flex-1 is what
+ *  actually claims this slot's even share of ConfigRow's width — w-full
+ *  alone on the child would only mean "100% of whatever space this slot
+ *  already has," not "an equal share of the row." */
+function ConfigSlot({ children }: { children: ReactNode }) {
+  return <div className="min-w-0 flex-1">{children}</div>;
 }
 
 function FieldConfig({ field, tableMeta, onChange }: { field: SchemaField; tableMeta: TableMeta[]; onChange: (patch: Partial<SchemaField>) => void }) {
@@ -206,31 +277,21 @@ function FieldConfig({ field, tableMeta, onChange }: { field: SchemaField; table
     }));
 
     return (
-      <div className="flex items-center gap-1.5">
-        {/* min-w-0 on each combobox is load-bearing, not decorative: a
-            Combobox's own min-width is "auto", and its automatic-minimum-
-            size never bottoms out at the inner input's min-w-0 the way a
-            plain flex item would — measured at ~267px even when its flex
-            parent was forced down to 80px. Without this, REFERENCE's two
-            side-by-side comboboxes refuse to shrink, overflow this cell,
-            and — since Combobox's root is `position: relative` — visually
-            and functionally sit on TOP of the Req/Uniq/List checkboxes to
-            its right (position:relative paints above static siblings
-            regardless of DOM order), making them unclickable. */}
-        <div className="min-w-0 flex-1">
+      <ConfigRow>
+        <ConfigSlot>
           <LocalCombobox
             value={field.target ?? ""}
             onChange={(v) => onChange({ target: v ?? undefined, target_field: undefined })}
             options={tableOptions}
             placeholder={isTableType ? "child table…" : "target table…"}
           />
-        </div>
+        </ConfigSlot>
         {t === "REFERENCE" && (
-          <div className="min-w-0 flex-1">
+          <ConfigSlot>
             <TargetFieldPicker field={field} tableMeta={tableMeta} onChange={onChange} />
-          </div>
+          </ConfigSlot>
         )}
-      </div>
+      </ConfigRow>
     );
   }
 
@@ -240,48 +301,56 @@ function FieldConfig({ field, tableMeta, onChange }: { field: SchemaField; table
 
   if (usesDecimal(t)) {
     return (
-      <div className="flex items-center gap-1.5">
-        <TextInput
-          className="!h-8"
-          type="number"
-          placeholder="precision"
-          value={field.precision ?? ""}
-          onChange={(e) => onChange({ precision: e.target.value ? Number(e.target.value) : undefined })}
-        />
-        <TextInput
-          className="!h-8"
-          type="number"
-          placeholder="scale"
-          value={field.scale ?? ""}
-          onChange={(e) => onChange({ scale: e.target.value ? Number(e.target.value) : undefined })}
-        />
-      </div>
+      <ConfigRow>
+        <ConfigSlot>
+          <TextInput
+            size="sm"
+            type="number"
+            placeholder="precision"
+            value={field.precision ?? ""}
+            onChange={(e) => onChange({ precision: e.target.value ? Number(e.target.value) : undefined })}
+          />
+        </ConfigSlot>
+        <ConfigSlot>
+          <TextInput
+            size="sm"
+            type="number"
+            placeholder="scale"
+            value={field.scale ?? ""}
+            onChange={(e) => onChange({ scale: e.target.value ? Number(e.target.value) : undefined })}
+          />
+        </ConfigSlot>
+      </ConfigRow>
     );
   }
 
   if (usesLength(t)) {
     return (
-      <div className="flex items-center gap-1.5">
-        <TextInput
-          className="!h-8"
-          type="number"
-          placeholder="length"
-          value={field.length ?? ""}
-          onChange={(e) => onChange({ length: e.target.value ? Number(e.target.value) : undefined })}
-        />
-        <TextInput
-          className="!h-8"
-          placeholder="default"
-          value={field.default != null ? String(field.default) : ""}
-          onChange={(e) => onChange({ default: e.target.value || undefined })}
-        />
-      </div>
+      <ConfigRow>
+        <ConfigSlot>
+          <TextInput
+            size="sm"
+            type="number"
+            placeholder="length"
+            value={field.length ?? ""}
+            onChange={(e) => onChange({ length: e.target.value ? Number(e.target.value) : undefined })}
+          />
+        </ConfigSlot>
+        <ConfigSlot>
+          <TextInput
+            size="sm"
+            placeholder="default"
+            value={field.default != null ? String(field.default) : ""}
+            onChange={(e) => onChange({ default: e.target.value || undefined })}
+          />
+        </ConfigSlot>
+      </ConfigRow>
     );
   }
 
   return (
     <TextInput
-      className="!h-8"
+      size="sm"
       placeholder="default (optional)"
       value={field.default != null ? String(field.default) : ""}
       onChange={(e) => onChange({ default: e.target.value || undefined })}
@@ -297,7 +366,7 @@ function OptionsInput({ field, onChange }: { field: SchemaField; onChange: (patc
   const [text, setText] = useState((field.options ?? []).join(", "));
   return (
     <TextInput
-      className="!h-8"
+      size="sm"
       placeholder="option1, option2, …"
       value={text}
       onChange={(e) => {

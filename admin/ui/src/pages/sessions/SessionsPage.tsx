@@ -1,15 +1,17 @@
-import { useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { useNavigate, Outlet } from "react-router-dom";
 import { Trash2, LogOut, Search } from "lucide-react";
 import { call, ApiError } from "../../api/client";
-import type { Session, User } from "../../api/types";
+import type { Session } from "../../api/types";
 import { useAsync } from "../../hooks/useAsync";
 import { useDebounce } from "../../hooks/useDebounce";
 import { usePageSearchFocus } from "../../hooks/usePageSearchFocus";
+import { useCursorList, type CursorPage } from "../../hooks/useCursorList";
 import { PageHeader } from "../../components/PageHeader";
 import { Button, IconButton } from "../../components/Button";
 import { TextInput } from "../../components/Field";
 import { DataTable, type Column } from "../../components/Table";
+import { InfiniteScroll } from "../../components/InfiniteScroll";
 import { Badge } from "../../components/Badge";
 import { ErrorBlock } from "../../components/States";
 import { ConfirmModal } from "../../components/Modal";
@@ -20,20 +22,27 @@ export function SessionsPage() {
   const navigate = useNavigate();
   const toast = useToast();
 
-  const { data: sessions, loading, error, reload } = useAsync<Session[]>(() => call<Session[]>("list_sessions", {}));
-  const { data: users } = useAsync<User[]>(() => call<User[]>("list_users", {}, { method: "GET" }));
-  const emailById = new Map((users ?? []).map((u) => [u.id, u.email]));
-
   const [qInput, setQInput] = useState("");
   const q = useDebounce(qInput, 300);
   const searchRef = usePageSearchFocus();
-  const rows = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    const all = sessions ?? [];
-    if (!needle) return all;
-    return all.filter((s) => (emailById.get(s.user) ?? s.user).toLowerCase().includes(needle) || (s.ip_address ?? "").toLowerCase().includes(needle));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessions, q, users]);
+
+  const fetchPage = useCallback(
+    (cursor: string | null, limit: number) => call<CursorPage<Session>>("list_sessions", { q: q || null, after: cursor, limit }),
+    [q],
+  );
+  const { rows, loading, hasMore, loadingMore, total, error, reload, loadMore, patchByIds } = useCursorList<Session>({
+    fetchPage,
+    rowKey: (s) => s.id,
+    deps: [q],
+  });
+
+  // id -> email, for every user in the system (not just the loaded page) —
+  // list_users itself is now cursor-paginated, so a per-page fetch would
+  // mislabel any session owner past the first page as a bare UUID.
+  const { data: userEmails } = useAsync<{ id: string; email: string }[]>(
+    () => call<{ id: string; email: string }[]>("list_user_emails", {}, { method: "GET" }),
+  );
+  const emailById = new Map((userEmails ?? []).map((u) => [u.id, u.email]));
 
   const [revokeId, setRevokeId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -43,8 +52,8 @@ export function SessionsPage() {
     setBusy(true);
     try {
       await call("revoke_session", { session_id: revokeId });
+      patchByIds([revokeId], { revoked_at: new Date().toISOString() });
       toast.success("Session revoked.");
-      reload();
     } catch (err) {
       toast.error(err instanceof ApiError ? err.message : "Failed to revoke session.");
     } finally {
@@ -94,22 +103,33 @@ export function SessionsPage() {
         }
       />
 
-      <div className="relative mb-4 max-w-xs">
-        <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint" />
-        <TextInput
-          ref={searchRef}
-          placeholder="Search by user or IP…"
-          value={qInput}
-          onChange={(e) => setQInput(e.target.value)}
-          className="pl-8"
-        />
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="relative max-w-xs flex-1">
+          <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint" />
+          <TextInput
+            ref={searchRef}
+            placeholder="Search by user or IP…"
+            value={qInput}
+            onChange={(e) => setQInput(e.target.value)}
+            className="pl-8"
+          />
+        </div>
+        <span className="text-[13px] text-text-faint">{total !== null ? `${rows.length} of ${total}` : `${rows.length} sessions`}</span>
       </div>
 
       {error ? (
         <ErrorBlock message={error} onRetry={reload} />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-          <DataTable columns={columns} rows={rows} rowKey={(s) => s.id} loading={loading} emptyLabel="No sessions found." fillHeight />
+          <DataTable
+            columns={columns}
+            rows={rows}
+            rowKey={(s) => s.id}
+            loading={loading}
+            emptyLabel="No sessions found."
+            fillHeight
+            footer={<InfiniteScroll hasMore={hasMore} loading={loadingMore} onReachEnd={loadMore} />}
+          />
         </div>
       )}
 

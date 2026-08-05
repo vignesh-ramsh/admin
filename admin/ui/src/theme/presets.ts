@@ -101,6 +101,22 @@ export const BUILTIN_PRESETS: ThemePreset[] = [
     danger: "#EF4444",
     info: "#38BDF8",
   },
+  {
+  "name": "Yellow Sky",
+  "appearance": "dark",
+  "canvas": "#0B0D10",
+  "surface": "#16191D",
+  "border": "rgba(255,255,255,0.08)",
+  "borderStrong": "rgba(255,255,255,0.16)",
+  "text": "#ffffff",
+  "textMuted": "#c7c7c7",
+  "textFaint": "#b9babc",
+  "accent": "#edb10c",
+  "success": "#7bdb9e",
+  "warning": "#d77a2d",
+  "danger": "#e86969",
+  "info": "#89bfd7"
+}
 ];
 
 /** New users, and anyone whose stored preset name doesn't match a known

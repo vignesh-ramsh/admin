@@ -1,20 +1,19 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { Search, RefreshCw, Plus } from "lucide-react";
 import { call } from "../../api/client";
 import type { FilerFileRow } from "../../api/types";
-import { useAsync } from "../../hooks/useAsync";
 import { useDebounce } from "../../hooks/useDebounce";
 import { usePageSearchFocus } from "../../hooks/usePageSearchFocus";
+import { useCursorList, type CursorPage } from "../../hooks/useCursorList";
 import { Button } from "../../components/Button";
 import { Select } from "../../components/Field";
 import { Badge, StatusBadge } from "../../components/Badge";
 import { ErrorBlock } from "../../components/States";
 import { DataTable, type Column } from "../../components/Table";
+import { InfiniteScroll } from "../../components/InfiniteScroll";
 import { formatDateTime } from "../shared/datetime";
 import { formatBytes } from "./filerUtils";
-
-const PAGE_SIZE = 25;
 
 export interface FilesOutletContext {
   rows: FilerFileRow[];
@@ -30,32 +29,28 @@ export function FilerFilesTab() {
   const [status, setStatus] = useState("");
   const [storage, setStorage] = useState("");
   const [visibility, setVisibility] = useState("");
-  const [offset, setOffset] = useState(0);
 
-  const loader = useCallback(
-    () =>
-      call<FilerFileRow[]>(
+  const fetchPage = useCallback(
+    (cursor: string | null, limit: number) =>
+      call<CursorPage<FilerFileRow>>(
         "list_filer_files",
         {
           q: q || null,
           status: status || null,
           storage: storage || null,
           private: visibility || null,
-          limit: PAGE_SIZE,
-          offset,
+          after: cursor,
+          limit,
         },
         { method: "GET" },
       ),
-    [q, status, storage, visibility, offset],
+    [q, status, storage, visibility],
   );
-
-  const { data, loading, error, reload } = useAsync(loader, [q, status, storage, visibility, offset]);
-  const rows = useMemo(() => data ?? [], [data]);
-
-  const onFilterChange = (setter: (v: string) => void) => (v: string) => {
-    setter(v);
-    setOffset(0);
-  };
+  const { rows, loading, hasMore, loadingMore, total, error, reload, loadMore } = useCursorList<FilerFileRow>({
+    fetchPage,
+    rowKey: (r) => r.file_id,
+    deps: [q, status, storage, visibility],
+  });
 
   const columns: Column<FilerFileRow>[] = [
     { key: "original_filename", header: "Filename", render: (r) => r.original_filename },
@@ -81,17 +76,10 @@ export function FilerFilesTab() {
             className="h-9 w-full rounded-md border border-border-strong bg-surface pl-8 pr-3 text-sm text-text placeholder:text-text-faint focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/25"
             placeholder="Search by filename or path…"
             value={qInput}
-            onChange={(e) => {
-              setQInput(e.target.value);
-              setOffset(0);
-            }}
+            onChange={(e) => setQInput(e.target.value)}
           />
         </div>
-        <Select
-          value={status}
-          onChange={(e) => onFilterChange(setStatus)(e.target.value)}
-          className="!w-auto"
-        >
+        <Select value={status} onChange={(e) => setStatus(e.target.value)} className="!w-auto">
           <option value="">All statuses</option>
           <option value="pending">pending</option>
           <option value="clean">clean</option>
@@ -99,12 +87,12 @@ export function FilerFilesTab() {
           <option value="skipped">skipped</option>
           <option value="deleted">deleted</option>
         </Select>
-        <Select value={storage} onChange={(e) => onFilterChange(setStorage)(e.target.value)} className="!w-auto">
+        <Select value={storage} onChange={(e) => setStorage(e.target.value)} className="!w-auto">
           <option value="">All storage</option>
           <option value="local">local</option>
           <option value="s3">s3</option>
         </Select>
-        <Select value={visibility} onChange={(e) => onFilterChange(setVisibility)(e.target.value)} className="!w-auto">
+        <Select value={visibility} onChange={(e) => setVisibility(e.target.value)} className="!w-auto">
           <option value="">Public + private</option>
           <option value="true">Private only</option>
           <option value="false">Public only</option>
@@ -112,6 +100,7 @@ export function FilerFilesTab() {
         <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />} onClick={reload}>
           Refresh
         </Button>
+        <span className="text-[13px] text-text-faint">{total !== null ? `${rows.length} of ${total}` : `${rows.length} files`}</span>
         <Button variant="primary" size="sm" icon={<Plus size={14} />} className="ml-auto" onClick={() => navigate("/files/browse/upload")}>
           Upload
         </Button>
@@ -129,18 +118,8 @@ export function FilerFilesTab() {
             emptyLabel={q || status || storage || visibility ? "No files match this search." : "Nothing has been uploaded yet."}
             onRowClick={(r) => navigate(`/files/browse/${r.file_id}`)}
             fillHeight
+            footer={<InfiniteScroll hasMore={hasMore} loading={loadingMore} onReachEnd={loadMore} />}
           />
-          <div className="mt-3 flex items-center justify-between text-[13px] text-text-muted">
-            <span>{rows.length} row{rows.length === 1 ? "" : "s"}</span>
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" size="sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>
-                Previous
-              </Button>
-              <Button variant="secondary" size="sm" disabled={rows.length < PAGE_SIZE} onClick={() => setOffset(offset + PAGE_SIZE)}>
-                Next
-              </Button>
-            </div>
-          </div>
         </div>
       )}
 

@@ -13,6 +13,7 @@ function normalize(content: SchemaFileContent): SchemaFileContent {
     child: !!content.child,
     fields: (content.fields ?? []).map((f) => ({ ...f })),
     index: content.index ?? [],
+    unique_together: content.unique_together ?? [],
   };
 }
 

@@ -38,6 +38,15 @@ export interface TableSchema {
 
 export type Row = Record<string, unknown>;
 
+/** admin.list_rows()'s cursor-paginated shape (admin._pagination.cursor_page)
+ *  — every cursor-paginated list endpoint in the app returns this same
+ *  shape now, not a bare array. */
+export interface RowPage {
+  rows: Row[];
+  next_cursor: string | null;
+  total: number;
+}
+
 export interface Role {
   id: string;
   name: string;
@@ -111,6 +120,11 @@ export interface SchemaFileContent {
   child?: boolean;
   fields: SchemaField[];
   index?: SchemaIndex[];
+  /** Composite-unique groups (psqldb/model.py's _parse_unique_together) —
+   *  same {key, fields} shape as `index`, schema-only (never valid on a
+   *  patch file). A single field's own "unique": true already covers the
+   *  one-column case; this is for a natural key spanning 2+ columns. */
+  unique_together?: SchemaIndex[];
 }
 
 export interface SchemaFileList {

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
 import { KeyRound, ShieldCheck, ShieldOff, ShieldAlert, LogOut, FlaskConical } from "lucide-react";
 import { call, ApiError } from "../../api/client";
-import type { Role, Session, User } from "../../api/types";
+import type { Role, RowPage, Session, User } from "../../api/types";
 import { useAsync } from "../../hooks/useAsync";
 import { Modal, ConfirmModal } from "../../components/Modal";
 import { Button, IconButton } from "../../components/Button";
@@ -19,19 +19,23 @@ export function UserDetailRoute() {
   const { reload: reloadList } = useOutletContext<{ reload: () => void }>();
   const toast = useToast();
 
-  const { data: users, loading: usersLoading, error: usersError, reload: reloadUsers } = useAsync<User[]>(
-    () => call<User[]>("list_users", {}, { method: "GET" }),
+  const { data: user, loading: usersLoading, error: usersError, reload: reloadUsers } = useAsync<User | null>(
+    () => (userId ? call<User>("get_row", { table: "_users", id: userId }, { method: "GET" }) : Promise.resolve(null)),
+    [userId],
   );
-  const user = users?.find((u) => u.id === userId) ?? null;
 
-  const { data: rolesData } = useAsync<Role[]>(() => call<Role[]>("list_roles", {}, { method: "GET" }));
-  const allRoles = rolesData ?? [];
+  const { data: rolesPage } = useAsync<RowPage>(() => call<RowPage>("list_roles", { limit: 500 }, { method: "GET" }));
+  const allRoles = (rolesPage?.rows ?? []) as unknown as Role[];
 
   const {
-    data: sessions,
+    data: sessionsPage,
     loading: sessionsLoading,
     reload: reloadSessions,
-  } = useAsync<Session[]>(() => (user ? call<Session[]>("list_sessions", { email: user.email }) : Promise.resolve([])), [user?.email]);
+  } = useAsync<RowPage>(
+    () => (user ? call<RowPage>("list_sessions", { email: user.email, limit: 200 }) : Promise.resolve({ rows: [], next_cursor: null, total: 0 })),
+    [user?.email],
+  );
+  const sessions = (sessionsPage?.rows ?? []) as unknown as Session[];
 
   const [fullName, setFullName] = useState("");
   const [username, setUsername] = useState("");
@@ -126,7 +130,7 @@ export function UserDetailRoute() {
     }
   };
 
-  if (usersLoading && !users) {
+  if (usersLoading && !user) {
     return (
       <Modal title="User" onClose={close}>
         <LoadingBlock label="Loading user…" />
@@ -267,14 +271,14 @@ export function UserDetailRoute() {
                       </td>
                     </tr>
                   )}
-                  {!sessionsLoading && (sessions ?? []).length === 0 && (
+                  {!sessionsLoading && sessions.length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-3 py-6 text-center text-text-faint">
                         No sessions.
                       </td>
                     </tr>
                   )}
-                  {(sessions ?? []).map((s) => (
+                  {sessions.map((s) => (
                     <tr key={s.id} className="border-b border-border last:border-0">
                       <td className="px-3 py-2 text-text">{s.session_type}</td>
                       <td className="px-3 py-2 font-mono text-[13px] text-text">{s.ip_address ?? "—"}</td>

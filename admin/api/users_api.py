@@ -21,12 +21,14 @@ UndefinedColumnError until `arc psqldb migrate -p authn` has been run."""
 import asyncio
 import ipaddress
 import secrets
+from collections import Counter
 from datetime import datetime, timezone
 
 import arc
 from psqldb.validation import ValidationError
 
 from admin._security import by_of, check_password_strength, hash_password
+from admin.api._pagination import cursor_page
 
 # Matches authn's own SUPERUSER_ROLE_NAME constant exactly (authn/authn/__init__.py)
 # — an ordinary _roles row, nothing magic about the string itself.
@@ -75,22 +77,77 @@ def _validate_allowed_ips(allowed_ips: list[str] | None) -> list[str] | None:
     return cleaned
 
 
+def _escape_like(value: str) -> str:
+    """Same escaping the Query Engine's own `contains` operator does
+    (relay/query.py's _escape_like) — a search value that happens to
+    contain a literal '%'/'_' shouldn't silently become a wildcard. Not
+    imported from relay.query since it's two lines and internal — same
+    call filer_admin_api.py's own copy already makes."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 @arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
-async def list_users(role: str | None = None, q: str | None = None) -> list[dict]:
-    # role/q filtering both happen client-side below (JSONB array
-    # membership + prefix search have no Query Engine operator) — a
-    # truncated fetch here would silently drop matching users, not just
-    # show fewer of them.
-    users = await arc.relay.list("_users", fields=_USER_LIST_FIELDS, order_by=["email"], limit=None)
+async def list_user_emails() -> list[dict]:
+    """Genuinely every user's {id, email} — the id -> email lookup Sessions
+    and Access Keys' own list pages need to show a human-readable owner
+    instead of a raw UUID, now that list_users itself is cursor-paginated
+    (a page-1-only fetch would silently mislabel any user past the first
+    page as its bare id). Only two narrow columns, unbounded — same
+    "genuinely need every row for a lookup, and it's cheap" reasoning
+    list_roles's own docstring already gives for _roles."""
+    return await arc.relay.list("_users", fields=["id", "email"], order_by=["email"], limit=None)
+
+
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
+async def list_users(
+    role: str | None = None, q: str | None = None, after: str | None = None, limit: int = 50
+) -> dict:
+    """Cursor-paginated — {rows, next_cursor, total}, same shape every
+    other cursor-paginated list endpoint returns (admin._pagination.
+    cursor_page). `role`/`q` both go through the extra_where hook: role
+    membership (`has_roles` is a JSONB array — no Query Engine filter
+    operator for that, docs/arc.MD §3.4) via the `?` "does this JSONB
+    array contain this string element" operator, `q` as an email-prefix
+    ILIKE — same semantics list_users always had, just no longer requiring
+    every user in the system to be fetched first to apply them."""
+    extra_clauses: list[str] = []
+    extra_params: list = []
     if role:
-        # JSONB array membership has no Query Engine filter operator
-        # (docs/arc.MD §3.4) — filtering client-side is the established
-        # pattern authn's own `list-users --role` already uses.
-        users = [u for u in users if role in (u.get("has_roles") or [])]
+        extra_params.append(role)
+        extra_clauses.append(f"has_roles ? ${len(extra_params)}")
     if q:
-        q_lower = q.lower()
-        users = [u for u in users if u["email"].lower().startswith(q_lower)]
-    return users
+        extra_params.append(f"{_escape_like(q)}%")
+        extra_clauses.append(f"email ILIKE ${len(extra_params)} ESCAPE '\\'")
+
+    rows, next_cursor, total = await cursor_page(
+        "_users",
+        arc.psqldb.schema("_users"),
+        fields=_USER_LIST_FIELDS,
+        order_by=("email", False),
+        after=after,
+        limit=limit,
+        extra_where=" AND ".join(extra_clauses),
+        extra_params=extra_params,
+    )
+    return {"rows": rows, "next_cursor": next_cursor, "total": total}
+
+
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
+async def count_users_by_role() -> dict:
+    """{role_name: member_count} across EVERY user — Roles' own list page
+    shows each role's member count, which genuinely needs the full table
+    (a per-page count would undercount) — split out from list_users
+    specifically so THAT endpoint's own pagination can stay real
+    pagination, not a special "give me everything" escape hatch. JSONB
+    array membership has no Query Engine filter/group operator (docs/
+    arc.MD §3.4), so this counts in Python, the same established pattern
+    authn's own `list-users --role` and this module's old client-side
+    role filter already used."""
+    users = await arc.relay.list("_users", fields=["has_roles"], limit=None)
+    counts: Counter = Counter()
+    for u in users:
+        counts.update(u.get("has_roles") or [])
+    return dict(counts)
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])

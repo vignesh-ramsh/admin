@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
 import { Copy, Check, AlertTriangle } from "lucide-react";
 import { call, ApiError } from "../../api/client";
-import type { User } from "../../api/types";
+import type { RowPage, User } from "../../api/types";
+import { useDebounce } from "../../hooks/useDebounce";
 import { Modal } from "../../components/Modal";
 import { Button } from "../../components/Button";
 import { TextInput } from "../../components/Field";
@@ -16,10 +17,12 @@ interface CreateAccessKeyResult {
 
 export function CreateAccessKeyRoute() {
   const navigate = useNavigate();
-  const { reload, users } = useOutletContext<{ reload: () => void; users: User[] }>();
+  const { reload } = useOutletContext<{ reload: () => void }>();
 
   const [userQuery, setUserQuery] = useState("");
+  const debouncedUserQuery = useDebounce(userQuery, 250);
   const [email, setEmail] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [label, setLabel] = useState("");
   const [scopesText, setScopesText] = useState("");
   const [expiresInDays, setExpiresInDays] = useState("");
@@ -34,9 +37,25 @@ export function CreateAccessKeyRoute() {
     navigate("/access-keys");
   };
 
-  const selectedUser = users.find((u) => u.email === email) ?? null;
-  const filteredUsers = users.filter((u) => u.email.toLowerCase().includes(userQuery.toLowerCase()));
-  const userOptions = filteredUsers.map((u) => ({ value: u.email, label: u.email, sublabel: u.full_name ?? undefined }));
+  // list_users itself is cursor-paginated now — searched live as the user
+  // types (same pattern ReferencePicker.tsx already uses for a REFERENCE
+  // field), rather than filtering one unbounded, page-1-only fetch.
+  const [searchResults, setSearchResults] = useState<User[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    call<RowPage>("list_users", { q: debouncedUserQuery || null, limit: 20 }, { method: "GET" })
+      .then((page) => {
+        if (!cancelled) setSearchResults(page.rows as unknown as User[]);
+      })
+      .catch(() => {
+        if (!cancelled) setSearchResults([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedUserQuery]);
+
+  const userOptions = searchResults.map((u) => ({ value: u.email, label: u.email, sublabel: u.full_name ?? undefined }));
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -113,7 +132,10 @@ export function CreateAccessKeyRoute() {
         <Combobox
           label="User"
           value={email}
-          onChange={setEmail}
+          onChange={(v) => {
+            setEmail(v);
+            setSelectedUser(v ? searchResults.find((u) => u.email === v) ?? null : null);
+          }}
           options={userOptions}
           query={userQuery}
           onQueryChange={setUserQuery}
