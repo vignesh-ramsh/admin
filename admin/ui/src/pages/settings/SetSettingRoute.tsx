@@ -4,11 +4,13 @@ import { call, ApiError } from "../../api/client";
 import type { SettingEntry } from "../../api/types";
 import { useAsync } from "../../hooks/useAsync";
 import { Modal } from "../../components/Modal";
+import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
-import { TextInput, Checkbox } from "../../components/Field";
+import { TextInput, Checkbox, Switch } from "../../components/Field";
 import { LoadingBlock } from "../../components/States";
 import { useToast } from "../../components/Toast";
 import { useSaveShortcut } from "../../hooks/useSaveShortcut";
+import { boolToSettingValue, settingValueToBool, validateSettingValue } from "./settingTypes";
 
 const NEW_KEY_SENTINEL = "__new__";
 
@@ -58,6 +60,14 @@ function SetSettingForm({
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // Only ever known for a key some plugin already declared a type for
+  // (existing?.type) — a brand-new key being created here has no type
+  // to validate against yet, same as any setting did before typed
+  // settings existed; it can only ever GAIN a type the next time a
+  // plugin's own register() runs with a real declare() call.
+  const settingType = existing?.type ?? null;
+  const valueError = !isEditing ? null : validateSettingValue(settingType, value);
+
   const submit = async () => {
     const trimmedKey = key.trim();
     if (!trimmedKey) {
@@ -66,6 +76,10 @@ function SetSettingForm({
     }
     if (secret && !confirmed) {
       toast.error("Check the confirmation box below first.");
+      return;
+    }
+    if (valueError) {
+      toast.error(valueError);
       return;
     }
     setBusy(true);
@@ -80,7 +94,7 @@ function SetSettingForm({
     }
   };
 
-  useSaveShortcut(submit, !busy && !(secret && !confirmed));
+  useSaveShortcut(submit, !busy && !(secret && !confirmed) && !valueError);
 
   return (
     <Modal
@@ -91,13 +105,21 @@ function SetSettingForm({
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={submit} loading={busy} disabled={secret && !confirmed}>
+          <Button variant="primary" onClick={submit} loading={busy} disabled={(secret && !confirmed) || !!valueError}>
             Save
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
+        {settingType && (
+          <div className="-mb-2 flex items-center gap-1.5 text-xs text-text-faint">
+            Declared type:
+            <Badge tone="neutral" className="font-mono uppercase">
+              {settingType}
+            </Badge>
+          </div>
+        )}
         <TextInput
           label="Key"
           hint={isEditing ? "Can't rename — delete and re-add under a new key instead." : "e.g. redix_url, authn_min_password_score"}
@@ -108,14 +130,37 @@ function SetSettingForm({
           autoFocus={!isEditing}
         />
 
-        <TextInput
-          label="Value"
-          hint={isEditing && existing.kind === "secret" ? "Enter a new value to overwrite — the current value is never shown here." : undefined}
-          placeholder={isEditing && existing.kind === "secret" ? "New value…" : "value"}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          autoFocus={isEditing}
-        />
+        {settingType === "bool" ? (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[13px] font-medium text-text-muted">Value</span>
+            <Switch
+              checked={settingValueToBool(value)}
+              onChange={(v) => setValue(boolToSettingValue(v))}
+              label={settingValueToBool(value) ? "True" : "False"}
+            />
+            {existing?.doc && <p className="text-xs text-text-faint">{existing.doc}</p>}
+          </div>
+        ) : (
+          <TextInput
+            label="Value"
+            type={settingType === "int" || settingType === "float" ? "number" : "text"}
+            step={settingType === "float" ? "any" : undefined}
+            error={valueError ?? undefined}
+            hint={
+              isEditing && existing.kind === "secret"
+                ? "Enter a new value to overwrite — the current value is never shown here."
+                : existing?.doc
+                  ? existing.default != null
+                    ? `${existing.doc} Default: ${existing.default}.`
+                    : existing.doc
+                  : undefined
+            }
+            placeholder={isEditing && existing.kind === "secret" ? "New value…" : "value"}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            autoFocus={isEditing}
+          />
+        )}
 
         <Checkbox
           checked={secret}

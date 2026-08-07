@@ -140,10 +140,22 @@ export function SettingsPage() {
                         className="flex cursor-pointer items-center gap-3 border-b border-border px-3.5 py-2.5 last:border-0 hover:bg-neutral-50 dark:hover:bg-neutral-900/40"
                         onClick={() => navigate(`/settings/${encodeURIComponent(row.key)}/edit`)}
                       >
-                        <span className="min-w-[220px] truncate font-mono text-[13px] text-text" title={row.key}>
+                        <span
+                          className="min-w-[220px] truncate font-mono text-[13px] text-text"
+                          title={row.doc ? `${row.key} — ${row.doc}` : row.key}
+                        >
                           {row.key}
                         </span>
                         <Badge tone={isSecret ? "danger" : "accent"}>{isSecret ? "Secret" : "Setting"}</Badge>
+                        {row.type && (
+                          <Badge
+                            tone="neutral"
+                            className="font-mono uppercase"
+                            title={row.default != null ? `default: ${row.default}` : undefined}
+                          >
+                            {row.type}
+                          </Badge>
+                        )}
                         <span className="flex-1 truncate font-mono text-[12.5px] text-text-muted" title={isSecret ? shown : row.value ?? undefined}>
                           {isSecret ? shown ?? "••••••••" : row.value ?? "—"}
                         </span>

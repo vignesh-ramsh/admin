@@ -190,10 +190,20 @@ export interface ApplySchemaResult {
 
 /** admin.list_settings() — value is always null for a "secret" row; a
  *  real value is only ever fetched on demand via admin.reveal_secret(). */
+/** `type`/`default`/`doc` come from whatever plugin called
+ *  `kernel.settings.declare(key, type=..., default=..., doc=...)` at
+ *  boot — `type` is `null` for a key nobody ever declared a type for
+ *  (still perfectly valid, just always a plain string, exactly like
+ *  before typed settings existed). `default` is only ever meaningful
+ *  when `type` is set; it mirrors whatever Python value the plugin
+ *  declared (a real number/bool for int/float/bool, a string for str). */
 export interface SettingEntry {
   key: string;
   kind: "setting" | "secret";
   value: string | null;
+  type: "int" | "float" | "bool" | "str" | null;
+  default: number | boolean | string | null;
+  doc: string;
 }
 
 /** admin.list_scheduled_jobs() — live config (arc.lineup.scheduled_tasks())
