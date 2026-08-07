@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link, Outlet, useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight, Eye, EyeOff, Info, Pencil, Plus, RefreshCw, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, EyeOff, Info, Plus, RefreshCw, Search } from "lucide-react";
 import { call } from "../../api/client";
 import type { SettingEntry } from "../../api/types";
 import { useAsync } from "../../hooks/useAsync";
@@ -105,86 +105,112 @@ export function SettingsPage() {
       ) : filtered.length === 0 ? (
         <EmptyState title="No matches" description={`Nothing matches "${q}".`} />
       ) : (
-        <div className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-1">
-          {groups.map(([group, groupRows]) => (
-            <div key={group} className="shrink-0 overflow-hidden rounded-lg border border-border bg-surface">
-              <button
-                type="button"
-                onClick={() => toggleGroup(group)}
-                className="flex w-full cursor-pointer items-center gap-2 border-b border-border bg-neutral-50 px-3.5 py-2.5 text-left dark:bg-neutral-900/60"
-              >
-                {collapsed[group] ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
-                <span className="text-[13px] font-semibold text-text">{group}</span>
-                <span className="text-xs text-text-faint">({groupRows.length})</span>
-              </button>
-              {!collapsed[group] && (
-                <div>
-                  {group === "filer" && (
-                    <div className="flex items-start gap-2 border-b border-border bg-info-bg px-3.5 py-2.5 text-[13px] text-info">
-                      <Info size={14} className="mt-0.5 shrink-0" />
-                      <span>
-                        Also editable, grouped and unit-converted, on{" "}
-                        <Link to="/files/settings" className="cursor-pointer font-medium underline underline-offset-2">
-                          File Manager → Settings
-                        </Link>
-                        .
-                      </span>
-                    </div>
-                  )}
-                  {groupRows.map((row) => {
+        <div className="scrollbar-thin min-h-0 flex-1 overflow-auto rounded-lg border border-border bg-surface">
+          <table className="w-full table-fixed border-collapse text-sm">
+            <colgroup>
+              <col style={{ width: "34%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "44%" }} />
+            </colgroup>
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-border bg-neutral-50 dark:bg-neutral-900/60">
+                <th className="px-3.5 py-2 text-left text-[12px] font-semibold uppercase tracking-wide text-text-faint">Key</th>
+                <th className="px-3.5 py-2 text-left text-[12px] font-semibold uppercase tracking-wide text-text-faint">Category</th>
+                <th className="px-3.5 py-2 text-left text-[12px] font-semibold uppercase tracking-wide text-text-faint">Type</th>
+                <th className="px-3.5 py-2 text-left text-[12px] font-semibold uppercase tracking-wide text-text-faint">Value</th>
+              </tr>
+            </thead>
+            {groups.map(([group, groupRows]) => (
+              <tbody key={group}>
+                <tr className="border-b border-border bg-neutral-50 dark:bg-neutral-900/60">
+                  <td colSpan={4} className="p-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group)}
+                      className="flex w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-left"
+                    >
+                      {collapsed[group] ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
+                      <span className="text-[13px] font-semibold text-text">{group}</span>
+                      <span className="text-xs text-text-faint">({groupRows.length})</span>
+                    </button>
+                  </td>
+                </tr>
+                {!collapsed[group] && group === "filer" && (
+                  <tr className="border-b border-border bg-info-bg">
+                    <td colSpan={4} className="px-3.5 py-2.5">
+                      <div className="flex items-start gap-2 text-[13px] text-info">
+                        <Info size={14} className="mt-0.5 shrink-0" />
+                        <span>
+                          Also editable, grouped and unit-converted, on{" "}
+                          <Link to="/files/settings" className="cursor-pointer font-medium underline underline-offset-2">
+                            File Manager → Settings
+                          </Link>
+                          .
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {!collapsed[group] &&
+                  groupRows.map((row) => {
                     const isSecret = row.kind === "secret";
                     const shown = revealed[row.key];
                     return (
-                      <div
+                      <tr
                         key={row.key}
-                        className="flex cursor-pointer items-center gap-3 border-b border-border px-3.5 py-2.5 last:border-0 hover:bg-neutral-50 dark:hover:bg-neutral-900/40"
                         onClick={() => navigate(`/settings/${encodeURIComponent(row.key)}/edit`)}
+                        className="cursor-pointer border-b border-border last:border-0 hover:bg-neutral-50 dark:hover:bg-neutral-900/40"
                       >
-                        <span
-                          className="min-w-[220px] truncate font-mono text-[13px] text-text"
+                        <td
+                          className="truncate px-3.5 py-2 font-mono text-[13px] text-text"
                           title={row.doc ? `${row.key} — ${row.doc}` : row.key}
                         >
                           {row.key}
-                        </span>
-                        <Badge tone={isSecret ? "danger" : "accent"}>{isSecret ? "Secret" : "Setting"}</Badge>
-                        {row.type && (
-                          <Badge
-                            tone="neutral"
-                            className="font-mono uppercase"
-                            title={row.default != null ? `default: ${row.default}` : undefined}
-                          >
-                            {row.type}
-                          </Badge>
-                        )}
-                        <span className="flex-1 truncate font-mono text-[12.5px] text-text-muted" title={isSecret ? shown : row.value ?? undefined}>
-                          {isSecret ? shown ?? "••••••••" : row.value ?? "—"}
-                        </span>
-                        {isSecret && (
-                          <IconButton
-                            label={shown !== undefined ? "Hide value" : "Reveal value"}
-                            icon={shown !== undefined ? <EyeOff size={14} /> : <Eye size={14} />}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleReveal(row.key);
-                            }}
-                            disabled={revealing === row.key}
-                          />
-                        )}
-                        <IconButton
-                          label={`Edit ${row.key}`}
-                          icon={<Pencil size={14} />}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/settings/${encodeURIComponent(row.key)}/edit`);
-                          }}
-                        />
-                      </div>
+                        </td>
+                        <td className="px-3.5 py-2">
+                          <Badge tone={isSecret ? "danger" : "accent"}>{isSecret ? "Secret" : "Setting"}</Badge>
+                        </td>
+                        <td className="px-3.5 py-2">
+                          {row.type ? (
+                            <Badge
+                              tone="neutral"
+                              className="font-mono uppercase"
+                              title={row.default != null ? `default: ${row.default}` : undefined}
+                            >
+                              {row.type}
+                            </Badge>
+                          ) : (
+                            <span className="text-text-faint">—</span>
+                          )}
+                        </td>
+                        <td className="px-3.5 py-2">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-text-muted"
+                              title={isSecret ? shown : row.value ?? undefined}
+                            >
+                              {isSecret ? shown ?? "••••••••" : row.value ?? "—"}
+                            </span>
+                            {isSecret && (
+                              <IconButton
+                                label={shown !== undefined ? "Hide value" : "Reveal value"}
+                                icon={shown !== undefined ? <EyeOff size={14} /> : <Eye size={14} />}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleReveal(row.key);
+                                }}
+                                disabled={revealing === row.key}
+                              />
+                            )}
+                          </div>
+                        </td>
+                      </tr>
                     );
                   })}
-                </div>
-              )}
-            </div>
-          ))}
+              </tbody>
+            ))}
+          </table>
         </div>
       )}
 
