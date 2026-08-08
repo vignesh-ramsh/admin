@@ -9,26 +9,36 @@
 export class ApiError extends Error {
   status: number;
   code?: string;
+  /** Whatever else rode along on this error body beyond {error, code} —
+   *  relay's RelayError.extra (arc/plugins/relay/relay/__init__.py), e.g.
+   *  login's max_sessions_reached handing back the caller's own active
+   *  sessions. Absent for every ordinary error; callers that don't know
+   *  to look for a specific key just never see this at all. */
+  details?: Record<string, unknown>;
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(message: string, status: number, code?: string, details?: Record<string, unknown>) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
 async function parseError(res: Response): Promise<ApiError> {
   let message = `Request failed (${res.status})`;
   let code: string | undefined;
+  let details: Record<string, unknown> | undefined;
   try {
     const body = await res.json();
     message = body.error || body.detail || message;
     code = body.code;
+    const { error: _error, code: _code, detail: _detail, ...rest } = body;
+    if (Object.keys(rest).length > 0) details = rest;
   } catch {
     /* non-JSON body — keep the generic message */
   }
-  return new ApiError(message, res.status, code);
+  return new ApiError(message, res.status, code, details);
 }
 
 function csrfToken(): string | null {
@@ -127,6 +137,19 @@ async function authFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   return res.json();
 }
 
+/** authn's own active-session summary (auth_api.py's
+ *  _active_sessions_summary) — rides along on a max_sessions_reached
+ *  ApiError.details.sessions, never fetched as its own separate call. No
+ *  token_hash — nothing here is a credential, just enough to tell one
+ *  session from another. */
+export interface ActiveSessionSummary {
+  id: string;
+  session_type: "Fixed" | "Extended";
+  ip_address: string | null;
+  user_agent: string | null;
+  expires_at: string | null;
+}
+
 export function login(params: {
   email?: string;
   username?: string;
@@ -134,6 +157,20 @@ export function login(params: {
   session_type: "Fixed" | "Extended";
 }): Promise<Profile> {
   return authFetch<Profile>("/login", { method: "POST", body: JSON.stringify(params) });
+}
+
+/** The "you're already signed in elsewhere" flow's second step — re-sends
+ *  the SAME credentials (there's no session yet to authenticate this call
+ *  any other way) alongside which of the caller's own sessions (from a
+ *  max_sessions_reached error's details.sessions) to end. Callers should
+ *  retry login() right after this resolves. */
+export function terminateLoginSession(params: {
+  email?: string;
+  username?: string;
+  password: string;
+  session_id: string;
+}): Promise<{ ok: true }> {
+  return authFetch("/login/terminate-session", { method: "POST", body: JSON.stringify(params) });
 }
 
 export async function whoami(): Promise<Profile | null> {

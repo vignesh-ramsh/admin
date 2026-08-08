@@ -11,6 +11,11 @@ interface AuthApi {
   username: string | null;
   fullName: string | null;
   login: (identifier: string, password: string, sessionType: "Fixed" | "Extended") => Promise<void>;
+  /** The "you're already signed in elsewhere" flow's second step — see
+   *  api/client.ts's terminateLoginSession. Doesn't touch local auth
+   *  state at all (there's no session yet either way); callers retry
+   *  login() themselves once this resolves. */
+  terminateSession: (identifier: string, password: string, sessionId: string) => Promise<void>;
   logout: () => Promise<void>;
   onUnauthorized: () => void;
 }
@@ -70,6 +75,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     applyServerTheme(result.theme, setPresetName);
   };
 
+  const terminateSession = async (identifier: string, password: string, sessionId: string) => {
+    const isEmail = identifier.includes("@");
+    await api.terminateLoginSession({
+      [isEmail ? "email" : "username"]: identifier,
+      password,
+      session_id: sessionId,
+    });
+  };
+
   const logout = async () => {
     await api.logout();
     setProfile(null);
@@ -91,6 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         username: profile?.username ?? null,
         fullName: profile?.full_name ?? null,
         login,
+        terminateSession,
         logout,
         onUnauthorized,
       }}

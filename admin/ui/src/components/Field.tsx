@@ -79,6 +79,13 @@ interface TextInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "si
    *  never used anywhere in this codebase, and this component doesn't
    *  forward it through anyway. */
   size?: ControlSize;
+  /** Rendered as a sibling of the <input>, INSIDE the same ControlBox —
+   *  e.g. a password show/hide toggle. Deliberately routed through the
+   *  one shared ControlBox rather than a second, caller-built wrapper box
+   *  (ControlBox's own docstring above: two different boxes, even with
+   *  matching height classes, have been verified to render at genuinely
+   *  different heights). */
+  endAdornment?: ReactNode;
 }
 
 /* The ONE box every control below renders through — TextInput and Select
@@ -130,7 +137,7 @@ function ControlBox({ size, error, children }: { size: ControlSize; error?: stri
    so the bug has no flex item to attach to, regardless of what layout
    utility a future call site passes in. */
 export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function TextInput(
-  { label, hint, error, mono, size = "md", className, id, required, ...rest },
+  { label, hint, error, mono, size = "md", className, id, required, endAdornment, ...rest },
   ref,
 ) {
   const autoId = useId();
@@ -149,6 +156,7 @@ export const TextInput = forwardRef<HTMLInputElement, TextInputProps>(function T
             aria-invalid={!!error}
             {...rest}
           />
+          {endAdornment}
         </ControlBox>
       </div>
     </FieldShell>
