@@ -77,14 +77,17 @@ def register(kernel: Any) -> None:
     )
 
     relay = kernel.get("relay")
-    # Deliberately NOT moved to Path(__file__).parent.parent like every
-    # other plugin's api/ — admin/api/*.py cross-import each other via
-    # real absolute imports (from admin.api._pagination import ...), not
-    # just relay's own by-path directory scan, so api/ has to stay a
-    # genuine subpackage of admin/ for that to keep resolving. Every
-    # other plugin's api/hooks/schemas/patches/tasks moved to the plugin
-    # root (arc.MD §6) since none of them have this cross-referencing.
-    relay.register_api(Path(__file__).parent / "api")
+    # admin/api/*.py used to cross-import a shared _pagination.py helper
+    # via `from admin.api._pagination import ...` — a real absolute
+    # import, not just relay's own by-path directory scan — which only
+    # resolved because api/ also happened to sit inside admin/'s own
+    # package dir. _pagination.py now lives at admin/_pagination.py
+    # instead (a genuine top-level module of the real package, so it
+    # stays importable as `admin._pagination` no matter where api/
+    # itself is on disk), which is what let api/ move out here too,
+    # matching every other plugin's api/hooks/schemas/patches/tasks
+    # (arc.MD §6).
+    relay.register_api(Path(__file__).parent.parent / "api")
 
     # Serve the built admin SPA at /admin-desk, if it's been built. The
     # dist/ directory is a build artifact (gitignored) — a fresh checkout

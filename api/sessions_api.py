@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 import arc
 
 from admin._security import by_of
-from admin.api._pagination import cursor_page
+from admin._pagination import cursor_page
 
 
 def _utcnow() -> datetime:

@@ -20,7 +20,7 @@ from relay import query as relay_query
 
 from admin._coerce import CoercionError, coerce_filters, coerce_row, throw_coercion
 from admin._security import by_of, redact_row
-from admin.api._pagination import PaginationError, _renumber, cursor_page
+from admin._pagination import PaginationError, _renumber, cursor_page
 
 _PROTECTED_WRITE_TABLES = frozenset(
     {"_users", "_roles", "_sessions", "_access_keys", "_trash", "_field_registry", "_patch_history"}

@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 import arc
 
 from admin._paths import require_known_plugin
-from admin.api._pagination import PaginationError, decode_cursor, encode_cursor
+from admin._pagination import PaginationError, decode_cursor, encode_cursor
 
 # One shared redaction set/helper for every admin endpoint that can return
 # rows off authn's tables — the Data Browser's read path (data_api) applies

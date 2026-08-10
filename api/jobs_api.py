@@ -18,7 +18,7 @@ than erroring when it isn't."""
 
 import arc
 
-from admin.api._pagination import cursor_page
+from admin._pagination import cursor_page
 
 
 @arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])

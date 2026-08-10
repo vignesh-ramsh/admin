@@ -28,7 +28,7 @@ import arc
 from psqldb.validation import ValidationError
 
 from admin._security import by_of, check_password_strength, hash_password
-from admin.api._pagination import cursor_page
+from admin._pagination import cursor_page
 
 # Matches authn's own SUPERUSER_ROLE_NAME constant exactly (authn/authn/__init__.py)
 # — an ordinary _roles row, nothing magic about the string itself.

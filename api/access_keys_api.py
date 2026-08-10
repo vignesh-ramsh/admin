@@ -12,7 +12,7 @@ import arc
 from psqldb.validation import ValidationError
 
 from admin._security import by_of, has_roles_subset, new_access_key
-from admin.api._pagination import cursor_page
+from admin._pagination import cursor_page
 
 
 def _utcnow() -> datetime:

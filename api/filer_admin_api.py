@@ -22,7 +22,7 @@ reimplemented here.
 
 import arc
 
-from admin.api._pagination import cursor_page
+from admin._pagination import cursor_page
 
 # key -> (kind, secret). Single source of truth for both what
 # list_filer_settings() reads and what set_filer_settings() is allowed to

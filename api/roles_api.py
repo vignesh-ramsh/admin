@@ -12,7 +12,7 @@ import arc
 from psqldb.validation import ValidationError
 
 from admin._security import by_of
-from admin.api._pagination import cursor_page
+from admin._pagination import cursor_page
 
 
 def _escape_like(value: str) -> str:
