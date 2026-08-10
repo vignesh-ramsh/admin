@@ -77,6 +77,13 @@ def register(kernel: Any) -> None:
     )
 
     relay = kernel.get("relay")
+    # Deliberately NOT moved to Path(__file__).parent.parent like every
+    # other plugin's api/ — admin/api/*.py cross-import each other via
+    # real absolute imports (from admin.api._pagination import ...), not
+    # just relay's own by-path directory scan, so api/ has to stay a
+    # genuine subpackage of admin/ for that to keep resolving. Every
+    # other plugin's api/hooks/schemas/patches/tasks moved to the plugin
+    # root (arc.MD §6) since none of them have this cross-referencing.
     relay.register_api(Path(__file__).parent / "api")
 
     # Serve the built admin SPA at /admin-desk, if it's been built. The
