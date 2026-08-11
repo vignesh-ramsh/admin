@@ -10,8 +10,6 @@ changed_by is returned as the raw UUID, same as every other admin
 endpoint returning a *_by column — resolving it to an email is the UI's
 job (useUserDirectory), not duplicated server-side per endpoint."""
 
-from datetime import datetime, timezone
-
 import arc
 
 from admin._paths import require_known_plugin
@@ -63,17 +61,6 @@ async def list_audit_tables(plugin: str) -> list[str]:
     return [r["table"] for r in rows]
 
 
-def _parse_cursor_changed_at(raw: object) -> datetime:
-    """The cursor's "v" is changed_at round-tripped through JSON — a real
-    datetime coming back as an ISO string, the same reason admin._coerce
-    exists at all for every psqldb-backed table. _audit_{plugin} has no
-    TableSchema for _pagination.cursor_page's own coerce_value(field, ...)
-    to key off, so this is the one-column-only equivalent, inlined here
-    rather than pulled in for a single field."""
-    dt = datetime.fromisoformat(str(raw))
-    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
-
-
 @arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_audit_entries(
     plugin: str,
@@ -88,9 +75,16 @@ async def list_audit_entries(
     psqldb TableSchema (arc.psqldb.schema(table)), and _audit_{plugin}
     tables — raw-SQL bootstrap structure, docs/arc.MD §3.9 — have none.
     Reuses cursor_page's own encode_cursor/decode_cursor primitives (both
-    schema-independent) for the keyset itself: (changed_at, id) DESC,
-    newest first, tie-broken by id the same way every other cursor in this
-    app is."""
+    schema-independent) for the keyset itself: id DESC alone, newest
+    first — no changed_at in the sort at all. id is UUIDv7
+    (psqldb/ddl.py's arc_uuid_generate_v7()), which embeds a millisecond
+    timestamp in its high bits, so it's already chronologically ordered
+    AND already indexed for free via the primary key — the same trick
+    cursor_page()'s own default order_by=("id", False) relies on for
+    every other admin-browsable table. Sorting by changed_at instead (the
+    original approach here) needed its own index to avoid a full table
+    scan on every request; id needs none, and being a single globally
+    unique column, needs no tie-breaker either."""
     audit_table = _audit_table(plugin)
     if not await _table_exists(audit_table):
         arc.relay.throw(f"plugin '{plugin}' has no audit trail", status=404, code="no_audit_table")
@@ -114,29 +108,31 @@ async def list_audit_entries(
 
     if after is not None:
         try:
-            raw_v, cursor_id = decode_cursor(after)
+            cursor_id, _ = decode_cursor(after)
         except PaginationError as exc:
             arc.relay.throw(str(exc), status=400, code="bad_cursor")
-        cursor_changed_at = _parse_cursor_changed_at(raw_v)
         n = len(params)
         # DESC (newest first) — the tuple-comparison direction is `<`,
-        # mirroring cursor_page's own op-per-direction convention.
-        where.append(f"(changed_at < ${n + 1} OR (changed_at = ${n + 1} AND id < ${n + 2}))")
-        params.extend([cursor_changed_at, cursor_id])
+        # mirroring cursor_page's own op-per-direction convention. id
+        # alone is a complete, collision-free cursor (see the module
+        # docstring above), so encode_cursor's `v`/`id` pair below just
+        # carries the same id in both slots — no second column needed.
+        where.append(f"id < ${n + 1}")
+        params.append(cursor_id)
 
     where_clause = f"WHERE {' AND '.join(where)}" if where else ""
     params.append(limit + 1)
     query = (
         f'SELECT id, "table", row_id, changes, changed_by, changed_at '
         f'FROM "{audit_table}" {where_clause} '
-        f"ORDER BY changed_at DESC, id DESC LIMIT ${len(params)}"
+        f"ORDER BY id DESC LIMIT ${len(params)}"
     )
     fetched = await arc.relay.sql(query, *params)
 
     has_more = len(fetched) > limit
     page_rows = fetched[:limit]
     next_cursor = (
-        encode_cursor(page_rows[-1]["changed_at"], page_rows[-1]["id"])
+        encode_cursor(page_rows[-1]["id"], page_rows[-1]["id"])
         if has_more and page_rows
         else None
     )
