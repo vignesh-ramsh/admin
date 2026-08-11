@@ -44,7 +44,7 @@ CAPABILITY = "admin"
 # to "admin/ui" or "/admin-desk" (docs, arc new-plugin's scaffold text,
 # arc build's own ui/ discovery convention below) stayed correct with no
 # changes needed anywhere else.
-UI_PREFIX = "admin-desk"
+UI_PREFIX = "admin"
 
 
 class AdminProvider:

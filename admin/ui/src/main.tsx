@@ -18,7 +18,7 @@ import { SaveShortcutProvider } from "./hooks/useSaveShortcut";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter basename="/admin-desk">
+    <BrowserRouter basename="/admin">
       <ThemeProvider>
         <AuthProvider>
           <ToastProvider>

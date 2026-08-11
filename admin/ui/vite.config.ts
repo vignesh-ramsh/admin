@@ -7,7 +7,7 @@ import tailwindcss from "@tailwindcss/vite";
 const apiTarget = process.env.VITE_ARC_API || "http://127.0.0.1:8000";
 
 export default defineConfig({
-  base: "/admin-desk/",
+  base: "/admin/",
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
