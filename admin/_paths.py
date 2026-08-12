@@ -6,8 +6,19 @@ plugin's own schemas/patches directories physically live on disk. Nothing
 in psqldb retains this mapping after boot (register_model/register_patches
 parse a directory into TableSchema objects immediately and never keep the
 path), so admin derives it itself, purely from the project's own directory
-convention (docs/arc.MD §3.7: a plugin's package folder matches its repo
-name, both under `plugins/`) — zero changes to psqldb needed for this.
+convention — zero changes to psqldb needed for this.
+
+schemas/patches (and hooks/api/tasks) live at the plugin ROOT
+(plugins/<name>/schemas/), siblings of the <name>/ package dir, NOT
+nested inside it — every plugin's own register(kernel) already reflects
+this (Path(__file__).parent.parent / "schemas"). plugin_dir() used to
+return the nested plugins/<name>/<name>/ package directory instead — a
+stale convention from before that move, never updated here when it
+happened, which made Schema Builder silently show zero schemas/patches
+for every plugin (the package directory itself still exists, so
+require_plugin_dir's own existence check never caught it; only the
+`/schemas`, `/patches` children built on top of the wrong base were
+missing).
 """
 
 from __future__ import annotations
@@ -22,7 +33,7 @@ PROJECT_ROOT = PLUGINS_ROOT.parent
 
 
 def plugin_dir(plugin: str) -> Path:
-    return PLUGINS_ROOT / plugin / plugin
+    return PLUGINS_ROOT / plugin
 
 
 def schemas_dir(plugin: str) -> Path:
@@ -46,16 +57,16 @@ def require_known_plugin(plugin: str) -> None:
 
 
 def require_plugin_dir(plugin: str) -> Path:
-    """The plugin's own package directory must exist on disk and follow the
-    plugins/<name>/<name>/ convention (§3.7) before admin will write a
-    schema/patch file into it — a clear error beats a silently-wrong path."""
+    """The plugin's own root directory must exist on disk (plugins/<name>/)
+    before admin will write a schema/patch file into it — a clear error
+    beats a silently-wrong path."""
     require_known_plugin(plugin)
     directory = plugin_dir(plugin)
     if not directory.is_dir():
         arc.relay.throw(
-            f"plugin '{plugin}' does not follow the plugins/<name>/<name>/ layout "
-            f"convention (expected {directory}) — cannot determine where to write "
-            f"its schema/patch files",
+            f"plugin '{plugin}' has no directory at the expected location "
+            f"({directory}) — cannot determine where to write its schema/patch "
+            f"files",
             status=409,
             code="unconventional_plugin_layout",
         )
