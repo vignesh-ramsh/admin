@@ -20,6 +20,8 @@ export interface FieldMeta {
   target_field: string | null;
   is_column: boolean;
   list: boolean;
+  /** UI-only section hint for the Row Editor — null means ungrouped. */
+  group: string | null;
 }
 
 export interface TableSchema {

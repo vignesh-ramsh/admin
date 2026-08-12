@@ -17,6 +17,36 @@ export function editableFields(schema: TableSchema): FieldMeta[] {
   return [...extras, ...own];
 }
 
+/** Groups fields by their `group` hint, preserving first-appearance order
+ *  within each group. Fields with no `group` (the default — most schemas,
+ *  unchanged) all collapse into one bucket keyed `null`, so a schema that
+ *  never opts in yields a single-entry result — callers should treat that
+ *  as "render flat, no section wrapper at all", matching the framework-
+ *  wide posture every other UI-only field hint takes (`list`): a schema
+ *  that never sets it sees zero visual change.
+ *
+ *  The ungrouped bucket is always returned FIRST, regardless of where its
+ *  fields fall in declaration order — a schema that groups most fields
+ *  but leaves a few out (a real, supported case, not just the "nobody
+ *  opted in" one above) would otherwise land its ungrouped fields
+ *  wherever they happened to appear, easy to miss entirely if that's the
+ *  last section, scrolled past without a second look. Nothing is ever
+ *  dropped either way; this only changes where it sorts. */
+export function groupFields(fields: FieldMeta[]): { group: string | null; fields: FieldMeta[] }[] {
+  const order: (string | null)[] = [];
+  const byGroup = new Map<string | null, FieldMeta[]>();
+  for (const f of fields) {
+    const g = f.group ?? null;
+    if (!byGroup.has(g)) {
+      byGroup.set(g, []);
+      order.push(g);
+    }
+    byGroup.get(g)!.push(f);
+  }
+  order.sort((a, b) => (a === b ? 0 : a === null ? -1 : b === null ? 1 : 0));
+  return order.map((g) => ({ group: g, fields: byGroup.get(g)! }));
+}
+
 /** Columns worth showing in the list view — TABLE fields aren't columns at
  *  all, and a field can opt itself OUT of the table view entirely via its
  *  own schema-declared `list: false`. */

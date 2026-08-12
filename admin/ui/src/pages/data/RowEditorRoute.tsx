@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate, useOutletContext, useParams } from "react-router-dom";
-import { History, Pencil } from "lucide-react";
+import { History, Pencil, Trash2 } from "lucide-react";
 import { call, ApiError } from "../../api/client";
-import type { Row } from "../../api/types";
+import type { FieldMeta, Row } from "../../api/types";
 import { Modal, ConfirmModal } from "../../components/Modal";
 import { Button, IconButton } from "../../components/Button";
+import { FieldGroup } from "../../components/FieldGroup";
 import { LoadingBlock } from "../../components/States";
 import { useToast } from "../../components/Toast";
 import { useSaveShortcut } from "../../hooks/useSaveShortcut";
@@ -14,8 +15,49 @@ import { FieldPreview } from "./FieldPreview";
 import { ChildTablePreview } from "./ChildTablePreview";
 import { MultiFilePreview } from "./MultiFilePreview";
 import { ExpandedPanel, type ExpandedPanelState } from "./ExpandedPanel";
-import { editableFields, formatCell, toInputValue } from "./format";
+import { editableFields, formatCell, groupFields, toInputValue } from "./format";
 import { validateField, validateValues, type Errors } from "./validate";
+
+/** Shared by both the editing and preview grids below — the grouping
+ *  wrapper is identical either way, only how each individual field
+ *  renders differs (FieldInput vs FieldPreview). A schema with no `group`
+ *  set on any field (grouped.length <= 1) renders exactly as before: one
+ *  flat grid, no section chrome at all. */
+function FieldGrid({
+  fields,
+  renderField,
+  isEmpty,
+  emptyMessage,
+}: {
+  fields: FieldMeta[];
+  renderField: (f: FieldMeta) => ReactNode;
+  /** When given, a group where EVERY field satisfies this collapses to
+   *  emptyMessage instead of the normal per-field grid — Row Preview
+   *  mode's own case: a group nobody has filled in yet, rendered as a
+   *  wall of "field_name —" pairs, reads as "these are all missing,"
+   *  where "not applicable/not filled in yet" is the much more common
+   *  reason. Checked per-GROUP, never per-field — a group with even one
+   *  real value still shows every field in it normally, "—" placeholders
+   *  included, exactly as before. */
+  isEmpty?: (f: FieldMeta) => boolean;
+  emptyMessage?: ReactNode;
+}) {
+  const grouped = groupFields(fields);
+  const grid = (list: FieldMeta[]) => <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{list.map(renderField)}</div>;
+  if (grouped.length <= 1) return grid(fields);
+  return (
+    <div className="flex flex-col gap-4">
+      {grouped.map(({ group, fields: groupFieldsList }) => {
+        const allEmpty = isEmpty != null && groupFieldsList.every(isEmpty);
+        return (
+          <FieldGroup key={group ?? " ungrouped"} label={group ?? "General"} count={groupFieldsList.length}>
+            {allEmpty ? <p className="text-[13px] text-text-faint">{emptyMessage}</p> : grid(groupFieldsList)}
+          </FieldGroup>
+        );
+      })}
+    </div>
+  );
+}
 
 type Values = Record<string, string | boolean>;
 type ViewState = "preview" | "edit";
@@ -57,6 +99,10 @@ export function RowEditorRoute({ mode }: { mode: "create" | "edit" }) {
         seed[f.name] = f.type === "BOOLEAN" ? f.default === true : f.default != null ? String(f.default) : "";
       }
       setValues(seed);
+      // Also the baseline for the dirty-check below — without this, every
+      // seeded default counts as "changed from {}" the instant the form
+      // opens, so confirmClose would fire on a still-untouched new row.
+      setOriginal(seed);
       return;
     }
     if (!rowId) return;
@@ -82,6 +128,16 @@ export function RowEditorRoute({ mode }: { mode: "create" | "edit" }) {
     setErrors({});
     setViewState("preview");
   };
+  // The footer's own Cancel/Cancel edit button calls cancelEdit/close
+  // directly — it never goes through Modal's Escape/backdrop path, so
+  // Modal's own confirmClose guard never sees it. Same risk, different
+  // trigger: confirmed live, clicking it while dirty silently discarded a
+  // typed value with zero warning. Same "Discard changes?" prompt, just a
+  // second local trigger for it — mirrors the confirmingDelete pattern
+  // already used a few lines below for the Delete button.
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const performCancel = () => (isEditing && !isCreate ? cancelEdit() : close());
+  const requestCancel = () => (isDirty ? setConfirmingCancel(true) : performCancel());
   // Opening the SAME thing that's already showing toggles the panel
   // closed; opening a DIFFERENT thing (even the same kind — a different
   // child row, a different file) swaps its content in place, matching
@@ -101,9 +157,21 @@ export function RowEditorRoute({ mode }: { mode: "create" | "edit" }) {
 
   const save = async () => {
     const found = validateValues(fields, values);
-    if (Object.keys(found).length > 0) {
+    const invalidCount = Object.keys(found).length;
+    if (invalidCount > 0) {
       setErrors(found);
-      toast.error("Fix the highlighted fields before saving.");
+      toast.error(`Fix ${invalidCount} highlighted field${invalidCount > 1 ? "s" : ""} before saving.`);
+      // On a short form the highlighted field is already on screen. On a
+      // long one (Employee: 90+ fields) it very often isn't — the toast
+      // alone left no way to find it without scrolling and re-reading the
+      // whole form. FieldGroup defaults every section open, so this can
+      // always find its target without needing to expand anything first.
+      const firstInvalid = fields.find((f) => found[f.name]);
+      if (firstInvalid) {
+        document
+          .querySelector(`[data-field="${CSS.escape(firstInvalid.name)}"]`)
+          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
       return;
     }
     // Editing an existing row with nothing actually changed still isn't
@@ -148,6 +216,12 @@ export function RowEditorRoute({ mode }: { mode: "create" | "edit" }) {
 
   const viewOnly = readOnly || (!isCreate && loading);
   const isEditing = viewState === "edit";
+  // Escape/backdrop-click discarding a half-filled 90-field form with zero
+  // warning is a much worse loss than on a short one — see the Row Editor
+  // review this fixes. Not evaluated for isCreate's very first render
+  // (original === values, both freshly seeded identically) so opening
+  // "New row" itself never immediately counts as dirty.
+  const isDirty = isEditing && fields.some((f) => values[f.name] !== original[f.name]);
 
   useSaveShortcut(save, isEditing && !viewOnly && !saving);
 
@@ -163,14 +237,35 @@ export function RowEditorRoute({ mode }: { mode: "create" | "edit" }) {
         onClose={close}
         size={panel && !isCreate && rowId ? "panel-open" : "panel-closed"}
         scrollBody={false}
-        footer={
-          <>
-            {!isCreate && !readOnly && (
-              <Button variant="ghost" onClick={() => setConfirmingDelete(true)} loading={deleting} className="mr-auto">
+        confirmClose={isDirty && !saving}
+        confirmCloseMessage={
+          isCreate ? "This new row hasn't been saved yet." : "Your changes to this row haven't been saved yet."
+        }
+        headerActions={
+          !isCreate &&
+          !readOnly && (
+            <>
+              {!isEditing && (
+                <Button variant="secondary" size="sm" icon={<Pencil size={13} />} onClick={startEdit}>
+                  Edit
+                </Button>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<Trash2 size={13} />}
+                onClick={() => setConfirmingDelete(true)}
+                loading={deleting}
+                className="border-danger/30 text-danger hover:bg-danger-bg/60 hover:text-danger"
+              >
                 Delete
               </Button>
-            )}
-            <Button variant="secondary" onClick={isEditing && !isCreate ? cancelEdit : close}>
+            </>
+          )
+        }
+        footer={
+          <>
+            <Button variant="secondary" onClick={isEditing ? requestCancel : close}>
               {isEditing ? (isCreate ? "Cancel" : "Cancel edit") : "Close"}
             </Button>
             {isEditing && !readOnly && (
@@ -219,11 +314,6 @@ export function RowEditorRoute({ mode }: { mode: "create" | "edit" }) {
                 )}
 
                 <div className="flex items-center justify-end gap-2">
-                  {!isEditing && !isCreate && !readOnly && (
-                    <Button variant="secondary" size="sm" icon={<Pencil size={13} />} onClick={startEdit}>
-                      Edit
-                    </Button>
-                  )}
                   {!isCreate && !!schema.audit && (
                     <IconButton
                       label="Audit history"
@@ -249,9 +339,14 @@ export function RowEditorRoute({ mode }: { mode: "create" | "edit" }) {
                 )}
 
                 {isEditing ? (
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {fields.map((f) => (
-                      <div key={f.id || f.name} className={f.type === "TEXT" || f.type === "JSON" || f.type === "MULTIFILE" ? "sm:col-span-2" : undefined}>
+                  <FieldGrid
+                    fields={fields}
+                    renderField={(f) => (
+                      <div
+                        key={f.id || f.name}
+                        data-field={f.name}
+                        className={f.type === "TEXT" || f.type === "JSON" || f.type === "MULTIFILE" ? "sm:col-span-2" : undefined}
+                      >
                         <label className="mb-1.5 block text-[13px] font-medium text-text-muted">
                           {f.name}
                           {f.required && <span className="ml-0.5 text-danger">*</span>}
@@ -274,13 +369,19 @@ export function RowEditorRoute({ mode }: { mode: "create" | "edit" }) {
                           }}
                         />
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  />
                 ) : (
                   row && (
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      {fields.map((f) => (
-                        <div key={f.id || f.name} className={f.type === "TEXT" || f.type === "JSON" || f.type === "MULTIFILE" ? "sm:col-span-2" : undefined}>
+                    <FieldGrid
+                      fields={fields}
+                      isEmpty={(f) => row[f.name] == null || row[f.name] === ""}
+                      emptyMessage="No information available."
+                      renderField={(f) => (
+                        <div
+                          key={f.id || f.name}
+                          className={f.type === "TEXT" || f.type === "JSON" || f.type === "MULTIFILE" ? "sm:col-span-2" : undefined}
+                        >
                           <label className="mb-1.5 block text-[13px] font-medium text-text-muted">
                             {f.name}
                             <span className="ml-1.5 text-[10px] font-normal text-text-faint">{f.type}</span>
@@ -296,8 +397,8 @@ export function RowEditorRoute({ mode }: { mode: "create" | "edit" }) {
                             />
                           )}
                         </div>
-                      ))}
-                    </div>
+                      )}
+                    />
                   )
                 )}
 
@@ -306,10 +407,19 @@ export function RowEditorRoute({ mode }: { mode: "create" | "edit" }) {
                     via the expand panel — so this stays visible (and
                     interactive) regardless of whether the PARENT row
                     itself is being edited right now. */}
-                {row &&
-                  childFields.map((cf) => (
-                    <div key={cf.id || cf.name}>
-                      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-faint">{cf.name}</p>
+                {/* Section headers show even in isCreate mode (row is
+                    still null then, before the first Save) — previously
+                    gated on `row &&` for the whole block, so a child table
+                    like leave_history simply never appeared while creating
+                    a new employee, with nothing on screen explaining why.
+                    A child row's parent id is the not-yet-assigned new
+                    row's own id, so it genuinely can't be added until
+                    after the first save either way — this makes that a
+                    stated fact instead of a silent omission. */}
+                {childFields.map((cf) => (
+                  <div key={cf.id || cf.name}>
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-faint">{cf.name}</p>
+                    {row ? (
                       <ChildTablePreview
                         field={cf}
                         parentRowId={String(row.id)}
@@ -317,8 +427,13 @@ export function RowEditorRoute({ mode }: { mode: "create" | "edit" }) {
                         onOpenChildRow={(childTable, childRow) => togglePanel({ kind: "child", childTable, row: childRow })}
                         onAddChildRow={(childTable, nextIdx) => togglePanel({ kind: "child", childTable, row: null, nextIdx })}
                       />
-                    </div>
-                  ))}
+                    ) : (
+                      <p className="rounded-md border border-dashed border-border px-3 py-4 text-center text-[13px] text-text-faint">
+                        Save this row first to add {cf.name}.
+                      </p>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -347,6 +462,20 @@ export function RowEditorRoute({ mode }: { mode: "create" | "edit" }) {
           danger
           onConfirm={del}
           onClose={() => setConfirmingDelete(false)}
+        />
+      )}
+
+      {confirmingCancel && (
+        <ConfirmModal
+          title="Discard changes?"
+          message={isCreate ? "This new row hasn't been saved yet." : "Your changes to this row haven't been saved yet."}
+          confirmLabel="Discard"
+          danger
+          onConfirm={() => {
+            setConfirmingCancel(false);
+            performCancel();
+          }}
+          onClose={() => setConfirmingCancel(false)}
         />
       )}
     </>

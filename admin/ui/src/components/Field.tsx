@@ -13,6 +13,7 @@ import {
   type ReactNode,
   type TextareaHTMLAttributes,
 } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronsUpDown } from "lucide-react";
 import clsx from "clsx";
 
@@ -232,8 +233,19 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
   const autoId = useId();
   const fieldId = id ?? autoId;
   const rootRef = useRef<HTMLDivElement>(null);
+  // The open list is portaled to document.body (below) specifically so no
+  // ancestor's overflow can ever clip it — confirmed live: a group card
+  // near the bottom of Row Editor's own scrollable, overflow-hidden body
+  // (Modal's scrollBody=false wrapper) cut the popup off entirely for
+  // whichever field happened to be last in an open group. A portaled
+  // popup needs its own ref for the "click outside" check below, since
+  // it's no longer a DOM descendant of rootRef.
+  const popupRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [popupRect, setPopupRect] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(
+    null,
+  );
 
   const options = useMemo<SelectOption[]>(
     () =>
@@ -254,11 +266,47 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
   useEffect(() => {
     if (!open) return;
     setActiveIdx(Math.max(0, options.findIndex((o) => o.value === value)));
-    const onDocClick = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+
+    // getBoundingClientRect() is already viewport-relative — the exact
+    // coordinate space position:fixed expects, so no scroll-offset math
+    // needed. Clamping maxHeight to the real remaining viewport space
+    // (instead of a flat max-h-64) is what actually stops the popup from
+    // ever running off the bottom of the screen, not just off the
+    // (now-irrelevant) old clipping ancestor.
+    const place = () => {
+      const r = rootRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const gap = 4;
+      setPopupRect({
+        top: r.bottom + gap,
+        left: r.left,
+        width: r.width,
+        maxHeight: Math.max(120, window.innerHeight - r.bottom - gap - 8),
+      });
     };
+    place();
+
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target) || popupRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    // Closing on scroll (rather than tracking position live) is the same
+    // trade-off every simple portaled-popup implementation makes — the
+    // trigger may have moved, so the popup's last computed position is no
+    // longer trustworthy; closing is simpler and safer than risking a
+    // stale, misplaced popup. capture:true so this fires for a scroll on
+    // ANY nested scrollable ancestor (Row Editor's own body), not just
+    // window-level scrolling.
+    const onScroll = () => setOpen(false);
     document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", onScroll, true);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -306,31 +354,41 @@ export const Select = forwardRef<HTMLButtonElement, SelectProps>(function Select
             <ChevronsUpDown size={14} className="shrink-0 text-text-faint" />
           </button>
         </ControlBox>
-        {open && (
-          <div
-            role="listbox"
-            className="scrollbar-thin absolute z-30 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-border bg-surface-raised py-1 shadow-lg shadow-black/10"
-          >
-            {options.map((opt, idx) => (
-              <button
-                type="button"
-                key={opt.value}
-                role="option"
-                aria-selected={opt.value === value}
-                disabled={opt.disabled}
-                onClick={() => commit(opt.value)}
-                onMouseEnter={() => setActiveIdx(idx)}
-                className={clsx(
-                  "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-1.5 text-left text-sm disabled:cursor-not-allowed disabled:text-text-faint",
-                  idx === activeIdx ? "bg-accent-50 dark:bg-accent-950/40" : "hover:bg-neutral-50 dark:hover:bg-neutral-900/50",
-                )}
-              >
-                <span className="truncate text-text">{opt.label}</span>
-                {opt.value === value && <Check size={14} className="shrink-0 text-accent-600" />}
-              </button>
-            ))}
-          </div>
-        )}
+        {open &&
+          popupRect &&
+          createPortal(
+            <div
+              ref={popupRef}
+              role="listbox"
+              style={{ top: popupRect.top, left: popupRect.left, width: popupRect.width, maxHeight: popupRect.maxHeight }}
+              // z-[60], not z-30: now a document.body portal same as
+              // Modal's own (also body-portaled, z-50) rather than a
+              // descendant of it — z-30 would render this BEHIND the
+              // modal it belongs to, both now being plain z-index siblings
+              // under body instead of parent/child.
+              className="scrollbar-thin fixed z-[60] overflow-y-auto rounded-md border border-border bg-surface-raised py-1 shadow-lg shadow-black/10"
+            >
+              {options.map((opt, idx) => (
+                <button
+                  type="button"
+                  key={opt.value}
+                  role="option"
+                  aria-selected={opt.value === value}
+                  disabled={opt.disabled}
+                  onClick={() => commit(opt.value)}
+                  onMouseEnter={() => setActiveIdx(idx)}
+                  className={clsx(
+                    "flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-1.5 text-left text-sm disabled:cursor-not-allowed disabled:text-text-faint",
+                    idx === activeIdx ? "bg-accent-50 dark:bg-accent-950/40" : "hover:bg-neutral-50 dark:hover:bg-neutral-900/50",
+                  )}
+                >
+                  <span className="truncate text-text">{opt.label}</span>
+                  {opt.value === value && <Check size={14} className="shrink-0 text-accent-600" />}
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )}
       </div>
     </FieldShell>
   );

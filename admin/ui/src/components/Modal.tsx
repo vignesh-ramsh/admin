@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import clsx from "clsx";
@@ -55,7 +55,10 @@ export function Modal({
   size = "md",
   children,
   footer,
+  headerActions,
   scrollBody = true,
+  confirmClose = false,
+  confirmCloseMessage = "You have unsaved changes that will be lost.",
 }: {
   title: string;
   subtitle?: string;
@@ -63,15 +66,35 @@ export function Modal({
   size?: Size;
   children: ReactNode;
   footer?: ReactNode;
+  /** Rendered in the header row itself, between the title and the Close
+   *  button — for a record-level primary action (Edit, Delete) a caller
+   *  wants reachable without scrolling the body or hunting the footer,
+   *  same shelf the Close button already lives on. Icon-only buttons are
+   *  the expected shape here; the header row has no room for labeled
+   *  ones once title + subtitle + a couple of actions + Close all share
+   *  it. */
+  headerActions?: ReactNode;
   /** Default true: the body scrolls as one region. Set false when the
    *  content manages its own internal scroll region(s) — e.g. a
    *  side-by-side layout where one column should scroll independently of
    *  the other, rather than the whole modal scrolling together. */
   scrollBody?: boolean;
+  /** When true, Escape/backdrop-click/the X button ask for confirmation
+   *  instead of closing directly — for a caller mid-edit on something
+   *  worth not losing to one misclick (e.g. RowEditorRoute with unsaved
+   *  field changes on a long form, where losing an edit is far more
+   *  costly than on a two-field one). Re-evaluated on every close attempt,
+   *  not captured once, so a caller can flip it live as its own dirty
+   *  state changes. */
+  confirmClose?: boolean;
+  confirmCloseMessage?: ReactNode;
 }) {
+  const [confirmingClose, setConfirmingClose] = useState(false);
+  const requestClose = () => (confirmClose ? setConfirmingClose(true) : onClose());
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") requestClose();
     };
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
@@ -79,43 +102,61 @@ export function Modal({
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
-  }, [onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onClose, confirmClose]);
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 pt-[8vh] sm:pt-[10vh]">
-      <div className="modal-backdrop-in fixed inset-0 bg-neutral-950/40 backdrop-blur-[2px]" onClick={onClose} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title"
-        className={clsx(
-          "modal-panel-in relative flex flex-col rounded-xl border border-border bg-surface-raised shadow-2xl shadow-black/10",
-          (size === "panel-closed" || size === "panel-open") && "transition-[width] duration-200 ease-out",
-          SIZES[size],
-          HEIGHTS[size],
-        )}
-      >
-        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
-          <div className="min-w-0 flex-1">
-            <h2 id="modal-title" className="truncate text-[15px] font-semibold text-text">
-              {title}
-            </h2>
-            {subtitle && <p className="mt-0.5 truncate text-[13px] text-text-muted">{subtitle}</p>}
+  return (
+    <>
+      {createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
+          <div className="modal-backdrop-in fixed inset-0 bg-neutral-950/40 backdrop-blur-[2px]" onClick={requestClose} />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-title"
+            className={clsx(
+              "modal-panel-in relative flex flex-col rounded-xl border border-border bg-surface-raised shadow-2xl shadow-black/10",
+              (size === "panel-closed" || size === "panel-open") && "transition-[width] duration-200 ease-out",
+              SIZES[size],
+              HEIGHTS[size],
+            )}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
+              <div className="min-w-0 flex-1">
+                <h2 id="modal-title" className="truncate text-[15px] font-semibold text-text">
+                  {title}
+                </h2>
+                {subtitle && <p className="mt-0.5 truncate text-[13px] text-text-muted">{subtitle}</p>}
+              </div>
+              <div className="flex shrink-0 items-center gap-1">
+                {headerActions}
+                <IconButton label="Close" icon={<X size={17} />} onClick={requestClose} />
+              </div>
+            </div>
+            <div
+              className={clsx(
+                "px-5 py-4",
+                scrollBody ? "scrollbar-thin flex-1 overflow-y-auto" : "flex min-h-0 flex-1 flex-col overflow-hidden",
+              )}
+            >
+              {children}
+            </div>
+            {footer && <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3.5">{footer}</div>}
           </div>
-          <IconButton label="Close" icon={<X size={17} />} onClick={onClose} className="shrink-0" />
-        </div>
-        <div
-          className={clsx(
-            "px-5 py-4",
-            scrollBody ? "scrollbar-thin flex-1 overflow-y-auto" : "flex min-h-0 flex-1 flex-col overflow-hidden",
-          )}
-        >
-          {children}
-        </div>
-        {footer && <div className="flex items-center justify-end gap-2 border-t border-border px-5 py-3.5">{footer}</div>}
-      </div>
-    </div>,
-    document.body,
+        </div>,
+        document.body,
+      )}
+      {confirmingClose && (
+        <ConfirmModal
+          title="Discard changes?"
+          message={confirmCloseMessage}
+          confirmLabel="Discard"
+          danger
+          onConfirm={onClose}
+          onClose={() => setConfirmingClose(false)}
+        />
+      )}
+    </>
   );
 }
 
