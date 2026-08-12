@@ -1,5 +1,6 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { Info, Plus, Search, Trash2 } from "lucide-react";
+import { useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
+import clsx from "clsx";
+import { GripVertical, Info, Plus, Rows3, Search, Trash2 } from "lucide-react";
 import type { SchemaField, TableMeta } from "../../api/types";
 import { Button, IconButton } from "../../components/Button";
 import { Checkbox, Select, TextInput } from "../../components/Field";
@@ -12,6 +13,53 @@ interface Props {
   system: boolean;
   tableMeta: TableMeta[];
   onChange: (fields: SchemaField[]) => void;
+}
+
+/** A row in the editor's own display order — either a real field or a
+ *  Frappe Section-Break-style separator. A separator is UI-only and never
+ *  reaches `onChange`/disk; a field's `.group` is instead recomputed from
+ *  whichever separator most recently precedes it in this list, so
+ *  dragging a row is the only thing that ever changes grouping — field
+ *  ids are never touched by anything in this file, on reorder or
+ *  otherwise (`_field_registry.id` is the diff/rename-detection key —
+ *  psqldb.fields.Field's own docstring — so it's left alone unconditionally,
+ *  whether or not the field has been migrated yet). */
+type Row = { kind: "field"; field: SchemaField } | { kind: "divider"; key: string; name: string };
+
+/** Rebuilds the row list from `fields`' own already-saved `.group` values
+ *  — one separator per contiguous run's first field. Runs once, at mount,
+ *  so an existing file (hand-edited, or saved by this editor before)
+ *  opens already segmented. A non-contiguous repeat of the same group
+ *  name (only possible via a hand-edited file) just renders as two
+ *  same-named separators rather than merging — a display quirk, not data
+ *  loss; dragging one segment under the other fixes it. */
+function deriveRows(fields: SchemaField[]): Row[] {
+  const rows: Row[] = [];
+  let prevGroup: string | undefined;
+  let n = 0;
+  for (const f of fields) {
+    const g = f.group || undefined;
+    if (g !== undefined && g !== prevGroup) rows.push({ kind: "divider", key: `divider-${n++}`, name: g });
+    rows.push({ kind: "field", field: f });
+    prevGroup = g;
+  }
+  return rows;
+}
+
+/** The single source of truth for what `.group` each field's onChange
+ *  payload carries — walks `rows` in display order, applying whichever
+ *  separator was most recently passed. */
+function extractFields(rows: Row[]): SchemaField[] {
+  const out: SchemaField[] = [];
+  let current: string | undefined;
+  for (const r of rows) {
+    if (r.kind === "divider") {
+      current = r.name;
+      continue;
+    }
+    out.push((r.field.group || undefined) === current ? r.field : { ...r.field, group: current });
+  }
+  return out;
 }
 
 /** A Combobox whose options are already known client-side (not server-
@@ -60,25 +108,117 @@ function sanitizeFieldName(raw: string): string {
 }
 
 export function FieldEditor({ fields, system, tableMeta, onChange }: Props) {
-  const update = (i: number, patch: Partial<SchemaField>) => {
-    onChange(fields.map((f, idx) => (idx === i ? { ...f, ...patch } : f)));
+  const [rows, setRows] = useState<Row[]>(() => deriveRows(fields));
+  const dividerCounter = useRef(0);
+  // The one separator currently showing its rename input instead of plain
+  // text — either just-inserted (addSeparator sets this directly, no
+  // separate "just inserted" state needed) or double-clicked into edit.
+  const [editingDivider, setEditingDivider] = useState<string | null>(null);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
+
+  const commit = (next: Row[]) => {
+    setRows(next);
+    onChange(extractFields(next));
   };
-  const remove = (i: number) => onChange(fields.filter((_, idx) => idx !== i));
-  const add = () => onChange([...fields, blankField(nextFieldId(fields))]);
+
+  const update = (fieldId: string, patch: Partial<SchemaField>) => {
+    commit(rows.map((r) => (r.kind === "field" && r.field.id === fieldId ? { ...r, field: { ...r.field, ...patch } } : r)));
+  };
+  const removeField = (fieldId: string) => commit(rows.filter((r) => !(r.kind === "field" && r.field.id === fieldId)));
+  const addField = () => commit([...rows, { kind: "field", field: blankField(nextFieldId(extractFields(rows))) }]);
+
+  const addSeparator = () => {
+    const key = `divider-new-${dividerCounter.current++}`;
+    commit([...rows, { kind: "divider", key, name: "New group" }]);
+    setEditingDivider(key);
+  };
+  const renameDivider = (key: string, name: string) => commit(rows.map((r) => (r.kind === "divider" && r.key === key ? { ...r, name } : r)));
+  const removeDivider = (key: string) => commit(rows.filter((r) => !(r.kind === "divider" && r.key === key)));
+
+  // Drag-and-drop reorder, index-based (stable within a render since
+  // `rows` only actually changes on drop). Never touches a field's id —
+  // moving a row only ever changes array position and, as a consequence,
+  // recomputed `.group` (extractFields); the id it was created with is
+  // preserved unconditionally, migrated or not.
+  const moveRow = (from: number, to: number) => {
+    const next = rows.slice();
+    const [moved] = next.splice(from, 1);
+    // Insert at `to`'s post-removal index, unadjusted for direction — this
+    // lands the dragged row immediately AFTER the target when dragging
+    // down, immediately BEFORE it when dragging up (verified by hand:
+    // dragging an adjacent row onto its very next neighbor needs this to
+    // actually move it, not round-trip back to where it started).
+    next.splice(to, 0, moved);
+    commit(next);
+  };
+  const onRowDragStart = (idx: number) => (e: DragEvent) => {
+    setDragIndex(idx);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(idx));
+  };
+  const onRowDragOver = (idx: number) => (e: DragEvent) => {
+    e.preventDefault();
+    if (overIndex !== idx) setOverIndex(idx);
+  };
+  const onRowDrop = (idx: number) => (e: DragEvent) => {
+    e.preventDefault();
+    const from = dragIndex;
+    setDragIndex(null);
+    setOverIndex(null);
+    if (from == null || from === idx) return;
+    moveRow(from, idx);
+  };
+  const onRowDragEnd = () => {
+    setDragIndex(null);
+    setOverIndex(null);
+  };
+  // A divider row's own drag handle — field rows don't use this (the
+  // whole ID cell is the drag source there instead, so a second nested
+  // draggable icon inside it would just fight the cell over which one
+  // wins a press). No extra sizing wrapper around the icon — that's what
+  // put it a few pixels off from the field row's own icon before
+  // (centered inside a fixed-width box instead of sitting flush).
+  const dragHandle = (idx: number) => (
+    <span
+      draggable
+      onDragStart={onRowDragStart(idx)}
+      onDragEnd={onRowDragEnd}
+      title="Drag to reorder"
+      className="inline-flex shrink-0 cursor-grab justify-self-start text-text-faint hover:text-text active:cursor-grabbing"
+    >
+      <GripVertical size={13} />
+    </span>
+  );
 
   // A quick filter, not a real "group" — a wide system table can have 15+
   // fields, so finding one by scanning top to bottom stops scaling. Only
-  // shown once there's enough fields for it to matter; index `i` used by
-  // update/remove always refers to the REAL position in `fields`, never
-  // the filtered list's position.
+  // shown once there's enough fields for it to matter. Matches a field's
+  // CURRENT group name too (groupAt), not just its own name/id/type, so
+  // typing a section's label surfaces everything in it. Dragging depends
+  // on real, contiguous row position, so filtering (which hides rows)
+  // drops to a flat, ungrouped, undraggable list instead of drawing a
+  // broken partial section — clear the filter to get both back.
   const [filterQuery, setFilterQuery] = useState("");
   const q = filterQuery.trim().toLowerCase();
+  const filtering = q.length > 0;
 
-  // Field name AND data type both searchable — typing "reference" or "int"
-  // filters down to every field of that type, not just a name substring.
-  const matches = (f: SchemaField) =>
-    !q || f.name.toLowerCase().includes(q) || f.id.toLowerCase().includes(q) || f.type.toLowerCase().includes(q);
-  const visibleFields = fields.filter(matches);
+  const groupAt = useMemo(() => {
+    const m: (string | undefined)[] = [];
+    let current: string | undefined;
+    rows.forEach((r, idx) => {
+      if (r.kind === "divider") current = r.name;
+      m[idx] = current;
+    });
+    return m;
+  }, [rows]);
+
+  const matchesField = (f: SchemaField, idx: number) =>
+    !q ||
+    f.name.toLowerCase().includes(q) ||
+    f.id.toLowerCase().includes(q) ||
+    f.type.toLowerCase().includes(q) ||
+    (groupAt[idx] ?? "").toLowerCase().includes(q);
 
   // Every <td> shares the same padding, and a native <table> stretches
   // every cell in a <tr> to that row's tallest cell automatically — a
@@ -86,73 +226,143 @@ export function FieldEditor({ fields, system, tableMeta, onChange }: Props) {
   // precision/scale pair can't make just THEIR row taller than a plain
   // STRING field's row, and every row is guaranteed the same height as
   // every other row by the browser's table layout algorithm itself,
-  // rather than by hand-matching an h-11 class on every branch.
-  const th = "border-b border-r border-border px-2.5 py-2 text-left last:border-r-0";
-  const td = "border-b border-r border-border px-2.5 py-2 align-middle last:border-r-0";
-  const tdCenter = "border-b border-r border-border px-2.5 py-2 text-center align-middle last:border-r-0";
+  // rather than by hand-matching an h-11 class on every branch. py-1.5
+  // (not py-2) is also what a divider row's own cell uses, so the two
+  // row kinds land on the same height without needing to hand-tune one
+  // against the other.
+  const th = "border-b border-r border-border px-2.5 py-1.5 text-left last:border-r-0";
+  const td = "border-b border-r border-border px-2.5 py-1.5 align-middle last:border-r-0";
+  const tdCenter = "border-b border-r border-border px-2.5 py-1.5 text-center align-middle last:border-r-0";
 
-  const row = (f: SchemaField) => {
-    const i = fields.indexOf(f);
+  const rowDropTarget = (idx: number, interactive: boolean) =>
+    interactive
+      ? {
+          onDragOver: onRowDragOver(idx),
+          onDrop: onRowDrop(idx),
+        }
+      : {};
+  const rowClass = (idx: number, interactive: boolean) =>
+    clsx(
+      interactive && dragIndex === idx && "opacity-40",
+      interactive && overIndex === idx && dragIndex !== idx && "outline outline-2 -outline-offset-2 outline-accent",
+    );
+
+  const dividerRow = (r: Extract<Row, { kind: "divider" }>, idx: number) => {
+    const editing = editingDivider === r.key;
     return (
-      <tr key={f.id || i}>
-        <td className={td}>
-          <span className="truncate font-mono text-[11px] text-text-faint">{f.id}</span>
-        </td>
-        <td className={td}>
-          <TextInput
-            size="sm"
-            placeholder="field_name"
-            value={f.name}
-            onChange={(e) => update(i, { name: sanitizeFieldName(e.target.value) })}
-          />
-        </td>
-        <td className={td}>
-          <Select
-            size="sm"
-            value={f.type}
-            onChange={(e) =>
-              update(i, {
-                type: e.target.value,
-                target: undefined,
-                target_field: undefined,
-                options: undefined,
-                length: undefined,
-                precision: undefined,
-                scale: undefined,
-              })
-            }
-          >
-            {typesFor(system).map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </Select>
-        </td>
-        <td className={td}>
-          <FieldConfig field={f} tableMeta={tableMeta} onChange={(patch) => update(i, patch)} />
-        </td>
-        <td className={tdCenter}>
-          <Checkbox label="" checked={!!f.required} onChange={(e) => update(i, { required: e.target.checked })} aria-label="Required" />
-        </td>
-        <td className={tdCenter}>
-          <Checkbox label="" checked={!!f.unique} onChange={(e) => update(i, { unique: e.target.checked })} aria-label="Unique" />
-        </td>
-        <td className={tdCenter}>
-          <Checkbox
-            label=""
-            checked={f.list !== false}
-            onChange={(e) => update(i, { list: e.target.checked })}
-            aria-label="Show in list view"
-            title="Show this column in Data Browser's table/list view — always still editable in the row editor either way"
-          />
-        </td>
-        <td className="px-2.5 py-2 text-center align-middle">
-          <IconButton label="Remove field" icon={<Trash2 size={15} />} onClick={() => remove(i)} />
+      <tr key={r.key} {...rowDropTarget(idx, true)} className={clsx("bg-info-bg/40 dark:bg-info-bg/20", rowClass(idx, true))}>
+        <td colSpan={8} className="border-b border-border px-2.5 py-1.5">
+          {/* Two equal 1fr side columns (not sized to the handle/delete
+              button's own content) is what keeps the center column truly
+              centered on the row, regardless of how wide those flanking
+              controls are — a plain flex row with a flex-1 label would
+              instead center it only between whatever the handle and button
+              happen to measure. min-h-8 matches TextInput/Select's own
+              "sm" control height (ControlBox, h-8) so this row's content
+              is exactly as tall as a field row's, not just its padding. */}
+          <div className="grid min-h-8 grid-cols-[1fr_auto_1fr] items-center gap-2">
+            {dragHandle(idx)}
+            {editing ? (
+              <input
+                className="min-w-0 bg-transparent text-center text-[12px] font-semibold uppercase tracking-wide text-info outline-none"
+                style={{ width: `${Math.max(r.name.length, 6)}ch` }}
+                value={r.name}
+                autoFocus
+                onFocus={(e) => e.target.select()}
+                onBlur={() => setEditingDivider(null)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === "Escape") e.currentTarget.blur();
+                }}
+                onChange={(e) => renameDivider(r.key, e.target.value)}
+              />
+            ) : (
+              <span
+                onDoubleClick={() => setEditingDivider(r.key)}
+                title="Double-click to rename"
+                className="cursor-text select-none text-center text-[12px] font-semibold uppercase tracking-wide text-info"
+              >
+                {r.name}
+              </span>
+            )}
+            <div className="justify-self-end">
+              <IconButton label="Remove group" icon={<Trash2 size={13} />} onClick={() => removeDivider(r.key)} className="h-6 w-6 shrink-0" />
+            </div>
+          </div>
         </td>
       </tr>
     );
   };
+
+  const fieldRow = (f: SchemaField, idx: number, interactive: boolean) => (
+    <tr key={f.id} {...rowDropTarget(idx, interactive)} className={rowClass(idx, interactive)}>
+      <td
+        className={clsx(td, interactive && "cursor-grab select-none active:cursor-grabbing")}
+        draggable={interactive}
+        onDragStart={interactive ? onRowDragStart(idx) : undefined}
+        onDragEnd={interactive ? onRowDragEnd : undefined}
+        title={interactive ? "Drag to reorder" : undefined}
+      >
+        <div className="flex items-center gap-1.5">
+          {interactive && <GripVertical size={13} className="shrink-0 text-text-faint" />}
+          <span className="whitespace-nowrap font-mono text-[11px] text-text-faint">{f.id}</span>
+        </div>
+      </td>
+      <td className={td}>
+        <TextInput
+          size="sm"
+          placeholder="field_name"
+          value={f.name}
+          onChange={(e) => update(f.id, { name: sanitizeFieldName(e.target.value) })}
+        />
+      </td>
+      <td className={td}>
+        <Select
+          size="sm"
+          value={f.type}
+          onChange={(e) =>
+            update(f.id, {
+              type: e.target.value,
+              target: undefined,
+              target_field: undefined,
+              options: undefined,
+              length: undefined,
+              precision: undefined,
+              scale: undefined,
+            })
+          }
+        >
+          {typesFor(system).map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </Select>
+      </td>
+      <td className={td}>
+        <FieldConfig field={f} tableMeta={tableMeta} onChange={(patch) => update(f.id, patch)} />
+      </td>
+      <td className={tdCenter}>
+        <Checkbox label="" checked={!!f.required} onChange={(e) => update(f.id, { required: e.target.checked })} aria-label="Required" />
+      </td>
+      <td className={tdCenter}>
+        <Checkbox label="" checked={!!f.unique} onChange={(e) => update(f.id, { unique: e.target.checked })} aria-label="Unique" />
+      </td>
+      <td className={tdCenter}>
+        <Checkbox
+          label=""
+          checked={f.list !== false}
+          onChange={(e) => update(f.id, { list: e.target.checked })}
+          aria-label="Show in list view"
+          title="Show this column in Data Browser's table/list view — always still editable in the row editor either way"
+        />
+      </td>
+      <td className="px-2.5 py-1.5 text-center align-middle">
+        <IconButton label="Remove field" icon={<Trash2 size={15} />} onClick={() => removeField(f.id)} />
+      </td>
+    </tr>
+  );
+
+  const visibleFieldRows = filtering ? rows.filter((r, idx): r is Extract<Row, { kind: "field" }> => r.kind === "field" && matchesField(r.field, idx)) : [];
 
   return (
     <div className="flex flex-col gap-3">
@@ -171,19 +381,20 @@ export function FieldEditor({ fields, system, tableMeta, onChange }: Props) {
             <Search size={14} className="text-text-faint" />
             <input
               className="flex-1 bg-transparent text-[13px] text-text outline-none placeholder:text-text-faint"
-              placeholder={`Filter ${fields.length} fields by name or type…`}
+              placeholder={`Filter ${fields.length} fields by name, type, or group…`}
               value={filterQuery}
               onChange={(e) => setFilterQuery(e.target.value)}
             />
+            {filtering && <span className="shrink-0 text-[11px] text-text-faint">Drag reorder hidden while filtering</span>}
           </div>
         )}
 
         {fields.length === 0 && <p className="px-3 py-6 text-center text-[13px] text-text-faint">No fields yet — add the table's first field below.</p>}
-        {fields.length > 0 && visibleFields.length === 0 && (
+        {fields.length > 0 && filtering && visibleFieldRows.length === 0 && (
           <p className="px-3 py-6 text-center text-[13px] text-text-faint">No fields match "{filterQuery}".</p>
         )}
 
-        {(fields.length === 0 || visibleFields.length > 0) && (
+        {(fields.length === 0 || !filtering || visibleFieldRows.length > 0) && (
           // table-layout: fixed makes every column's width a fixed
           // contract (the <colgroup> below), independent of any cell's
           // content — the same reason REFERENCE's two comboboxes or a
@@ -195,7 +406,7 @@ export function FieldEditor({ fields, system, tableMeta, onChange }: Props) {
           // of doubling up wherever two bordered boxes used to touch.
           <table className="w-full table-fixed border-collapse text-sm">
             <colgroup>
-              <col style={{ width: "52px" }} />
+              <col style={{ width: "84px" }} />
               <col style={{ width: "22%" }} />
               <col style={{ width: "150px" }} />
               <col />
@@ -215,16 +426,23 @@ export function FieldEditor({ fields, system, tableMeta, onChange }: Props) {
                 <th className={`${th} text-center`} title="Show this column in Data Browser's table/list view">
                   List
                 </th>
-                <th className="border-b border-border px-2.5 py-2" />
+                <th className="border-b border-border px-2.5 py-1.5" />
               </tr>
             </thead>
-            <tbody>{visibleFields.map(row)}</tbody>
+            <tbody>
+              {filtering
+                ? visibleFieldRows.map((r) => fieldRow(r.field, -1, false))
+                : rows.map((r, idx) => (r.kind === "divider" ? dividerRow(r, idx) : fieldRow(r.field, idx, true)))}
+            </tbody>
           </table>
         )}
 
-        <div className="border-t border-border p-2.5">
-          <Button variant="secondary" size="sm" icon={<Plus size={14} />} onClick={add}>
+        <div className="flex items-center gap-2 border-t border-border p-2.5">
+          <Button variant="secondary" size="sm" icon={<Plus size={14} />} onClick={addField}>
             Add field
+          </Button>
+          <Button variant="ghost" size="sm" icon={<Rows3 size={14} />} onClick={addSeparator}>
+            Add separator
           </Button>
         </div>
       </div>

@@ -109,6 +109,10 @@ export interface SchemaField {
   target?: string;
   target_field?: string;
   list?: boolean;
+  /** UI-only section hint (same field Data Browser's Row Editor groups
+   *  by) — Schema Builder's field editor derives its separator rows from
+   *  contiguous runs of this value, never stores separators separately. */
+  group?: string;
 }
 
 export interface SchemaIndex {
