@@ -377,25 +377,38 @@ async def _apply_or_preview(
         # preview_migration_plan already uses, via build_plan's own
         # only_table parameter (the exact mechanism `arc psqldb migrate -t`
         # already relies on — reused here, not reinvented).
+        #
+        # ALSO holds psqldb's own migration_lock (a Postgres advisory lock,
+        # migrate.py's own cross-process serialization for `arc psqldb
+        # migrate`) around the SAME build-then-apply window, on one shared
+        # connection — found missing by this project's own failure-mode
+        # audit: the arc.relay.lock above only ever serialized concurrent
+        # Admin API calls against EACH OTHER. It shares nothing with the
+        # CLI's advisory lock (a different mechanism entirely), so an
+        # operator's `arc psqldb migrate` and an Admin UI "Apply Now" click
+        # against the same table, at the same moment, had no mutual
+        # exclusion between them at all. migration_lock's own polling
+        # design means this just waits its turn rather than erroring if
+        # the CLI already holds it — the correct "serialize, don't reject"
+        # behavior its own docstring describes.
         all_schemas, all_patches = _schemas_on_disk(), _patches_on_disk()
-        async with arc.psqldb.acquire() as conn:
+        async with arc.psqldb.acquire() as conn, psqldb_migrate.migration_lock(conn):
             plan = await psqldb_migrate.build_plan(conn, all_schemas, all_patches, only_table=table)
 
-        result = {
-            "ok": True,
-            "table": table,
-            "empty": plan.is_empty(),
-            "applied": False,
-            "ops": [_serialize_op(op) for op in plan.ops],
-            "warnings": plan.warnings,
-            "migration_file": None,
-            "process_warning": None,
-        }
-        if plan.is_empty() or not confirm:
-            return result
+            result = {
+                "ok": True,
+                "table": table,
+                "empty": plan.is_empty(),
+                "applied": False,
+                "ops": [_serialize_op(op) for op in plan.ops],
+                "warnings": plan.warnings,
+                "migration_file": None,
+                "process_warning": None,
+            }
+            if plan.is_empty() or not confirm:
+                return result
 
-        reference = psqldb_migrate.migration_reference()
-        async with arc.psqldb.acquire() as conn:
+            reference = psqldb_migrate.migration_reference()
             await psqldb_migrate.apply_plan(conn, plan, reference=reference)
 
         # Same audit-trail file `arc psqldb migrate` itself writes — plan.ops
