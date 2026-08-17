@@ -28,7 +28,14 @@ export function UploadFileRoute() {
     call<FilerSettingEntry[]>("list_filer_settings", {}, { method: "GET" })
       .then((rows) => {
         const configured = rows.find((r) => r.key === "filer_default_storage")?.value;
-        if (configured && !storageTouched.current) setStorage(configured);
+        // filer_default_storage is a "select"-kind entry, never a bool
+        // one — always a real string at runtime — but FilerSettingEntry
+        // .value is honestly typed as string | boolean | null now (a
+        // bool-kind entry really can be a boolean), so this needs an
+        // explicit narrow rather than relying on the type alone.
+        if (typeof configured === "string" && configured && !storageTouched.current) {
+          setStorage(configured);
+        }
       })
       .catch(() => {
         /* best-effort — "local" stays the fallback if this fails */

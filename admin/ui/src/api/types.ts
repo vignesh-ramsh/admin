@@ -247,7 +247,14 @@ export interface FilerSettingEntry {
   key: string;
   kind: string;
   secret: boolean;
-  value: string | null;
+  // A "bool"-kind entry (filer_scan_public/filer_scan_private, both
+  // declared type=bool) comes back as a real JSON boolean — arc.settings
+  // .get() coerces a typed setting before it's ever serialized. Every
+  // other kind ("text"/"int"/"select") is untyped and stays a plain
+  // string. This was previously (wrongly) declared string-only, which is
+  // exactly what let FilerSettingsTab.tsx's initialValue() compare a real
+  // boolean against the string "true" with nothing catching it.
+  value: string | boolean | null;
   is_set: boolean;
 }
 

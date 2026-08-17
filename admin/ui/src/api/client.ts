@@ -96,7 +96,19 @@ export async function call<T = unknown>(
   const base = `/api/method/admin.${fn}`;
 
   if (method === "GET") {
-    const res = await fetch(base + buildQueryString(params), { credentials: "same-origin" });
+    // cache: "no-store" — a whitelisted GET is a live, per-request read
+    // (a connectivity check, current settings), not a static resource;
+    // without this, fetch()'s default cache mode can silently serve a
+    // stale response on reload instead of hitting the server again. The
+    // server now also sends Cache-Control: no-store on every route
+    // response (gateway/__init__.py's _dispatch), but that alone doesn't
+    // retroactively invalidate whatever a browser already cached from
+    // before that existed — this forces a real network request every
+    // time regardless of what's sitting in the cache already.
+    const res = await fetch(base + buildQueryString(params), {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
     if (!res.ok) throw await parseError(res);
     return res.json();
   }

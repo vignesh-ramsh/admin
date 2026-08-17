@@ -17,7 +17,19 @@ const BYTES_PER_MB = 1024 * 1024;
 const MB_FIELDS = new Set(["filer_max_upload_bytes", "filer_max_request_body_bytes"]);
 
 function initialValue(entry: FilerSettingEntry): FormValue {
-  if (entry.kind === "bool") return entry.value === "true";
+  if (entry.kind === "bool") {
+    // A "bool"-kind entry backed by a settings.declare(type=bool) key
+    // (filer_scan_public/filer_scan_private) comes back as a genuine
+    // JSON boolean, not the string "true" — arc.settings.get() coerces a
+    // typed setting to a real Python bool before it's ever serialized.
+    // `entry.value === "true"` was comparing that boolean against a
+    // string literal, which is false unconditionally, for every value —
+    // the toggle never reflected the real setting, cache or no cache.
+    // Still handle a literal string defensively (kept honest in
+    // FilerSettingEntry's own type below) in case anything upstream ever
+    // does send "true"/"false" as text instead.
+    return typeof entry.value === "boolean" ? entry.value : entry.value === "true";
+  }
   return entry.value ?? "";
 }
 
