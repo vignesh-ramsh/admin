@@ -14,18 +14,15 @@ stay open here since browsing them is safe and sometimes convenient."""
 from uuid import UUID
 
 import arc
-from psqldb.model import SchemaError
-from psqldb.validation import ValidationError
 from relay import query as relay_query
 
 from admin._coerce import CoercionError, coerce_filters, coerce_row, throw_coercion
+from admin._dataops import READ_ERRORS as _READ_ERRORS
+from admin._dataops import friendly as _friendly
+from admin._dataops import require_not_protected as _require_not_protected
+from admin._dataops import schema_or_throw as _schema_or_throw
 from admin._security import by_of, redact_row
-from admin._pagination import PaginationError, _renumber, cursor_page
-
-_PROTECTED_WRITE_TABLES = frozenset(
-    {"_users", "_roles", "_sessions", "_access_keys", "_trash", "_field_registry", "_patch_history"}
-)
-_READ_ERRORS = (SchemaError, ValidationError, arc.relay.QueryError, PaginationError)
+from admin._pagination import _renumber, cursor_page
 
 #: Data Browser's own list-view column cap (format.ts's listColumns(schema, max=6))
 #: — kept in sync by hand since the two are independent implementations of the
@@ -120,37 +117,6 @@ def _single_order_by(order_by: list[str] | None) -> tuple[str, bool]:
     raw = order_by[0]
     desc = raw.startswith("-")
     return (raw[1:] if desc else raw, desc)
-
-
-def _friendly(exc: Exception):
-    arc.relay.throw(str(exc), status=400, code="bad_request")
-
-
-def _schema_or_throw(table: str):
-    try:
-        return arc.psqldb.schema(table)
-    except SchemaError as exc:
-        arc.relay.throw(str(exc), status=404, code="unknown_table")
-
-
-def _require_not_protected(table: str) -> None:
-    if table in _PROTECTED_WRITE_TABLES:
-        arc.relay.throw(
-            f"'{table}' is managed through its own dedicated endpoints "
-            f"(users/roles/sessions/access-keys) — not the generic data browser",
-            status=409,
-            code="protected_table",
-        )
-    if table.startswith("_audit_"):
-        # Integrity bookkeeping (docs/arc.MD §3.9's audit trigger writes
-        # these), not application data — hand-editing a historical audit
-        # row defeats the point of it existing. Browsable, never editable,
-        # same posture as the protected tables above.
-        arc.relay.throw(
-            f"'{table}' is an audit trail, written only by its table's trigger — read-only here",
-            status=409,
-            code="protected_table",
-        )
 
 
 @arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])

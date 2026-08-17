@@ -73,10 +73,20 @@ class AdminProvider:
 def register(kernel: Any) -> None:
     provider = AdminProvider(kernel)
     kernel.export(
-        CAPABILITY, provider, requires=["relay", "gateway", "authn", "filer"], optional_requires=[]
+        CAPABILITY,
+        provider,
+        requires=["relay", "gateway", "authn", "filer", "psqldb"],
+        optional_requires=[],
     )
 
     relay = kernel.get("relay")
+    psqldb = kernel.get("psqldb")
+    # Bulk import/export job-tracking tables (_data_import_job/_row,
+    # _data_export_job) — the one place admin owns its own schema rather
+    # than only ever writing through tables other plugins declare. A
+    # direct psqldb requirement (not just transitive through relay) since
+    # this is a real, direct dependency now, not an implementation detail.
+    psqldb.register_model(Path(__file__).parent.parent / "schemas")
     # admin/api/*.py used to cross-import a shared _pagination.py helper
     # via `from admin.api._pagination import ...` — a real absolute
     # import, not just relay's own by-path directory scan — which only

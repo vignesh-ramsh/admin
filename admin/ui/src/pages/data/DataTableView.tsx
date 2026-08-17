@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Outlet, useNavigate, useParams } from "react-router-dom";
-import { Plus, RefreshCw } from "lucide-react";
+import { Download, Plus, RefreshCw, Upload } from "lucide-react";
 import { call, ApiError } from "../../api/client";
 import type { Row, RowPage, TableSchema } from "../../api/types";
 import { useAuth } from "../../auth/AuthContext";
@@ -8,6 +8,7 @@ import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import { Checkbox } from "../../components/Field";
 import { DataTable, type Column } from "../../components/Table";
+import { KebabMenu } from "../../components/KebabMenu";
 import { ListToolbar } from "../../components/ListToolbar";
 import { InfiniteScroll } from "../../components/InfiniteScroll";
 import { BulkEditModal } from "../../components/BulkEditModal";
@@ -15,6 +16,8 @@ import { ConfirmModal } from "../../components/Modal";
 import { ErrorBlock, LoadingBlock } from "../../components/States";
 import { useToast } from "../../components/Toast";
 import { useCursorList } from "../../hooks/useCursorList";
+import { ExportModal } from "./ExportModal";
+import { ImportModal } from "./ImportModal";
 import { formatCell, listColumns, PROTECTED_TABLES, shortId } from "./format";
 import { SearchTermPills } from "./SearchBar";
 
@@ -45,6 +48,8 @@ export function DataTableView() {
   const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false);
   const [deleteScopeAll, setDeleteScopeAll] = useState(true);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
 
   const readOnly = PROTECTED_TABLES.has(table);
 
@@ -238,6 +243,24 @@ export function DataTableView() {
               New row
             </Button>
           )}
+          {!readOnly && (
+            <KebabMenu
+              items={[
+                {
+                  key: "export",
+                  label: "Export",
+                  icon: <Download size={14} />,
+                  onSelect: () => setExportModalOpen(true),
+                },
+                {
+                  key: "import",
+                  label: "Import",
+                  icon: <Upload size={14} />,
+                  onSelect: () => setImportModalOpen(true),
+                },
+              ]}
+            />
+          )}
         </div>
       </div>
 
@@ -335,6 +358,21 @@ export function DataTableView() {
           onConfirm={doBulkDelete}
           onClose={() => setConfirmingBulkDelete(false)}
         />
+      )}
+
+      {exportModalOpen && (
+        <ExportModal
+          table={table}
+          schema={schema}
+          filters={filters}
+          search={search}
+          hasActiveQuery={hasAnyQuery}
+          onClose={() => setExportModalOpen(false)}
+        />
+      )}
+
+      {importModalOpen && (
+        <ImportModal table={table} schema={schema} onClose={() => setImportModalOpen(false)} onImported={loadRows} />
       )}
 
       <Outlet context={{ table, schema, readOnly, reloadRows: loadRows } satisfies DataTableOutletContext} />

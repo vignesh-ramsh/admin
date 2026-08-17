@@ -1,0 +1,22 @@
+{
+  "system": true,
+  "fields": [
+    {"id": "AA00", "name": "id", "type": "UUID", "primary_key": true},
+    {"id": "AA01", "name": "table", "type": "STRING", "length": 255, "required": true},
+    {"id": "AA02", "name": "filters", "type": "JSON"},
+    {"id": "AA03", "name": "search", "type": "JSON"},
+    {"id": "AA04", "name": "fields", "type": "JSON", "required": true},
+    {"id": "AA05", "name": "format", "type": "SELECT", "required": true, "options": ["csv", "xlsx"]},
+    {"id": "AA06", "name": "status", "type": "SELECT", "required": true, "options": ["Queued", "Running", "Completed", "Failed"]},
+    {"id": "AA07", "name": "rows_total", "type": "INT"},
+    {"id": "AA08", "name": "rows_exported", "type": "INT", "default": 0},
+    {"id": "AA09", "name": "file", "type": "REFERENCE", "target": "FilerFile"},
+    {"id": "AA10", "name": "started_at", "type": "DATETIME"},
+    {"id": "AA11", "name": "finished_at", "type": "DATETIME"},
+    {"id": "AA12", "name": "created_by", "type": "STRING", "length": 255},
+    {"id": "AA13", "name": "error", "type": "TEXT"}
+  ],
+  "index": [
+    {"key": "idx_data_export_job_status", "fields": ["status"]}
+  ]
+}

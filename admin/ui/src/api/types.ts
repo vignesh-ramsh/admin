@@ -292,3 +292,59 @@ export interface FilerAntivirusStatus {
   scan_private: boolean;
   available_engines: string[];
 }
+
+/** admin.start_export()/get_export_status() — a background export job's
+ *  own row, plus the two fields get_export_status computes fresh on every
+ *  poll rather than storing (download_url expires, so it's never cached). */
+export interface ExportJob {
+  id: string;
+  table: string;
+  filters: Record<string, unknown> | null;
+  search: string[] | null;
+  fields: string[];
+  format: "csv" | "xlsx";
+  status: "Queued" | "Running" | "Completed" | "Failed";
+  rows_total: number | null;
+  rows_exported: number;
+  file: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_by: string | null;
+  error: string | null;
+  download_url: string | null;
+  scan_pending: boolean;
+}
+
+/** admin.start_import()/get_import_status() — same shape family as
+ *  ExportJob, plus the per-row bookkeeping counters that make progress
+ *  and Resume possible (see admin/schemas/_data_import_row.json). */
+export interface ImportJob {
+  id: string;
+  table: string;
+  file: string;
+  column_mapping: Record<string, string>;
+  match_on: string[] | null;
+  on_error: "abort" | "skip";
+  status: "Queued" | "Running" | "Completed" | "CompletedWithErrors" | "Failed";
+  rows_total: number | null;
+  rows_processed: number;
+  rows_succeeded: number;
+  rows_failed: number;
+  started_at: string | null;
+  finished_at: string | null;
+  created_by: string | null;
+  error: string | null;
+}
+
+export interface ImportRowError {
+  id: string;
+  row_number: number;
+  raw_data: Record<string, unknown>;
+  error: string | null;
+}
+
+export interface ImportPreview {
+  columns: string[];
+  sample_rows: string[][];
+  row_count_hint: number | null;
+}

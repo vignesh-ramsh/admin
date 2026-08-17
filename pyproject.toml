@@ -3,7 +3,7 @@ name = "admin"
 version = "0.1.0"
 description = "Admin backend for ARC: schema/patch builder, generic data browser, user/role/session/access-key management, health dashboard, and its own served UI"
 requires-python = ">=3.12"
-dependencies = ["argon2-cffi", "zxcvbn"]
+dependencies = ["argon2-cffi", "zxcvbn", "openpyxl>=3.1"]
 
 [project.entry-points."arc.plugins"]
 admin = "admin:register"

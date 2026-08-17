@@ -2,5 +2,5 @@
 name = "admin"
 version = "0.1.0"
 capability = "admin"
-requires = ["relay", "gateway", "authn", "filer"]
+requires = ["relay", "gateway", "authn", "filer", "psqldb"]
 optional_requires = []
