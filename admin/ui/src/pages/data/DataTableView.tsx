@@ -226,7 +226,7 @@ export function DataTableView() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface px-2.5 py-2">
         <div className="flex items-center gap-2">
           <h2 className="text-[15px] font-semibold text-text">{table}</h2>
           {schema.system && <Badge tone="warning">system</Badge>}
