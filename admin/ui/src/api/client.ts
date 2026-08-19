@@ -1,6 +1,6 @@
 /* API client — talks to the same ARC Gateway backend as admin-desk.
  * Every admin capability is a whitelisted function reached at
- * /api/method/admin.<fn> (relay's RPC convention); auth uses its own
+ * /api/v1/admin.<fn> (relay's RPC convention); auth uses its own
  * hand-rolled paths (/login, /whoami, ...) served by the authn plugin.
  * Session lives in an httpOnly `arc_session` cookie; mutating requests
  * echo the JS-readable `csrf_token` cookie back as X-CSRF-Token
@@ -93,7 +93,7 @@ export async function call<T = unknown>(
   options: { method?: CallMethod } = {},
 ): Promise<T> {
   const method = options.method ?? "POST";
-  const base = `/api/method/admin.${fn}`;
+  const base = `/api/v1/admin.${fn}`;
 
   if (method === "GET") {
     // cache: "no-store" — a whitelisted GET is a live, per-request read
