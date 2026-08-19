@@ -22,8 +22,11 @@ import { validateField, validateValues, type Errors } from "./validate";
  *  wrapper is identical either way, only how each individual field
  *  renders differs (FieldInput vs FieldPreview). A schema with no `group`
  *  set on any field (grouped.length <= 1) renders exactly as before: one
- *  flat grid, no section chrome at all. */
-function FieldGrid({
+ *  flat grid, no section chrome at all. Exported: TrashPreviewModal reuses
+ *  this exact grouping/rendering shape for a trash entry's snapshot, the
+ *  same "preview a row's fields" job this route's own preview mode does,
+ *  just sourcing values from a JSON snapshot instead of a live row. */
+export function FieldGrid({
   fields,
   renderField,
   isEmpty,

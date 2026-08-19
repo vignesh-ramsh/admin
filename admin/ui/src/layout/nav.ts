@@ -9,6 +9,7 @@ import {
   FolderOpen,
   ListChecks,
   Settings2,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -30,6 +31,7 @@ export const NAV: NavGroup[] = [
     items: [
       { to: "/data", label: "Data Browser", icon: Database },
       { to: "/schema", label: "Schema Builder", icon: FileCode2 },
+      { to: "/trash", label: "Trash", icon: Trash2 },
     ],
   },
   {

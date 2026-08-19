@@ -13,6 +13,8 @@ import { RowEditorRoute } from "./pages/data/RowEditorRoute";
 import { SchemaBuilderPage } from "./pages/schema/SchemaBuilderPage";
 import { SchemaFileEditorRoute } from "./pages/schema/SchemaFileEditorRoute";
 
+import { TrashPage } from "./pages/trash/TrashPage";
+
 import { UsersPage } from "./pages/users/UsersPage";
 import { CreateUserRoute } from "./pages/users/CreateUserRoute";
 import { UserDetailRoute } from "./pages/users/UserDetailRoute";
@@ -76,6 +78,8 @@ export default function App() {
         <Route path="/schema" element={<SchemaBuilderPage />}>
           <Route path=":kind/:name" element={<SchemaFileEditorRoute />} />
         </Route>
+
+        <Route path="/trash" element={<TrashPage />} />
 
         <Route path="/users" element={<UsersPage />}>
           <Route path="new" element={<CreateUserRoute />} />

@@ -348,3 +348,19 @@ export interface ImportPreview {
   sample_rows: string[][];
   row_count_hint: number | null;
 }
+
+/** admin.list_trash_rows() — one entry per soft-deleted row still sitting
+ *  in _trash (drop_type="Row" only; a "Table"/"Column" trash entry from a
+ *  schema migration isn't a single restorable document, see trash_api.py). */
+export interface TrashRow {
+  id: string;
+  table: string;
+  deleted_by: string | null;
+  deleted_at: string;
+}
+
+/** admin.get_trash_row() — TrashRow plus the full pre-delete row snapshot. */
+export interface TrashRowDetail extends TrashRow {
+  drop_type: string;
+  snapshot: Record<string, unknown>;
+}
