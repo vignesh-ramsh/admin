@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
 from typing import Any
 
 import arc
@@ -31,10 +30,6 @@ _SKIP_OPTIMISTIC_BATCH = 20
 _REFERENCE_CHUNK = 1000
 _PROGRESS_EVERY_ROWS = 200
 _PROGRESS_EVERY_SECONDS = 2.0
-
-
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 async def _resolve_references(
@@ -148,7 +143,7 @@ async def _run_import_job(job_id: str) -> None:
         logger.error(f"import job {job_id} vanished before it could run")
         return
 
-    await arc.relay.save("_data_import_job", {"id": job_id, "status": "Running", "started_at": _now()})
+    await arc.relay.save("_data_import_job", {"id": job_id, "status": "Running", "started_at": arc.tz.utcnow()})
 
     try:
         await _ensure_row_bookkeeping(job)
@@ -214,7 +209,7 @@ async def _run_import_job(job_id: str) -> None:
                         "id": job_id,
                         "status": "Failed",
                         "error": f"{len(preflight_errors)} row(s) failed to resolve — nothing was written",
-                        "finished_at": _now(),
+                        "finished_at": arc.tz.utcnow(),
                     },
                 )
                 return
@@ -237,7 +232,7 @@ async def _run_import_job(job_id: str) -> None:
                             "id": job_id,
                             "status": "Failed",
                             "error": f"batch commit failed: {exc}",
-                            "finished_at": _now(),
+                            "finished_at": arc.tz.utcnow(),
                         },
                     )
                     return
@@ -304,9 +299,9 @@ async def _run_import_job(job_id: str) -> None:
 
         await flush_progress(force=True)
         final_status = "Completed" if failed == 0 else "CompletedWithErrors"
-        await arc.relay.save("_data_import_job", {"id": job_id, "status": final_status, "finished_at": _now()})
+        await arc.relay.save("_data_import_job", {"id": job_id, "status": final_status, "finished_at": arc.tz.utcnow()})
     except Exception as exc:  # noqa: BLE001 - a background job must record its own failure, never crash silently
         logger.error(f"import job {job_id} failed: {exc}")
         await arc.relay.save(
-            "_data_import_job", {"id": job_id, "status": "Failed", "error": str(exc), "finished_at": _now()}
+            "_data_import_job", {"id": job_id, "status": "Failed", "error": str(exc), "finished_at": arc.tz.utcnow()}
         )

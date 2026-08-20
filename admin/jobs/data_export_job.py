@@ -18,7 +18,6 @@ from __future__ import annotations
 import csv
 import io
 import logging
-from datetime import datetime, timezone
 
 import arc
 
@@ -69,17 +68,13 @@ def _search_where(schema, search: list[str] | None) -> tuple[str, list]:
     return "(" + " OR ".join(clauses) + ")", params
 
 
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
 async def _run_export_job(job_id: str) -> None:
     job = await arc.relay.get("_data_export_job", job_id, arc.relay.all_columns("_data_export_job"))
     if job is None:
         logger.error(f"export job {job_id} vanished before it could run")
         return
 
-    await arc.relay.save("_data_export_job", {"id": job_id, "status": "Running", "started_at": _now()})
+    await arc.relay.save("_data_export_job", {"id": job_id, "status": "Running", "started_at": arc.tz.utcnow()})
 
     try:
         schema = arc.psqldb.schema(job["table"])
@@ -100,7 +95,7 @@ async def _run_export_job(job_id: str) -> None:
             writer = csv.writer(buf)
             writer.writerow(job["fields"])
 
-        last_progress_at = _now().timestamp()
+        last_progress_at = arc.tz.utcnow().timestamp()
         cursor: str | None = None
         while True:
             page_rows, cursor, total = await cursor_page(
@@ -125,7 +120,7 @@ async def _run_export_job(job_id: str) -> None:
                     ws.append([None if v is None else str(v) for v in values])
                 rows_written += 1
 
-            now_ts = _now().timestamp()
+            now_ts = arc.tz.utcnow().timestamp()
             if rows_written % _PROGRESS_EVERY_ROWS == 0 or now_ts - last_progress_at >= _PROGRESS_EVERY_SECONDS:
                 await arc.relay.save("_data_export_job", {"id": job_id, "rows_exported": rows_written})
                 last_progress_at = now_ts
@@ -151,10 +146,10 @@ async def _run_export_job(job_id: str) -> None:
         )
         await arc.relay.save(
             "_data_export_job",
-            {"id": job_id, "status": "Completed", "file": file_row["id"], "finished_at": _now()},
+            {"id": job_id, "status": "Completed", "file": file_row["id"], "finished_at": arc.tz.utcnow()},
         )
     except Exception as exc:  # noqa: BLE001 - a background job must record its own failure, never crash silently
         logger.error(f"export job {job_id} failed: {exc}")
         await arc.relay.save(
-            "_data_export_job", {"id": job_id, "status": "Failed", "error": str(exc), "finished_at": _now()}
+            "_data_export_job", {"id": job_id, "status": "Failed", "error": str(exc), "finished_at": arc.tz.utcnow()}
         )

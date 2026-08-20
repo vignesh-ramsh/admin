@@ -6,17 +6,11 @@ include the Superuser/"*" full-bypass) are reimplemented directly here,
 same reasoning as sessions_api/users_api — a leaked API key must never be
 able to carry the full-role bypass a session can."""
 
-from datetime import datetime, timedelta, timezone
-
 import arc
 from psqldb.validation import ValidationError
 
 from admin._security import by_of, has_roles_subset, new_access_key
 from admin._pagination import cursor_page
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 def _escape_like(value: str) -> str:
@@ -105,7 +99,7 @@ async def create_access_key(
         )
 
     raw_key, prefix, key_hash = new_access_key()
-    expires_at = _utcnow() + timedelta(days=expires_in_days) if expires_in_days else None
+    expires_at = arc.tz.add(days=expires_in_days) if expires_in_days else None
     try:
         row = await arc.relay.save(
             "_access_keys",
@@ -137,7 +131,7 @@ async def revoke_access_key(key_prefix: str, identity=None) -> dict:
         arc.relay.throw("no such access key", status=404, code="not_found")
     if row["revoked_at"] is None:
         await arc.relay.save(
-            "_access_keys", {"id": row["id"], "revoked_at": _utcnow()}, by=by_of(identity)
+            "_access_keys", {"id": row["id"], "revoked_at": arc.tz.utcnow()}, by=by_of(identity)
         )
         await arc.authn.invalidate_access_key_cache(row["key_prefix"])
     return {"ok": True}
@@ -162,14 +156,14 @@ async def clear_access_keys(
         "_access_keys", filters=filters, fields=["id", "key_prefix"], limit=None
     )
     for r in rows:
-        await arc.relay.save("_access_keys", {"id": r["id"], "revoked_at": _utcnow()}, by=by)
+        await arc.relay.save("_access_keys", {"id": r["id"], "revoked_at": arc.tz.utcnow()}, by=by)
         await arc.authn.invalidate_access_key_cache(r["key_prefix"])
     return {"ok": True, "revoked": len(rows)}
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def prune_access_keys(older_than_days: int = 30) -> dict:
-    cutoff = _utcnow() - timedelta(days=older_than_days)
+    cutoff = arc.tz.ago(days=older_than_days)
     # Correctness-critical: every key past the cutoff must be found, or
     # pruning silently stops working past DEFAULT_LIST_LIMIT keys.
     all_keys = await arc.relay.list(

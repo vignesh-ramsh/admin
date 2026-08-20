@@ -50,10 +50,6 @@ _USER_LIST_FIELDS = [
 ]
 
 
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
-
-
 def _validate_allowed_ips(allowed_ips: list[str] | None) -> list[str] | None:
     """Same shape authn's own `_ip_allowed` (authn/authn/__init__.py)
     parses at request time — a plain IP or a CIDR network. Rejected here,
@@ -361,6 +357,6 @@ async def set_password(email: str, password: str, identity=None) -> dict:
         filters={"user": user["id"], "revoked_at": {"is_null": True}},
     )
     for s in sessions:
-        await arc.relay.save("_sessions", {"id": s["id"], "revoked_at": _utcnow()}, by=by)
+        await arc.relay.save("_sessions", {"id": s["id"], "revoked_at": arc.tz.utcnow()}, by=by)
         await arc.authn.invalidate_session_cache(s["token_hash"])
     return {"ok": True, "sessions_revoked": len(sessions)}

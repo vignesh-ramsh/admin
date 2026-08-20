@@ -5,16 +5,10 @@ directly. _sessions is a "system": true table with no soft-delete
 (docs/arc.MD §3.9) — revoke sets revoked_at; prune is a genuine hard
 delete of already-inactive rows, mirroring the CLI exactly."""
 
-from datetime import datetime, timedelta, timezone
-
 import arc
 
 from admin._security import by_of
 from admin._pagination import cursor_page
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
 
 
 def _escape_like(value: str) -> str:
@@ -84,7 +78,7 @@ async def revoke_session(session_id: str, identity=None) -> dict:
         arc.relay.throw("no such session", status=404, code="not_found")
     if row["revoked_at"] is None:
         await arc.relay.save(
-            "_sessions", {"id": row["id"], "revoked_at": _utcnow()}, by=by_of(identity)
+            "_sessions", {"id": row["id"], "revoked_at": arc.tz.utcnow()}, by=by_of(identity)
         )
         await arc.authn.invalidate_session_cache(row["token_hash"])
     return {"ok": True}
@@ -109,7 +103,7 @@ async def clear_sessions(email: str | None = None, all_users: bool = False, iden
         "_sessions", filters=filters, fields=["id", "token_hash"], limit=None
     )
     for r in rows:
-        await arc.relay.save("_sessions", {"id": r["id"], "revoked_at": _utcnow()}, by=by)
+        await arc.relay.save("_sessions", {"id": r["id"], "revoked_at": arc.tz.utcnow()}, by=by)
         await arc.authn.invalidate_session_cache(r["token_hash"])
     return {"ok": True, "revoked": len(rows)}
 
@@ -124,7 +118,7 @@ async def prune_sessions(older_than_days: int = 30) -> dict:
     semantics as the CLI's prune-sessions. The Query Engine has no OR
     grouping (docs/arc.MD §3.4), so this filters client-side, the same
     established pattern already used for has_roles membership checks."""
-    cutoff = _utcnow() - timedelta(days=older_than_days)
+    cutoff = arc.tz.ago(days=older_than_days)
     # Correctness-critical: every session past the cutoff must be found,
     # or pruning silently stops working once there are more than
     # DEFAULT_LIST_LIMIT sessions in the table.
