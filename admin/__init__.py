@@ -11,7 +11,8 @@ arc.health.*) — zero code changes to relay/psqldb/authn/gateway. Where
 authn's own CLI (plugins/authn/authn/cli.py) has logic admin also needs
 (password hashing/strength, token/prefix generation), admin reimplements
 it directly against the same libraries (argon2-cffi, zxcvbn) and the same
-documented formats (authn's KEY_PREFIX_LEN=12, hash_token's sha256), rather
+documented formats (authn's KEY_PREFIX_LEN=12) — token hashing itself calls
+the shared arc.hash(), so it's not even a reimplementation there — rather
 than importing authn's internal module — the safety nets that actually
 matter (has_roles validation, cache invalidation, audit trail) are
 TABLE-level hooks/triggers authn already registered at ITS OWN boot time

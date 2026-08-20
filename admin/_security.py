@@ -3,8 +3,11 @@ admin._security
 -----------------
 Password hashing/strength and token/prefix generation — reimplemented here
 against the same libraries and documented formats authn's own CLI uses
-(argon2-cffi, zxcvbn, secrets.token_urlsafe, sha256), rather than importing
-authn's internal module, per this plugin's explicit self-containment.
+(argon2-cffi, zxcvbn, secrets.token_urlsafe, arc.hash), rather than importing
+authn's internal module, per this plugin's explicit self-containment. The
+token hashing itself isn't a reimplementation at all — new_access_key()
+below calls the same arc.hash() authn's own _resolve_api_key uses, so a key
+minted here always verifies there.
 
 None of this is authn business "logic" that could drift in a way that
 matters — it's direct library calls plus two documented protocol
@@ -20,9 +23,10 @@ Relay, never through raw SQL.
 
 from __future__ import annotations
 
-import hashlib
 import secrets
 from typing import Any
+
+import arc
 
 # Must match authn/authn/__init__.py's KEY_PREFIX_LEN exactly — that's what
 # _resolve_api_key's own parsing (`prefix = raw[:KEY_PREFIX_LEN]`) expects
@@ -65,17 +69,13 @@ def check_password_strength(
         raise ValueError(f"password does not meet the minimum strength requirement: {detail}")
 
 
-def hash_token(raw: str) -> str:
-    return hashlib.sha256(raw.encode()).hexdigest()
-
-
 def new_access_key() -> tuple[str, str, str]:
     """Returns (raw_key, key_prefix, key_hash). Format ("ak_" + 43 url-safe
     chars) and prefix length must match authn's _resolve_api_key parsing
     exactly, or a key minted here would never authenticate."""
     raw = "ak_" + secrets.token_urlsafe(32)
     prefix = raw[:ACCESS_KEY_PREFIX_LEN]
-    return raw, prefix, hash_token(raw)
+    return raw, prefix, arc.hash(raw)
 
 
 def has_roles_subset(candidate: list[str] | None, allowed: list[str] | None) -> bool:
