@@ -98,6 +98,12 @@ async def _run_export_job(job_id: str) -> None:
         last_progress_at = arc.tz.utcnow().timestamp()
         cursor: str | None = None
         while True:
+            # with_total only on the FIRST page — a keyset page is
+            # O(limit), but count(*) is O(matching rows); every page after
+            # the first only ever discarded it anyway (`if rows_total is
+            # None` below), so a 1M-row export at _PAGE_SIZE=500 used to
+            # pay 2000 sequential full-table counts for exactly one that
+            # mattered.
             page_rows, cursor, total = await cursor_page(
                 job["table"],
                 schema,
@@ -108,6 +114,7 @@ async def _run_export_job(job_id: str) -> None:
                 limit=_PAGE_SIZE,
                 extra_where=search_where,
                 extra_params=search_params,
+                with_total=rows_total is None,
             )
             if rows_total is None:
                 rows_total = total

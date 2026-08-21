@@ -108,7 +108,8 @@ async def cursor_page(
     limit: int = 50,
     extra_where: str = "",
     extra_params: list[Any] = (),
-) -> tuple[list[dict], str | None, int]:
+    with_total: bool = True,
+) -> tuple[list[dict], str | None, int | None]:
     """Returns (rows, next_cursor, total).
 
     `order_by` is (column, is_desc) — a single column, validated against the
@@ -119,11 +120,30 @@ async def cursor_page(
     same query: write it with $1, $2, ... placeholders as if it were the
     only condition; this renumbers them automatically to fit alongside
     `filters`'s own params.
-    """
+
+    `with_total=True` (default) matches every existing caller's own
+    contract unchanged — the interactive list pages (Data Browser, Users,
+    Jobs, ...) show a live total on every scroll-triggered page. Pass
+    `with_total=False` to skip it: a keyset page is O(limit), but
+    `count(*)` is O(matching rows) — the export job's own `while True`
+    loop over `cursor_page` used to pay that full-table count on EVERY
+    page and discard all but the first result (`if rows_total is None`),
+    so a 1M-row export at 500/page meant 2000 sequential full-table
+    counts. `total` comes back None when skipped — never a stale or
+    guessed number."""
     sort_col, desc = order_by
     columns = schema.columns_by_name
     if sort_col not in columns:
         raise PaginationError(f"unknown sort column '{sort_col}' on table '{table}'")
+    # `fields` is interpolated straight into the SELECT column list below
+    # (quoted identifiers, never a parameter) — validated here for the
+    # same reason relay.query.build_select validates its own `fields`:
+    # every CURRENT caller happens to pass an already-validated list, but
+    # nothing enforced that as a contract, and this is the one place that
+    # can actually check it against the schema.
+    unknown = [f for f in fields if f not in columns]
+    if unknown:
+        raise PaginationError(f"unknown field(s) {unknown} on table '{table}'")
     pk = _pk_name(schema)
     ref_columns = arc.psqldb.ref_columns()
     limit = max(1, min(int(limit), MAX_LIMIT))
@@ -136,8 +156,10 @@ async def cursor_page(
         clauses.append(_renumber(extra_where, len(params)))
         params = [*params, *extra_params]
 
-    count_where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-    total = await arc.relay.sql_val(f'SELECT count(*) FROM "{table}" {count_where}', *params)
+    total = None
+    if with_total:
+        count_where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        total = await arc.relay.sql_val(f'SELECT count(*) FROM "{table}" {count_where}', *params)
 
     page_clauses = list(clauses)
     page_params = list(params)
