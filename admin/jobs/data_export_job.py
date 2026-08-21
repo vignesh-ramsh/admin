@@ -18,6 +18,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
+from typing import Any
 
 import arc
 
@@ -33,6 +34,28 @@ _CONTENT_TYPE = {
     "csv": "text/csv",
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 }
+
+
+# A spreadsheet application (Excel, LibreOffice, Sheets) treats a cell
+# whose text STARTS with one of these as a formula, not literal text — the
+# classic =HYPERLINK(...)/=WEBSERVICE(...)/cmd|'/c calc'!A1 exfiltration/
+# execution chain, triggered the instant whoever downloaded this export
+# opens it. The values being exported here are ordinary business data
+# (employee names, chat messages, ...) — genuinely attacker-influenced,
+# not staff-authored, so this isn't a hypothetical.
+_FORMULA_LEAD_CHARS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _safe_cell(value: Any) -> Any:
+    """Prefixes a single U+0027 (apostrophe) — the standard "force this
+    cell to be read as text" marker every major spreadsheet app already
+    honors — rather than stripping the leading character, so the
+    exported value still round-trips byte-for-byte on re-import. Only
+    ever touches a str; a number/bool/etc. can't begin with any of these
+    characters in a way that would parse as a formula."""
+    if isinstance(value, str) and value.startswith(_FORMULA_LEAD_CHARS):
+        return "'" + value
+    return value
 
 
 def _escape_like(value: str) -> str:
@@ -122,9 +145,9 @@ async def _run_export_job(job_id: str) -> None:
             for row in page_rows:
                 values = [row.get(f) for f in job["fields"]]
                 if writer is not None:
-                    writer.writerow(["" if v is None else v for v in values])
+                    writer.writerow(["" if v is None else _safe_cell(v) for v in values])
                 else:
-                    ws.append([None if v is None else str(v) for v in values])
+                    ws.append([None if v is None else _safe_cell(str(v)) for v in values])
                 rows_written += 1
 
             now_ts = arc.tz.utcnow().timestamp()
