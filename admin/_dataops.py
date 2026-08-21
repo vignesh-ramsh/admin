@@ -16,7 +16,27 @@ from psqldb.validation import ValidationError
 from admin._pagination import PaginationError
 
 PROTECTED_WRITE_TABLES = frozenset(
-    {"_users", "_roles", "_sessions", "_access_keys", "_trash", "_field_registry", "_patch_history"}
+    {
+        "_users",
+        "_roles",
+        "_sessions",
+        "_access_keys",
+        "_trash",
+        "_field_registry",
+        "_patch_history",
+        # _job_log.payload is executable — a raw save_row() here is a second
+        # way to reach the same arbitrary-dispatch surface
+        # relay.background_jobs._dispatch_module_allowed now gates on the
+        # run side; blocking the write here means a Superuser data-browser
+        # slip can't even queue the attempt.
+        "_job_log",
+        # Both mint a real, usable credential the instant their token_hash
+        # matches on a later request (a password-reset link, an
+        # impersonation ticket) — a raw save_row() can set expires_at/
+        # used_at/token_hash by hand and forge either one for any user.
+        "_password_resets",
+        "_impersonation_tickets",
+    }
 )
 READ_ERRORS = (SchemaError, ValidationError, arc.relay.QueryError, PaginationError)
 
