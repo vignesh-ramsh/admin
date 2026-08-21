@@ -39,7 +39,7 @@ from psqldb.model import (
     load_schemas_dir,
 )
 
-from admin._paths import PLUGINS_ROOT, patches_dir, require_plugin_dir, schemas_dir
+from admin._paths import PLUGINS_ROOT, patches_dir, require_plugin_dir, schema_file_path, schemas_dir
 
 
 def _read_json_files(directory) -> list[str]:
@@ -223,8 +223,7 @@ async def list_schema_files(plugin: str) -> dict:
 
 @arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def get_schema_file(plugin: str, name: str) -> dict:
-    directory = require_plugin_dir(plugin)
-    path = directory / "schemas" / f"{name}.json"
+    path = schema_file_path(plugin, name, kind="schemas")
     if not path.is_file():
         arc.relay.throw(
             f"no schema file '{name}.json' for plugin '{plugin}'", status=404, code="not_found"
@@ -234,8 +233,7 @@ async def get_schema_file(plugin: str, name: str) -> dict:
 
 @arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def get_patch_file(plugin: str, name: str) -> dict:
-    directory = require_plugin_dir(plugin)
-    path = directory / "patches" / f"{name}.json"
+    path = schema_file_path(plugin, name, kind="patches")
     if not path.is_file():
         arc.relay.throw(
             f"no patch file '{name}.json' for plugin '{plugin}'", status=404, code="not_found"
@@ -249,8 +247,7 @@ async def save_schema_file(plugin: str, name: str, content: dict) -> dict:
     plugin already owns — same file, same rules as hand-editing
     schemas/<name>.json. Disk only; run get_migrate_command afterward to
     see the real command that applies it."""
-    directory = require_plugin_dir(plugin)
-    path = directory / "schemas" / f"{name}.json"
+    path = schema_file_path(plugin, name, kind="schemas")
     schema = _atomic_write_validated(path, content, loader=load_schema_file, plugin=plugin)
     return {"ok": True, "path": str(path), "table": schema.table}
 
@@ -261,8 +258,7 @@ async def save_patch_file(plugin: str, name: str, content: dict) -> dict:
     another plugin's) — never creates the table itself (docs/arc.MD
     §3.9). Disk only, same validate-before-write guarantee as
     save_schema_file."""
-    directory = require_plugin_dir(plugin)
-    path = directory / "patches" / f"{name}.json"
+    path = schema_file_path(plugin, name, kind="patches")
     schema = _atomic_write_validated(
         path, content, loader=load_patch_file, plugin=plugin, is_patch=True
     )
@@ -271,8 +267,7 @@ async def save_patch_file(plugin: str, name: str, content: dict) -> dict:
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def delete_schema_file(plugin: str, name: str) -> dict:
-    directory = require_plugin_dir(plugin)
-    path = directory / "schemas" / f"{name}.json"
+    path = schema_file_path(plugin, name, kind="schemas")
     if not path.is_file():
         arc.relay.throw(
             f"no schema file '{name}.json' for plugin '{plugin}'", status=404, code="not_found"
@@ -283,8 +278,7 @@ async def delete_schema_file(plugin: str, name: str) -> dict:
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def delete_patch_file(plugin: str, name: str) -> dict:
-    directory = require_plugin_dir(plugin)
-    path = directory / "patches" / f"{name}.json"
+    path = schema_file_path(plugin, name, kind="patches")
     if not path.is_file():
         arc.relay.throw(
             f"no patch file '{name}.json' for plugin '{plugin}'", status=404, code="not_found"
@@ -451,16 +445,14 @@ async def apply_schema_file(plugin: str, name: str, confirm: bool = False) -> di
     """Apply Now for a schema file — see this module's own docstring and
     _apply_or_preview for the full design. `confirm=False` (the default)
     is a dry preview: builds and returns the plan, applies nothing."""
-    directory = require_plugin_dir(plugin)
-    path = directory / "schemas" / f"{name}.json"
+    path = schema_file_path(plugin, name, kind="schemas")
     return await _apply_or_preview(path, plugin, load_schema_file, is_patch=False, confirm=confirm)
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def apply_patch_file(plugin: str, name: str, confirm: bool = False) -> dict:
     """Apply Now for a patch file — identical shape to apply_schema_file."""
-    directory = require_plugin_dir(plugin)
-    path = directory / "patches" / f"{name}.json"
+    path = schema_file_path(plugin, name, kind="patches")
     return await _apply_or_preview(path, plugin, load_patch_file, is_patch=True, confirm=confirm)
 
 

@@ -71,3 +71,40 @@ def require_plugin_dir(plugin: str) -> Path:
             code="unconventional_plugin_layout",
         )
     return directory
+
+
+def schema_file_path(plugin: str, name: str, *, kind: str) -> Path:
+    """Every schema_api.py read/write/delete call site's `path = directory
+    / kind / f"{name}.json"` funnels through here — `plugin` is already
+    validated by require_plugin_dir (require_known_plugin), but `name` is
+    caller-supplied and, before this, was used completely unchecked: a
+    `name` of "../../../../tmp/pwned" resolves OUTSIDE the project
+    entirely (verified), giving Superuser arbitrary `.json` read/write/
+    delete anywhere this process can reach, and a same-project-different-
+    plugin `name` could plant a schema file another plugin's own migrate
+    then executes as DDL.
+
+    `kind` is "schemas" or "patches". Deliberately permissive on
+    CHARACTERS (a legitimate schema name is a human-typed display name —
+    slugify_table_name's own docstring gives "Legal Tasks" as the
+    canonical example, spaces and all) — the only thing that actually
+    enables traversal is a path separator, since Path only ever splits on
+    those; blocking `/`/`\\`/NUL closes it completely without rejecting
+    any name the Schema Builder UI would ever legitimately send. The
+    resolved-path containment check below is the second, independent
+    guard — the same belt-and-braces shape filer.providers.
+    LocalProvider._resolve already uses for the identical class of bug."""
+    directory = require_plugin_dir(plugin)
+    name = (name or "").strip()
+    if not name or any(ch in name for ch in ("/", "\\", "\x00")):
+        arc.relay.throw(
+            f"invalid file name {name!r} — must be non-empty and contain no "
+            f"path separators",
+            status=400,
+            code="invalid_name",
+        )
+    base = (directory / kind).resolve()
+    path = (base / f"{name}.json").resolve()
+    if path.parent != base:
+        arc.relay.throw(f"invalid file name {name!r}", status=400, code="invalid_name")
+    return path
