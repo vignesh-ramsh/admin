@@ -15,11 +15,12 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
+from typing import Any, AsyncIterator
 
 import arc
 
 from admin._coerce import CoercionError, coerce_value
+from admin._pagination import cursor_page
 from admin.jobs._file_reading import read_all_rows
 
 logger = logging.getLogger("admin.jobs.data_import")
@@ -30,16 +31,30 @@ _SKIP_OPTIMISTIC_BATCH = 20
 _REFERENCE_CHUNK = 1000
 _PROGRESS_EVERY_ROWS = 200
 _PROGRESS_EVERY_SECONDS = 2.0
+#: Batch size for the chunked _data_import_row scan (_iter_work_row_batches)
+#: that replaced a single `limit=None` fetch of the whole job's work queue.
+#: Same order of magnitude as _ABORT_CHUNK — this governs how many
+#: {id, row_number, raw_data} rows are held in memory AT ONCE, not how
+#: many get written in one statement (abort mode still writes in its own
+#: _ABORT_CHUNK-sized groups within one page when a page is larger).
+_WORK_ROW_SCAN_BATCH = 2000
 
 
 async def _resolve_references(
-    schema: Any, column_mapping: dict[str, str], row_dicts: list[dict[str, Any]]
+    schema: Any, column_mapping: dict[str, str], row_dicts: AsyncIterator[dict[str, Any]]
 ) -> dict[str, set[str]]:
     """{field_name: set of raw string values that already exist on the
     reference's real target column} — one arc.relay.list() call per
     REFERENCE column for the WHOLE work queue, never per-chunk, never
     per-row (mirrors relay.crud.save_many's own match_on distinct-value
     batching, for the same reason: this is what keeps it fast).
+
+    `row_dicts` is a single-use async iterator (a chunked scan over
+    _data_import_row, not a materialized list — see
+    _iter_work_row_batches) — collects EVERY reference field's distinct
+    values in ONE pass over it, not one pass per field the way a
+    materialized list could afford to do, since a second pass over an
+    already-exhausted async generator would just see nothing.
 
     What "the reference's real target column" is depends on
     Field.target_field (see psqldb.migrate.resolve_ref_columns): unset ->
@@ -60,16 +75,21 @@ async def _resolve_references(
     if not reference_fields:
         return {}
 
+    file_col_for = {f: file_col_by_field[f] for f in reference_fields}
+    distinct_by_field: dict[str, set[str]] = {f: set() for f in reference_fields}
+    async for raw in row_dicts:
+        for field_name in reference_fields:
+            value = raw.get(file_col_for[field_name])
+            if value not in (None, ""):
+                distinct_by_field[field_name].add(str(value))
+
     schemas_by_stem = {s.source_path.stem: s for s in arc.psqldb.schemas()}
     valid_by_field: dict[str, set[str]] = {}
     for field_name in reference_fields:
         field = columns_by_name[field_name]
-        file_col = file_col_by_field[field_name]
         target_schema = schemas_by_stem.get(field.target)
         lookup_column = field.target_field or "id"
-        distinct = {
-            str(raw[file_col]) for raw in row_dicts if raw.get(file_col) not in (None, "")
-        }
+        distinct = distinct_by_field[field_name]
         valid: set[str] = set()
         if target_schema is not None and distinct:
             values = list(distinct)
@@ -81,6 +101,49 @@ async def _resolve_references(
                 valid.update(str(m[lookup_column]) for m in matches)
         valid_by_field[field_name] = valid
     return valid_by_field
+
+
+async def _iter_work_row_batches(job_id: str, batch_size: int) -> AsyncIterator[list[dict]]:
+    """Yields the job's pending/failed _data_import_row rows in
+    row_number order, one bounded batch at a time — the chunked
+    replacement for a single `arc.relay.list(..., limit=None)` fetch of
+    the WHOLE job's work queue. Built on admin._pagination.cursor_page,
+    the same keyset-pagination primitive every other admin list endpoint
+    already uses, rather than hand-rolling a second one.
+
+    Safe to call while a CONCURRENT pass is updating already-yielded
+    rows' own `status` (skip mode's single streaming pass, and abort
+    mode's write pass both do exactly this): cursor_page's keyset
+    condition excludes earlier rows by `row_number` POSITION, not by
+    re-evaluating `status` on each page — a row this function already
+    yielded is never reconsidered by a later page regardless of what its
+    status becomes in the meantime."""
+    schema = arc.psqldb.schema("_data_import_row")
+    cursor: str | None = None
+    while True:
+        rows, cursor, _total = await cursor_page(
+            "_data_import_row",
+            schema,
+            fields=["id", "row_number", "raw_data"],
+            filters={"job": job_id, "status": {"in": ["pending", "failed"]}},
+            order_by=("row_number", False),
+            after=cursor,
+            limit=batch_size,
+            with_total=False,
+        )
+        if not rows:
+            return
+        yield rows
+        if cursor is None:
+            return
+
+
+async def _iter_raw_data(job_id: str, batch_size: int) -> AsyncIterator[dict[str, Any]]:
+    """Flattens _iter_work_row_batches into individual raw_data dicts —
+    _resolve_references' own input shape."""
+    async for batch in _iter_work_row_batches(job_id, batch_size):
+        for w in batch:
+            yield w["raw_data"]
 
 
 def _build_row(
@@ -124,7 +187,7 @@ async def _ensure_row_bookkeeping(job: dict) -> None:
 
     batch: list[dict] = []
     row_number = 0
-    for raw_row in data_rows:
+    async for raw_row in data_rows:
         row_number += 1
         raw_data = dict(zip(columns, raw_row))
         batch.append({"job": job["id"], "row_number": row_number, "raw_data": raw_data, "status": "pending"})
@@ -153,15 +216,9 @@ async def _run_import_job(job_id: str) -> None:
         column_mapping: dict[str, str] = job["column_mapping"]
         match_on = job["match_on"] or None
 
-        work_rows = await arc.relay.list(
-            "_data_import_row",
-            fields=["id", "row_number", "raw_data"],
-            filters={"job": job_id, "status": {"in": ["pending", "failed"]}},
-            order_by=["row_number"],
-            limit=None,
+        valid_by_field = await _resolve_references(
+            schema, column_mapping, _iter_raw_data(job_id, _WORK_ROW_SCAN_BATCH)
         )
-        raw_dicts = [w["raw_data"] for w in work_rows]
-        valid_by_field = await _resolve_references(schema, column_mapping, raw_dicts)
 
         # A resumed run's work queue only holds pending/failed rows — a
         # row that already succeeded on an earlier run isn't reprocessed,
@@ -188,15 +245,19 @@ async def _run_import_job(job_id: str) -> None:
             # Pre-flight: every unresolved REFERENCE must be known BEFORE
             # touching save_many at all — a downstream FK-constraint DB
             # error would be a much worse message, and the whole point of
-            # "abort" is nothing gets written if anything's wrong.
-            built: list[tuple[dict, dict]] = []  # (row_payload, work_row)
+            # "abort" is nothing gets written if anything's wrong. Streamed
+            # via _iter_work_row_batches rather than a materialized
+            # `work_rows` list — `preflight_errors` itself still IS a
+            # plain list, but its size is bounded by how many rows are
+            # actually WRONG, not by the total row count, so holding it
+            # is a reasonable, much smaller footprint than the row queue
+            # it was found within.
             preflight_errors: list[tuple[dict, str]] = []
-            for w in work_rows:
-                payload, err = _build_row(w["raw_data"], column_mapping, columns_by_name, valid_by_field)
-                if err is not None:
-                    preflight_errors.append((w, err))
-                else:
-                    built.append((payload, w))
+            async for batch in _iter_work_row_batches(job_id, _WORK_ROW_SCAN_BATCH):
+                for w in batch:
+                    _payload, err = _build_row(w["raw_data"], column_mapping, columns_by_name, valid_by_field)
+                    if err is not None:
+                        preflight_errors.append((w, err))
 
             if preflight_errors:
                 for w, err in preflight_errors:
@@ -214,13 +275,22 @@ async def _run_import_job(job_id: str) -> None:
                 )
                 return
 
-            for i in range(0, len(built), _ABORT_CHUNK):
-                chunk = built[i : i + _ABORT_CHUNK]
-                payloads = [p for p, _w in chunk]
+            # Second pass, same rows, same order (row_number, unchanged
+            # since the preflight pass above never wrote anything) — the
+            # preflight pass already proved every row builds cleanly, so
+            # rebuilding here (cheap, pure in-memory work, no I/O) instead
+            # of holding onto `built` from pass one is what keeps this
+            # bounded to _ABORT_CHUNK rows in memory at a time rather than
+            # the whole job's queue.
+            async for chunk in _iter_work_row_batches(job_id, _ABORT_CHUNK):
+                payloads = [
+                    _build_row(w["raw_data"], column_mapping, columns_by_name, valid_by_field)[0]
+                    for w in chunk
+                ]
                 try:
                     await arc.relay.save_many(job["table"], payloads, match_on=match_on)
                 except Exception as exc:  # noqa: BLE001 - recorded on every row in this chunk, then re-raised path below
-                    for _p, w in chunk:
+                    for w in chunk:
                         await arc.relay.save(
                             "_data_import_row", {"id": w["id"], "status": "failed", "error": str(exc)}
                         )
@@ -243,14 +313,13 @@ async def _run_import_job(job_id: str) -> None:
                 # positionally. Record success without resolved_row_id
                 # rather than risk attaching the wrong id to a row.
                 await arc.relay.save_many(
-                    "_data_import_row", [{"id": w["id"], "status": "success", "error": None} for _p, w in chunk]
+                    "_data_import_row", [{"id": w["id"], "status": "success", "error": None} for w in chunk]
                 )
                 succeeded += len(chunk)
                 await flush_progress()
 
         else:  # "skip"
-            for i in range(0, len(work_rows), _SKIP_OPTIMISTIC_BATCH):
-                batch = work_rows[i : i + _SKIP_OPTIMISTIC_BATCH]
+            async for batch in _iter_work_row_batches(job_id, _SKIP_OPTIMISTIC_BATCH):
                 built = []
                 batch_errors: list[tuple[dict, str]] = []
                 for w in batch:

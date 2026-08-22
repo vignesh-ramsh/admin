@@ -8,16 +8,34 @@ uploaded content-type — filer's own upload() only maps a handful of
 content types to a real extension (csv isn't one of them, see its
 _EXTENSION_FOR), and different browsers/OSes report different content
 types for the same .csv file anyway. The filename extension is stable
-and always available (filerfile.original_filename)."""
+and always available (filerfile.original_filename).
+
+read_all_rows() streams: it hands back an async row ITERATOR, not a
+materialized list — the earlier shape (`list[list[Any]]`) meant the
+import job's own bookkeeping pass, which already batches its WRITES in
+bounded chunks, was still reading the whole file into memory first
+regardless. XLSX goes through a temp file on disk rather than an
+in-memory BytesIO for the identical reason: openpyxl's read_only mode
+already streams row data once it has a seekable source, but only if that
+source isn't itself a giant in-memory buffer — a temp file also bounds
+"how much RAM can a single malicious upload force us to hold" to roughly
+one chunk at a time instead of the whole (possibly zip-bomb-expanded)
+archive. Exactly ONE read/stream of the underlying file per call — the
+header comes off the SAME pass as the data rows, not a separate peek."""
 
 from __future__ import annotations
 
 import csv
 import io
-from typing import Any
+import os
+import tempfile
+from pathlib import Path
+from typing import Any, AsyncIterator
 
-import arc
-
+#: Matches filer.providers' own StorageProvider.read_stream default —
+#: not imported (that's a Protocol, no constant to share), just the same
+#: number for the same "reasonable I/O chunk" reasoning.
+_STREAM_CHUNK_SIZE = 65536
 _PREVIEW_SAMPLE_ROWS = 10
 
 
@@ -25,10 +43,30 @@ def _is_xlsx(file_row: dict) -> bool:
     return file_row["original_filename"].lower().endswith(".xlsx")
 
 
-async def _read_bytes(file_row: dict) -> bytes:
+def _provider(file_row: dict):
     from filer.providers import PROVIDERS
 
-    return await PROVIDERS[file_row["storage"]].read(file_row["storage_key"])
+    return PROVIDERS[file_row["storage"]]
+
+
+async def _read_bytes(file_row: dict) -> bytes:
+    return await _provider(file_row).read(file_row["storage_key"])
+
+
+async def _stream_to_tempfile(file_row: dict) -> Path:
+    """Copies the stored file to a local temp file via the provider's own
+    read_stream() (bounded per-chunk memory the whole way, including over
+    S3 — StorageProvider.read_stream is part of the same Protocol either
+    backend implements), rather than one `provider.read()` call handing
+    back the entire file as a single in-memory bytes object."""
+    fd, raw_path = tempfile.mkstemp(prefix="arc-import-", suffix=".xlsx")
+    path = Path(raw_path)
+    with os.fdopen(fd, "wb") as f:
+        async for chunk in _provider(file_row).read_stream(
+            file_row["storage_key"], chunk_size=_STREAM_CHUNK_SIZE
+        ):
+            f.write(chunk)
+    return path
 
 
 async def iter_rows_preview(file_row: dict) -> tuple[list[str], list[list[str]], int | None]:
@@ -37,25 +75,29 @@ async def iter_rows_preview(file_row: dict) -> tuple[list[str], list[list[str]],
     already fully in memory to get the header) and None for xlsx (would
     need a second full pass to count with openpyxl's own API; not worth
     it just for a preview hint)."""
-    content = await _read_bytes(file_row)
     if _is_xlsx(file_row):
-        import openpyxl
-
-        wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
-        ws = wb.active
-        rows_iter = ws.iter_rows(values_only=True)
+        path = await _stream_to_tempfile(file_row)
         try:
-            header = [str(c) if c is not None else "" for c in next(rows_iter)]
-        except StopIteration:
-            return [], [], 0
-        samples = []
-        for i, row in enumerate(rows_iter):
-            if i >= _PREVIEW_SAMPLE_ROWS:
-                break
-            samples.append(["" if v is None else str(v) for v in row])
-        wb.close()
-        return header, samples, None
+            import openpyxl
 
+            wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+            ws = wb.active
+            rows_iter = ws.iter_rows(values_only=True)
+            try:
+                header = [str(c) if c is not None else "" for c in next(rows_iter)]
+            except StopIteration:
+                return [], [], 0
+            samples = []
+            for i, row in enumerate(rows_iter):
+                if i >= _PREVIEW_SAMPLE_ROWS:
+                    break
+                samples.append(["" if v is None else str(v) for v in row])
+            wb.close()
+            return header, samples, None
+        finally:
+            path.unlink(missing_ok=True)
+
+    content = await _read_bytes(file_row)
     text = content.decode("utf-8-sig")
     reader = csv.reader(io.StringIO(text))
     try:
@@ -71,34 +113,72 @@ async def iter_rows_preview(file_row: dict) -> tuple[list[str], list[list[str]],
     return header, samples, total
 
 
-async def read_all_rows(file_row: dict) -> tuple[list[str], list[list[Any]]]:
-    """(columns, every data row's raw cell values) — the full file, used
-    once by the import job's own first-run bookkeeping pass (see
-    data_import_job.py). Loads the whole file's TEXT into memory (not the
-    whole target TABLE) — a deliberate, pragmatic v1 choice: a CSV/XLSX
-    sized for an admin bulk import is realistically thousands to tens of
-    thousands of rows, single-digit MB of text, categorically different
-    from the "never fetch the whole table" constraint the export job's
-    own cursor-paginated read actually has to honor."""
-    content = await _read_bytes(file_row)
+async def _iter_csv_rows(reader: csv.reader) -> AsyncIterator[list[str]]:
+    """Thin async wrapper around an already-open csv.reader's remaining
+    rows — csv.reader is already a lazy, one-row-at-a-time iterator; the
+    old code's only actual mistake was collecting its output into
+    `list(reader)`. No `await` inside the loop (row iteration is pure,
+    fast CPU work over an already-decoded in-memory string, not I/O), so
+    this never yields control mid-row — it's an async generator purely so
+    callers can `async for` it alongside the xlsx path uniformly."""
+    for row in reader:
+        yield row
+
+
+async def _iter_xlsx_rows(rows_iter, path: Path, wb) -> AsyncIterator[list[Any]]:
+    """Same shape as _iter_csv_rows, for openpyxl's own lazy row
+    iterator. Owns closing the workbook AND deleting the temp file once
+    exhausted (or once the caller stops iterating early and this
+    generator is garbage-collected/closed — the `finally` still runs via
+    PEP 342 generator close semantics)."""
+    try:
+        for row in rows_iter:
+            yield ["" if v is None else v for v in row]
+    finally:
+        wb.close()
+        path.unlink(missing_ok=True)
+
+
+async def read_all_rows(file_row: dict) -> tuple[list[str], AsyncIterator[list[Any]]]:
+    """(columns, an async iterator over every remaining data row's raw
+    cell values) — used once by the import job's own first-run
+    bookkeeping pass (see data_import_job.py), which already writes in
+    bounded _BOOKKEEPING_BATCH-sized chunks; this is what makes the READ
+    side of that pass bounded-memory too, instead of materializing the
+    whole file's rows first and batching only the writes.
+
+    Exactly one read/stream of the file — the header is pulled off the
+    SAME open reader/workbook the returned iterator continues from, not
+    a separate peek that would double the I/O."""
     if _is_xlsx(file_row):
+        path = await _stream_to_tempfile(file_row)
         import openpyxl
 
-        wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
         ws = wb.active
         rows_iter = ws.iter_rows(values_only=True)
         try:
             header = [str(c) if c is not None else "" for c in next(rows_iter)]
         except StopIteration:
-            return [], []
-        data_rows = [["" if v is None else v for v in row] for row in rows_iter]
-        wb.close()
-        return header, data_rows
+            wb.close()
+            path.unlink(missing_ok=True)
 
+            async def _empty() -> AsyncIterator[list[Any]]:
+                return
+                yield  # pragma: no cover - makes this a generator function
+
+            return [], _empty()
+        return header, _iter_xlsx_rows(rows_iter, path, wb)
+
+    content = await _read_bytes(file_row)
     text = content.decode("utf-8-sig")
     reader = csv.reader(io.StringIO(text))
     try:
         header = next(reader)
     except StopIteration:
-        return [], []
-    return header, list(reader)
+        async def _empty() -> AsyncIterator[list[Any]]:
+            return
+            yield  # pragma: no cover - makes this a generator function
+
+        return [], _empty()
+    return header, _iter_csv_rows(reader)
