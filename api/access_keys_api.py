@@ -164,17 +164,24 @@ async def clear_access_keys(
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def prune_access_keys(older_than_days: int = 30) -> dict:
     cutoff = arc.tz.ago(days=older_than_days)
-    # Correctness-critical: every key past the cutoff must be found, or
-    # pruning silently stops working past DEFAULT_LIST_LIMIT keys.
-    all_keys = await arc.relay.list(
-        "_access_keys", fields=["id", "revoked_at", "expires_at"], limit=None
+    # The cutoff comparison itself runs in Postgres now, not in Python
+    # after an unbounded fetch — `limit=None` used to mean "every row in
+    # the table," not "every row past the cutoff." any_of is relay's own
+    # bounded OR escape hatch (relay/query.py), the same mechanism
+    # save_rows_bulk_by_filter/delete_rows_by_filter already use for a
+    # "resolve the matching ids, then act" pair.
+    rows = await arc.relay.list(
+        "_access_keys",
+        fields=["id"],
+        filters={
+            "any_of": [
+                {"revoked_at": {"lt": cutoff}},
+                {"expires_at": {"lt": cutoff}},
+            ]
+        },
+        limit=None,
     )
-    to_delete = [
-        k["id"]
-        for k in all_keys
-        if (k["revoked_at"] is not None and k["revoked_at"] < cutoff)
-        or (k["expires_at"] is not None and k["expires_at"] < cutoff)
-    ]
+    to_delete = [r["id"] for r in rows]
     if to_delete:
         await arc.relay.delete_many("_access_keys", to_delete)
     return {"ok": True, "deleted": len(to_delete)}
