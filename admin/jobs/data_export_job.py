@@ -67,6 +67,11 @@ def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+#: Same bound and reasoning as data_api.py's own _MAX_SEARCH_TERMS —
+#: kept in sync by hand, same duplication posture as this whole function.
+_MAX_SEARCH_TERMS = 10
+
+
 def _search_where(schema, search: list[str] | None) -> tuple[str, list]:
     """Same shape as data_api.py's own _search_where — free-text search
     OR'd across the table's list-view columns, cast ::text so it works
@@ -75,6 +80,12 @@ def _search_where(schema, search: list[str] | None) -> tuple[str, list]:
     there)."""
     if not search:
         return "", []
+    if len(search) > _MAX_SEARCH_TERMS:
+        arc.relay.throw(
+            f"search supports at most {_MAX_SEARCH_TERMS} terms, got {len(search)}.",
+            status=400,
+            code="too_many_search_terms",
+        )
     columns = [f.name for f in schema.fields if f.is_column() and f.list][:6]
     columns = ["id", *columns]
     clauses: list[str] = []

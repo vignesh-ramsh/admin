@@ -29,6 +29,15 @@ from admin._pagination import _renumber, cursor_page
 #: same "what does the table visually show" question, one per side of the wire.
 _LIST_VIEW_MAX = 6
 
+#: Caller-supplied `search` is a list, unlike every other admin list
+#: endpoint's single `q: str` — each term multiplies into up to
+#: _LIST_VIEW_MAX+1 OR'd ILIKE clauses (_search_where below), so an
+#: unbounded list is an unbounded WHERE clause, caller-controlled. Same
+#: number relay.query.py's own OR primitive already bounds itself to
+#: (MAX_ANY_OF_BRANCHES), not a coincidence — same shape of problem, same
+#: bound.
+_MAX_SEARCH_TERMS = 10
+
 
 def _escape_like(value: str) -> str:
     """Same escaping the Query Engine's own `contains` operator does
@@ -54,10 +63,42 @@ def _search_where(schema, search: list[str] | None) -> tuple[str, list]:
     wrapper, not an indexed full-text search" trade-off, consistent with the
     rest of this bounded Query Engine.
 
+    Indexing note (evaluated, not applied here — this function has no
+    business creating indexes on an arbitrary caller's table, and which
+    columns are worth it is workload-specific, not something this
+    framework should decide for every project): a plain B-tree index
+    can't serve `col::text ILIKE '%term%'` at all (the leading `%` rules
+    out any prefix-anchored scan) regardless of the ::text cast, so
+    nothing here is disabling an index that would otherwise have helped —
+    every one of these searches is already a sequential scan on an
+    unindexed table today, cast or no cast. The one thing that WOULD
+    actually help a genuinely large, frequently-searched table is a
+    `pg_trgm` GIN index (`CREATE INDEX ... USING GIN (col gin_trgm_ops)`,
+    requires `CREATE EXTENSION pg_trgm`) on that specific TEXT/VARCHAR
+    column — Postgres's trigram operator class serves `ILIKE '%term%'`
+    directly. psqldb's own schema `"index"` declarations have no way to
+    request one today (index_sql's GIN branch is a fixed, automatic rule
+    for a lone JSONB field only, not a caller-chosen "using"/opclass) —
+    adding that is real, separate future work if a project actually needs
+    it, not something to bolt on here for every table whether it helps
+    or not.
+
     Returns ("", []) when there's nothing to search — the caller ANDs this in
-    only when non-empty, same contract cursor_page's own extra_where has."""
+    only when non-empty, same contract cursor_page's own extra_where has.
+
+    Raises QueryError past _MAX_SEARCH_TERMS — same reject-don't-truncate
+    posture every other bound in this Query Engine already takes
+    (relay.query's own MAX_ANY_OF_BRANCHES/MAX_ORDER_FIELDS/
+    MAX_AGGREGATES), so a caller sees a clear 400 naming the limit rather
+    than a silently-narrowed search."""
     if not search:
         return "", []
+    if len(search) > _MAX_SEARCH_TERMS:
+        arc.relay.throw(
+            f"search supports at most {_MAX_SEARCH_TERMS} terms, got {len(search)}.",
+            status=400,
+            code="too_many_search_terms",
+        )
     columns = [f.name for f in schema.fields if f.is_column() and f.list][:_LIST_VIEW_MAX]
     columns = ["id", *columns]
     if not columns:
