@@ -156,7 +156,7 @@ async def list_filer_files(
     # numeric STRING outright rather than silently accepting it.
     rows, next_cursor, total = await cursor_page(
         "filerfile",
-        arc.psqldb.schema("filerfile"),
+        arc.pgdb.schema("filerfile"),
         fields=arc.relay.all_columns("filerfile"),
         filters=filters or None,
         order_by=("created_at", True),

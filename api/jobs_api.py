@@ -77,7 +77,7 @@ async def list_job_log(
     # filer_admin_api.py, and audit_api.py this session.
     rows, next_cursor, total = await cursor_page(
         "_job_log",
-        arc.psqldb.schema("_job_log"),
+        arc.pgdb.schema("_job_log"),
         fields=arc.relay.all_columns("_job_log"),
         filters=filters or None,
         order_by=("finished_at", True),

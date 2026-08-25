@@ -47,7 +47,7 @@ async def list_sessions(
 
     rows, next_cursor, total = await cursor_page(
         "_sessions",
-        arc.psqldb.schema("_sessions"),
+        arc.pgdb.schema("_sessions"),
         fields=["id", "user", "session_type", "expires_at", "revoked_at", "ip_address", "last_seen_at"],
         filters=filters,
         order_by=("expires_at", True),

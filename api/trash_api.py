@@ -2,7 +2,7 @@
 arc_soft_delete_to_trash trigger) and restore them.
 
 `_trash` is raw bootstrap DDL (docs/arc.MD §3.9), never a declared
-TableSchema, so it's invisible to arc.psqldb.schema()/cursor_page() the
+TableSchema, so it's invisible to arc.pgdb.schema()/cursor_page() the
 same way _audit_{plugin} tables are — see audit_api.py's own module
 docstring for the identical situation. This hand-rolls cursor pagination
 the same way, reusing only the schema-independent encode_cursor/
@@ -22,7 +22,7 @@ restored, it's just gone from Trash, not merely marked recovered."""
 from __future__ import annotations
 
 import arc
-from psqldb.model import SchemaError
+from pgdb.model import SchemaError
 
 from admin._pagination import PaginationError, decode_cursor, encode_cursor
 
@@ -122,11 +122,11 @@ async def restore_trash_row(trash_id: str) -> dict:
 
     table = trash_row["table"]
     try:
-        arc.psqldb.schema(table)
+        arc.pgdb.schema(table)
     except SchemaError:
         arc.relay.throw(f"'{table}' no longer exists — cannot restore into it", status=409, code="table_gone")
 
-    async with arc.psqldb.acquire() as conn:
+    async with arc.pgdb.acquire() as conn:
         async with conn.transaction():
             inserted_id = await conn.fetchval(
                 f'INSERT INTO "{table}" SELECT * FROM jsonb_populate_record(null::"{table}", $1::jsonb) '

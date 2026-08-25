@@ -83,7 +83,7 @@ async def _resolve_references(
             if value not in (None, ""):
                 distinct_by_field[field_name].add(str(value))
 
-    schemas_by_stem = {s.source_path.stem: s for s in arc.psqldb.schemas()}
+    schemas_by_stem = {s.source_path.stem: s for s in arc.pgdb.schemas()}
     valid_by_field: dict[str, set[str]] = {}
     for field_name in reference_fields:
         field = columns_by_name[field_name]
@@ -118,7 +118,7 @@ async def _iter_work_row_batches(job_id: str, batch_size: int) -> AsyncIterator[
     re-evaluating `status` on each page — a row this function already
     yielded is never reconsidered by a later page regardless of what its
     status becomes in the meantime."""
-    schema = arc.psqldb.schema("_data_import_row")
+    schema = arc.pgdb.schema("_data_import_row")
     cursor: str | None = None
     while True:
         rows, cursor, _total = await cursor_page(
@@ -211,7 +211,7 @@ async def _run_import_job(job_id: str) -> None:
     try:
         await _ensure_row_bookkeeping(job)
         job = await arc.relay.get("_data_import_job", job_id, arc.relay.all_columns("_data_import_job"))
-        schema = arc.psqldb.schema(job["table"])
+        schema = arc.pgdb.schema(job["table"])
         columns_by_name = schema.columns_by_name
         column_mapping: dict[str, str] = job["column_mapping"]
         match_on = job["match_on"] or None

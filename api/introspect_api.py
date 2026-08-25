@@ -2,7 +2,7 @@
 Builder's "pick a plugin, pick a table" flow. Read-only, no writes."""
 
 import arc
-from psqldb.model import SchemaError
+from pgdb.model import SchemaError
 
 from admin._exclusions import filter_plugins
 from admin._paths import require_known_plugin
@@ -16,7 +16,7 @@ def _parent_tables_by_stem() -> dict[str, str]:
     that stem. Shared by list_table_meta and get_table_schema so both
     surfaces agree."""
     by_stem: dict[str, str] = {}
-    for s in arc.psqldb.schemas():
+    for s in arc.pgdb.schemas():
         for f in s.fields:
             if f.type == "TABLE" and f.target:
                 by_stem[f.target] = s.table
@@ -64,13 +64,13 @@ async def list_table_meta(surface: str | None = None) -> list[dict]:
     hard MigrationError on every query. `table` is the physical name, only
     for display and for looking a schema up by table elsewhere.
 
-    Reads arc.psqldb.schemas() (what's declared in schema files) rather
+    Reads arc.pgdb.schemas() (what's declared in schema files) rather
     than _field_registry (what's been migrated): when authoring a schema
     you want to reference a table that exists on disk even if its first
     migration hasn't run yet — and _field_registry only ever knows the
     physical name, never the stem this needs.
     """
-    schemas = list(arc.psqldb.schemas())
+    schemas = list(arc.pgdb.schemas())
     parent_by_stem = _parent_tables_by_stem()
 
     return [
@@ -111,7 +111,7 @@ async def list_tables(plugin: str, surface: str | None = None) -> list[str]:
 @arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def get_table_schema(table: str) -> dict:
     try:
-        schema = arc.psqldb.schema(table)
+        schema = arc.pgdb.schema(table)
     except SchemaError as exc:
         arc.relay.throw(str(exc), status=404, code="unknown_table")
     parent_table = _parent_tables_by_stem().get(schema.source_path.stem) if schema.child else None

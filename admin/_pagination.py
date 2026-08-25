@@ -78,7 +78,7 @@ def decode_cursor(token: str) -> tuple[Any, str]:
     reuses this directly: _audit_{plugin} tables are raw-SQL bootstrap
     structure with no TableSchema (see that module's own docstring), so
     they can never go through cursor_page() itself (which requires
-    arc.psqldb.schema(table)), only its two small, schema-independent
+    arc.pgdb.schema(table)), only its two small, schema-independent
     encode/decode primitives."""
     try:
         payload = json.loads(base64.urlsafe_b64decode(token.encode()).decode())
@@ -145,7 +145,7 @@ async def cursor_page(
     if unknown:
         raise PaginationError(f"unknown field(s) {unknown} on table '{table}'")
     pk = _pk_name(schema)
-    ref_columns = arc.psqldb.ref_columns()
+    ref_columns = arc.pgdb.ref_columns()
     limit = max(1, min(int(limit), MAX_LIMIT))
 
     parsed, any_of = relay_query.parse_filters(schema, filters)

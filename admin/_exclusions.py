@@ -40,7 +40,7 @@ DATA_BROWSER_EXCLUDED_PLUGINS = frozenset(
         "redix",
         "relay",
         "authn",
-        "psqldb",
+        "pgdb",
     }
 )
 
@@ -56,7 +56,7 @@ SCHEMA_BUILDER_EXCLUDED_PLUGINS = frozenset(
         "gateway",
         "redix",
         "relay",
-        "psqldb",
+        "pgdb",
     }
 )
 

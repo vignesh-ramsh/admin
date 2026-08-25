@@ -7,7 +7,7 @@ same reasoning as sessions_api/users_api — a leaked API key must never be
 able to carry the full-role bypass a session can."""
 
 import arc
-from psqldb.validation import ValidationError
+from pgdb.validation import ValidationError
 
 from admin._security import by_of, has_roles_subset, new_access_key
 from admin._pagination import cursor_page
@@ -49,7 +49,7 @@ async def list_access_keys(
 
     rows, next_cursor, total = await cursor_page(
         "_access_keys",
-        arc.psqldb.schema("_access_keys"),
+        arc.pgdb.schema("_access_keys"),
         fields=["id", "user", "key_prefix", "label", "scopes", "expires_at", "last_used_at", "revoked_at"],
         filters=filters,
         order_by=("expires_at", True),

@@ -111,7 +111,7 @@ async def _run_export_job(job_id: str) -> None:
     await arc.relay.save("_data_export_job", {"id": job_id, "status": "Running", "started_at": arc.tz.utcnow()})
 
     try:
-        schema = arc.psqldb.schema(job["table"])
+        schema = arc.pgdb.schema(job["table"])
         search_where, search_params = _search_where(schema, job["search"])
 
         rows_written = 0

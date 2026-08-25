@@ -1,7 +1,7 @@
 """Audit history — _audit_{plugin} tables are raw-SQL bootstrap structure
 (docs/arc.MD §3.9's audit trigger writes them directly), never declared via
 a schema file, so they have no TableSchema and are invisible to
-arc.psqldb.schema()/the generic Data Browser (get_table_schema/list_rows
+arc.pgdb.schema()/the generic Data Browser (get_table_schema/list_rows
 both depend on it — verified directly: schema("_audit_example_hr") raises
 SchemaError, "no registered schema for table"). There was previously no
 way to view this data anywhere in admin at all; this is that view.
@@ -72,7 +72,7 @@ async def list_audit_entries(
     """Cursor-paginated — {rows, next_cursor, total}, same shape every
     other list endpoint in admin returns, but hand-rolled rather than
     built on admin._pagination.cursor_page: that helper requires a real
-    psqldb TableSchema (arc.psqldb.schema(table)), and _audit_{plugin}
+    psqldb TableSchema (arc.pgdb.schema(table)), and _audit_{plugin}
     tables — raw-SQL bootstrap structure, docs/arc.MD §3.9 — have none.
     Reuses cursor_page's own encode_cursor/decode_cursor primitives (both
     schema-independent) for the keyset itself: id DESC alone, newest

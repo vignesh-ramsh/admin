@@ -10,8 +10,8 @@ checks and error-translation, rather than each copying them.
 from __future__ import annotations
 
 import arc
-from psqldb.model import SchemaError
-from psqldb.validation import ValidationError
+from pgdb.model import SchemaError
+from pgdb.validation import ValidationError
 
 from admin._pagination import PaginationError
 
@@ -47,7 +47,7 @@ def friendly(exc: Exception):
 
 def schema_or_throw(table: str):
     try:
-        return arc.psqldb.schema(table)
+        return arc.pgdb.schema(table)
     except SchemaError as exc:
         arc.relay.throw(str(exc), status=404, code="unknown_table")
 

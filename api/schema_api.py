@@ -10,7 +10,7 @@ Two distinct steps, deliberately never blurred together:
 - APPLY NOW (`apply_schema_file`/`apply_patch_file`, below) runs a real,
   TABLE-SCOPED migration for just the one file being edited, immediately,
   against the live database — then reloads THAT ONE table's shape into
-  this process's own in-memory psqldb registry (`arc.psqldb.
+  this process's own in-memory psqldb registry (`arc.pgdb.
   reload_schema_file`) so the very next read/write in this process sees
   it, no restart needed here. Explicitly narrower than `arc psqldb
   migrate`: it never touches any other table, and — this phase's one
@@ -29,8 +29,8 @@ import tempfile
 from pathlib import Path
 
 import arc
-from psqldb import migrate as psqldb_migrate
-from psqldb.model import (
+from pgdb import migrate as psqldb_migrate
+from pgdb.model import (
     FieldError,
     SchemaError,
     load_patch_file,
@@ -66,7 +66,7 @@ def _read_json_files(directory) -> list[str]:
 
 def _schemas_on_disk() -> list:
     """Every plugin's schema files as they are RIGHT NOW on disk — not
-    arc.psqldb.schemas(), which is the boot-time cache and would miss a
+    arc.pgdb.schemas(), which is the boot-time cache and would miss a
     table authored earlier in this same session."""
     out = []
     for plugin_name in arc.admin.list_installed_plugins():
@@ -302,7 +302,7 @@ def _serialize_op(op) -> dict:
 async def preview_migration_plan(plugin: str | None = None, table: str | None = None) -> dict:
     """Entirely read-only — build_plan diffs against the live database but
     never writes to it. Reloads EVERY installed plugin's schemas/patches
-    fresh from disk (not arc.psqldb's own cached, boot-time copies), so
+    fresh from disk (not arc.pgdb's own cached, boot-time copies), so
     this reflects on-disk edits immediately, exactly what `arc psqldb
     plan` run fresh in a new process would show. load_schemas_dir/
     load_patches_dir already tolerate a missing directory (a plugin with
@@ -316,7 +316,7 @@ async def preview_migration_plan(plugin: str | None = None, table: str | None = 
         all_schemas.extend(load_schemas_dir(directory / "schemas", plugin=name))
         all_patches.extend(load_patches_dir(directory / "patches", plugin=name))
 
-    async with arc.psqldb.acquire() as conn:
+    async with arc.pgdb.acquire() as conn:
         plan = await psqldb_migrate.build_plan(conn, all_schemas, all_patches, only_table=table)
     if plugin:
         plan.ops = [op for op in plan.ops if op.plugin == plugin or op.table == "_bootstrap"]
@@ -386,7 +386,7 @@ async def _apply_or_preview(
         # the CLI already holds it — the correct "serialize, don't reject"
         # behavior its own docstring describes.
         all_schemas, all_patches = _schemas_on_disk(), _patches_on_disk()
-        async with arc.psqldb.acquire() as conn, psqldb_migrate.migration_lock(conn):
+        async with arc.pgdb.acquire() as conn, psqldb_migrate.migration_lock(conn):
             plan = await psqldb_migrate.build_plan(conn, all_schemas, all_patches, only_table=table)
 
             result = {
@@ -415,11 +415,11 @@ async def _apply_or_preview(
             PLUGINS_ROOT / plugin, plugin, plan, reference
         )
 
-        # THE live reload — this process's own arc.psqldb registry now
+        # THE live reload — this process's own arc.pgdb registry now
         # reflects the new shape for THIS table, immediately. See
         # reload_schema_file's own docstring for exactly what this does and
         # doesn't cover (in-process only, this phase).
-        arc.psqldb.reload_schema_file(path, plugin=plugin, is_patch=is_patch)
+        arc.pgdb.reload_schema_file(path, plugin=plugin, is_patch=is_patch)
 
         result["applied"] = True
         result["migration_file"] = str(migration_path)

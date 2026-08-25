@@ -6,7 +6,7 @@ Deliberately self-contained, by explicit instruction: every management
 surface it needs (schema/patch builder, generic data browser, user/role/
 session/access-key management, health dashboard) is implemented ENTIRELY
 inside this plugin, calling only already-public capabilities
-(arc.relay.*, arc.psqldb.*, arc.authn.* the exported capability instance,
+(arc.relay.*, arc.pgdb.*, arc.authn.* the exported capability instance,
 arc.health.*) — zero code changes to relay/psqldb/authn/gateway. Where
 authn's own CLI (plugins/authn/authn/cli.py) has logic admin also needs
 (password hashing/strength, token/prefix generation), admin reimplements
@@ -51,7 +51,7 @@ UI_PREFIX = "admin"
 class AdminProvider:
     """Deliberately thin — almost all of admin's actual logic lives in its
     whitelisted api/ functions (loaded via relay.register_api below), which
-    call arc.relay/arc.psqldb/arc.authn directly. This class exists mainly
+    call arc.relay/arc.pgdb/arc.authn directly. This class exists mainly
     to hold the real Kernel instance register(kernel) receives, so
     admin._paths' plugin-existence check has something authoritative to
     call (there's no separate arc.kernel capability — the Kernel is the
@@ -76,12 +76,12 @@ def register(kernel: Any) -> None:
     kernel.export(
         CAPABILITY,
         provider,
-        requires=["relay", "gateway", "authn", "filer", "psqldb"],
+        requires=["relay", "gateway", "authn", "filer", "pgdb"],
         optional_requires=[],
     )
 
     relay = kernel.get("relay")
-    psqldb = kernel.get("psqldb")
+    psqldb = kernel.get("pgdb")
     # Bulk import/export job-tracking tables (_data_import_job/_row,
     # _data_export_job) — the one place admin owns its own schema rather
     # than only ever writing through tables other plugins declare. A

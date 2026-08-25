@@ -9,7 +9,7 @@ hook is registered against the TABLE, not the caller, so it runs
 regardless of which plugin calls arc.relay.save("_users", ...)."""
 
 import arc
-from psqldb.validation import ValidationError
+from pgdb.validation import ValidationError
 
 from admin._security import by_of
 from admin._pagination import cursor_page
@@ -37,7 +37,7 @@ async def list_roles(q: str | None = None, after: str | None = None, limit: int 
 
     rows, next_cursor, total = await cursor_page(
         "_roles",
-        arc.psqldb.schema("_roles"),
+        arc.pgdb.schema("_roles"),
         fields=arc.relay.all_columns("_roles"),
         order_by=("name", False),
         after=after,

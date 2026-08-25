@@ -125,7 +125,7 @@ async def _resolve_filtered_ids(table: str, schema, filters: dict | None, search
     does (parse_filters/render_where + the same _search_where extra clause
     list_rows uses) so the id set resolved here can never drift from what
     list_rows's own `total` showed the caller."""
-    ref_columns = arc.psqldb.ref_columns()
+    ref_columns = arc.pgdb.ref_columns()
     parsed, any_of = relay_query.parse_filters(schema, filters)
     where_sql, params = relay_query.render_where(table, parsed, any_of, ref_columns, start=1)
     clauses = [where_sql] if where_sql else []

@@ -25,7 +25,7 @@ from collections import Counter
 from datetime import datetime, timezone
 
 import arc
-from psqldb.validation import ValidationError
+from pgdb.validation import ValidationError
 
 from admin._security import by_of, check_password_strength, hash_password
 from admin._pagination import cursor_page
@@ -117,7 +117,7 @@ async def list_users(
 
     rows, next_cursor, total = await cursor_page(
         "_users",
-        arc.psqldb.schema("_users"),
+        arc.pgdb.schema("_users"),
         fields=_USER_LIST_FIELDS,
         order_by=("email", False),
         after=after,
