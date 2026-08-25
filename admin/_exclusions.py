@@ -31,7 +31,7 @@ SCHEMA_BUILDER = "schema_builder"
 #   authn                     — _users/_roles/_sessions/_access_keys have real
 #                               invariants; the Users/Roles/Sessions/Access Keys
 #                               screens own those instead of a raw row editor.
-#   psqldb                    — _trash/_field_registry/_patch_history are the
+#   pgdb                    — _trash/_field_registry/_patch_history are the
 #                               framework's own bookkeeping, not app data.
 DATA_BROWSER_EXCLUDED_PLUGINS = frozenset(
     {
@@ -48,7 +48,7 @@ DATA_BROWSER_EXCLUDED_PLUGINS = frozenset(
 #   admin/gateway/redix/relay — declare no schema files.
 #   authn                     — its four system tables are self-declared and
 #                               security-critical; editing them here is sharp-edged.
-#   psqldb                    — its own tables are created by raw bootstrap SQL,
+#   pgdb                    — its own tables are created by raw bootstrap SQL,
 #                               not schema files, so there is nothing to author.
 SCHEMA_BUILDER_EXCLUDED_PLUGINS = frozenset(
     {

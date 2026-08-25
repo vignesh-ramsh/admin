@@ -57,7 +57,7 @@ async def _resolve_references(
     already-exhausted async generator would just see nothing.
 
     What "the reference's real target column" is depends on
-    Field.target_field (see psqldb.migrate.resolve_ref_columns): unset ->
+    Field.target_field (see pgdb.migrate.resolve_ref_columns): unset ->
     this column is a raw UUID FK to target.id, so the file must supply
     that id directly, existence is checked against target.id, and the id
     string is written straight through. Set -> the column's REAL physical
@@ -65,7 +65,7 @@ async def _resolve_references(
     UNIQUE non-PK column, not UUID at all) — the file's raw value IS the
     natural key, existence is checked against that column instead, and
     it's written straight through unchanged too. Either way there is no
-    "resolve this string to a different id" step — psqldb's own design
+    "resolve this string to a different id" step — pgdb's own design
     already puts the resolvable value directly in the column; a UUID
     object is not what a target_field-typed column wants (confirmed the
     hard way: asyncpg rejects one with "expected str, got UUID")."""

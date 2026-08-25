@@ -3,7 +3,7 @@ admin._coerce
 --------------
 JSON → Python type coercion for the generic data browser.
 
-Why this exists: psqldb deliberately does no type coercion — insert()/
+Why this exists: pgdb deliberately does no type coercion — insert()/
 update() hand a caller's values straight to asyncpg, which requires real
 Python objects for typed columns (datetime for TIMESTAMPTZ, date for DATE,
 Decimal for NUMERIC, int for INTEGER, ...). Every existing caller is Python
@@ -11,14 +11,14 @@ code that already has those objects. The data browser is the first caller
 whose values arrive as JSON over HTTP, where a datetime can only ever be a
 string — so the conversion has to happen somewhere, and admin's own
 endpoint (the thing accepting the untrusted JSON) is where it belongs.
-Doing it here rather than in psqldb keeps admin self-contained and leaves
+Doing it here rather than in pgdb keeps admin self-contained and leaves
 every other caller's contract untouched.
 
 Deliberately narrow: only the types where a JSON value can't already be
 the right Python object. STRING/TEXT/EMAIL/PHONE/SELECT are already
 strings; REFERENCE is left alone (a str is accepted for both the default
 UUID case and a text natural-key target_field — an INT-typed target_field
-would need the cross-schema resolution psqldb.migrate.resolve_ref_columns
+would need the cross-schema resolution pgdb.migrate.resolve_ref_columns
 does, which isn't worth pulling in for that edge).
 """
 
@@ -103,7 +103,7 @@ def _columns_by_name(schema: Any) -> dict[str, Any]:
 
 def coerce_row(schema: Any, data: dict) -> dict:
     """Coerce every value in a write payload. Unknown keys are passed
-    through untouched — psqldb.validation.validate_columns_known is what
+    through untouched — pgdb.validation.validate_columns_known is what
     rejects those, with a better message than this module could give."""
     by_name = _columns_by_name(schema)
     out: dict[str, Any] = {}

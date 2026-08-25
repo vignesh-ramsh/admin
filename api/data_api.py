@@ -1,5 +1,5 @@
 """Generic data browser — list/view/edit/delete rows on ANY table, driven
-entirely by psqldb's own schema metadata. No new read/write logic: this is
+entirely by pgdb's own schema metadata. No new read/write logic: this is
 a thin, friendly-error wrapper directly over arc.relay.list/get/save/delete
 — the same Query Engine and CRUD every other caller in the system uses.
 
@@ -76,7 +76,7 @@ def _search_where(schema, search: list[str] | None) -> tuple[str, list]:
     `pg_trgm` GIN index (`CREATE INDEX ... USING GIN (col gin_trgm_ops)`,
     requires `CREATE EXTENSION pg_trgm`) on that specific TEXT/VARCHAR
     column — Postgres's trigram operator class serves `ILIKE '%term%'`
-    directly. psqldb's own schema `"index"` declarations have no way to
+    directly. pgdb's own schema `"index"` declarations have no way to
     request one today (index_sql's GIN branch is a fixed, automatic rule
     for a lone JSONB field only, not a caller-chosen "using"/opclass) —
     adding that is real, separate future work if a project actually needs

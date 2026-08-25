@@ -3,10 +3,10 @@ admin._paths
 -------------
 Filesystem conventions the schema/patch builder needs — where a given
 plugin's own schemas/patches directories physically live on disk. Nothing
-in psqldb retains this mapping after boot (register_model/register_patches
+in pgdb retains this mapping after boot (register_model/register_patches
 parse a directory into TableSchema objects immediately and never keep the
 path), so admin derives it itself, purely from the project's own directory
-convention — zero changes to psqldb needed for this.
+convention — zero changes to pgdb needed for this.
 
 schemas/patches (and hooks/api/tasks) live at the plugin ROOT
 (plugins/<name>/schemas/), siblings of the <name>/ package dir, NOT

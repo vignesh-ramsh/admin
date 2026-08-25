@@ -58,7 +58,7 @@ async def list_table_meta(surface: str | None = None) -> list[dict]:
     pickers need.
 
     `name` is the schema FILE STEM ("Department") and is what a REFERENCE/
-    TABLE field's `target` must be set to — psqldb.migrate
+    TABLE field's `target` must be set to — pgdb.migrate
     .resolve_ref_targets resolves targets via `{source_path.stem: schema}`,
     so the physical table name ("department") does NOT resolve and raises a
     hard MigrationError on every query. `table` is the physical name, only

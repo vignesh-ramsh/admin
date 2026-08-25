@@ -72,12 +72,12 @@ async def list_audit_entries(
     """Cursor-paginated — {rows, next_cursor, total}, same shape every
     other list endpoint in admin returns, but hand-rolled rather than
     built on admin._pagination.cursor_page: that helper requires a real
-    psqldb TableSchema (arc.pgdb.schema(table)), and _audit_{plugin}
+    pgdb TableSchema (arc.pgdb.schema(table)), and _audit_{plugin}
     tables — raw-SQL bootstrap structure, docs/arc.MD §3.9 — have none.
     Reuses cursor_page's own encode_cursor/decode_cursor primitives (both
     schema-independent) for the keyset itself: id DESC alone, newest
     first — no changed_at in the sort at all. id is UUIDv7
-    (psqldb/ddl.py's arc_uuid_generate_v7()), which embeds a millisecond
+    (pgdb/ddl.py's arc_uuid_generate_v7()), which embeds a millisecond
     timestamp in its high bits, so it's already chronologically ordered
     AND already indexed for free via the primary key — the same trick
     cursor_page()'s own default order_by=("id", False) relies on for

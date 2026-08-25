@@ -1,4 +1,4 @@
-"""Trash — browse rows soft-deleted into `_trash` (psqldb/ddl.py's
+"""Trash — browse rows soft-deleted into `_trash` (pgdb/ddl.py's
 arc_soft_delete_to_trash trigger) and restore them.
 
 `_trash` is raw bootstrap DDL (docs/arc.MD §3.9), never a declared
@@ -9,9 +9,9 @@ the same way, reusing only the schema-independent encode_cursor/
 decode_cursor halves of admin._pagination.
 
 Scoped to drop_type='Row' only — a 'Table'/'Column' trash entry (written
-by psqldb.migrate on a destructive schema change, not by a row delete)
+by pgdb.migrate on a destructive schema change, not by a row delete)
 doesn't represent a single restorable document the way this page's
-"preview the doc, click Restore" flow assumes; that's `arc psqldb trash
+"preview the doc, click Restore" flow assumes; that's `arc pgdb trash
 recover` CLI territory, not this page's.
 
 Restore re-inserts the row into its original table AND hard-deletes the

@@ -16,7 +16,7 @@ own audit trigger, _audit_authn.changed_by) are populated instead of NULL.
 REQUIRES authn's _users/_roles/_sessions/_access_keys to have been
 migrated with the created_by/updated_by columns added in this same
 change (schemas/_users.json etc.) — every write here will raise a raw
-UndefinedColumnError until `arc psqldb migrate -p authn` has been run."""
+UndefinedColumnError until `arc pgdb migrate -p authn` has been run."""
 
 import asyncio
 import ipaddress

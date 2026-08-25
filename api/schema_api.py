@@ -4,15 +4,15 @@ Schema/patch builder.
 Two distinct steps, deliberately never blurred together:
 
 - SAVE writes the schema/patch JSON file to disk only — the same file a
-  developer would hand-edit — and validates it (via psqldb's own
+  developer would hand-edit — and validates it (via pgdb's own
   load_schema_file/load_patch_file, already public) before committing.
   Never touches the database.
 - APPLY NOW (`apply_schema_file`/`apply_patch_file`, below) runs a real,
   TABLE-SCOPED migration for just the one file being edited, immediately,
   against the live database — then reloads THAT ONE table's shape into
-  this process's own in-memory psqldb registry (`arc.pgdb.
+  this process's own in-memory pgdb registry (`arc.pgdb.
   reload_schema_file`) so the very next read/write in this process sees
-  it, no restart needed here. Explicitly narrower than `arc psqldb
+  it, no restart needed here. Explicitly narrower than `arc pgdb
   migrate`: it never touches any other table, and — this phase's one
   deliberate, flagged limitation (2026-07-17) — it only reloads THIS
   server process; any other already-running Gateway worker, or a `arc
@@ -51,7 +51,7 @@ def _read_json_files(directory) -> list[str]:
 # --------------------------------------------------------------------- #
 # Cross-schema validation.
 #
-# psqldb's own load_schema_file validates ONE file in isolation. The rules
+# pgdb's own load_schema_file validates ONE file in isolation. The rules
 # that need every schema at once — does this REFERENCE's target resolve? is
 # a TABLE target actually a child? is target_field really unique? — are only
 # enforced later, at plan/migrate time (migrate.resolve_ref_targets /
@@ -187,7 +187,7 @@ def _atomic_write_validated(
     that validation passes — a malformed edit never leaves a broken schema
     file in place.
 
-    The table name is derived from the filename's STEM (psqldb.model.
+    The table name is derived from the filename's STEM (pgdb.model.
     slugify_table_name), so the temp copy must keep path.name unchanged —
     it lives in a different (temporary) PARENT directory instead. An
     earlier version of this used path.with_suffix(".json.tmp"), which
@@ -303,7 +303,7 @@ async def preview_migration_plan(plugin: str | None = None, table: str | None = 
     """Entirely read-only — build_plan diffs against the live database but
     never writes to it. Reloads EVERY installed plugin's schemas/patches
     fresh from disk (not arc.pgdb's own cached, boot-time copies), so
-    this reflects on-disk edits immediately, exactly what `arc psqldb
+    this reflects on-disk edits immediately, exactly what `arc pgdb
     plan` run fresh in a new process would show. load_schemas_dir/
     load_patches_dir already tolerate a missing directory (a plugin with
     no schemas/patches at all, e.g. gateway/redix) by returning []."""
@@ -334,7 +334,7 @@ async def preview_migration_plan(plugin: str | None = None, table: str | None = 
 # verb pair in this module (save_schema_file/save_patch_file, ...); both
 # funnel through _apply_or_preview, which does the actual work.
 #
-# `confirm` mirrors `arc psqldb migrate`'s own CLI posture exactly
+# `confirm` mirrors `arc pgdb migrate`'s own CLI posture exactly
 # (docs/arc.MD §3.9's CLI table: "Always shows the plan first (even with
 # --yes), single y/N confirm — no separate destructive-only gate"): a
 # confirm=false call ALWAYS returns the plan without applying anything,
@@ -369,17 +369,17 @@ async def _apply_or_preview(
         # this table may target another plugin's table, and vice versa;
         # same "read everything, diff scoped to one table" shape
         # preview_migration_plan already uses, via build_plan's own
-        # only_table parameter (the exact mechanism `arc psqldb migrate -t`
+        # only_table parameter (the exact mechanism `arc pgdb migrate -t`
         # already relies on — reused here, not reinvented).
         #
-        # ALSO holds psqldb's own migration_lock (a Postgres advisory lock,
-        # migrate.py's own cross-process serialization for `arc psqldb
+        # ALSO holds pgdb's own migration_lock (a Postgres advisory lock,
+        # migrate.py's own cross-process serialization for `arc pgdb
         # migrate`) around the SAME build-then-apply window, on one shared
         # connection — found missing by this project's own failure-mode
         # audit: the arc.relay.lock above only ever serialized concurrent
         # Admin API calls against EACH OTHER. It shares nothing with the
         # CLI's advisory lock (a different mechanism entirely), so an
-        # operator's `arc psqldb migrate` and an Admin UI "Apply Now" click
+        # operator's `arc pgdb migrate` and an Admin UI "Apply Now" click
         # against the same table, at the same moment, had no mutual
         # exclusion between them at all. migration_lock's own polling
         # design means this just waits its turn rather than erroring if
@@ -405,7 +405,7 @@ async def _apply_or_preview(
             reference = psqldb_migrate.migration_reference()
             await psqldb_migrate.apply_plan(conn, plan, reference=reference)
 
-        # Same audit-trail file `arc psqldb migrate` itself writes — plan.ops
+        # Same audit-trail file `arc pgdb migrate` itself writes — plan.ops
         # here is already scoped to this one table (plus universal bootstrap
         # ops), so this never claims another table's pending changes as
         # applied (the class of bug the CLI's own `-p` scoping had, before
@@ -424,7 +424,7 @@ async def _apply_or_preview(
         result["applied"] = True
         result["migration_file"] = str(migration_path)
         # Other processes notice on their own: every bridge-running ARC
-        # process (gateway workers, lineup worker/scheduler) polls psqldb's
+        # process (gateway workers, lineup worker/scheduler) polls pgdb's
         # reload stamp — max(applied_at) in _patch_history, which this
         # apply just moved — and reconciles from disk within seconds
         # (arc.events' process bridge). `arc reload` pushes it instantly;
@@ -463,7 +463,7 @@ async def get_migrate_command(plugin: str | None = None, table: str | None = Non
     cache (a fresh `arc.boot()` reloads every schema file from disk).
     Admin deliberately never runs apply_plan() itself — see this module's
     own docstring for why."""
-    parts = ["arc", "psqldb", "migrate"]
+    parts = ["arc", "pgdb", "migrate"]
     if plugin:
         parts += ["-p", plugin]
     if table:

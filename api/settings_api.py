@@ -16,7 +16,7 @@ roles=["Superuser"] gate on every function here — a known, flagged
 simplicity choice, not an oversight.
 
 set_setting() relies entirely on arc.settings.set()'s own existing rules
-(psqldb/arc/settings.py) rather than reimplementing them: flipping an
+(pgdb/arc/settings.py) rather than reimplementing them: flipping an
 existing key's secret-ness without deleting it first is already a hard
 SettingsError there, surfaced here as a clean 400. The UI additionally
 locks the secret/plain toggle for an existing key so this path is never

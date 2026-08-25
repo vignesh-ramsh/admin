@@ -7,7 +7,7 @@ surface it needs (schema/patch builder, generic data browser, user/role/
 session/access-key management, health dashboard) is implemented ENTIRELY
 inside this plugin, calling only already-public capabilities
 (arc.relay.*, arc.pgdb.*, arc.authn.* the exported capability instance,
-arc.health.*) — zero code changes to relay/psqldb/authn/gateway. Where
+arc.health.*) — zero code changes to relay/pgdb/authn/gateway. Where
 authn's own CLI (plugins/authn/authn/cli.py) has logic admin also needs
 (password hashing/strength, token/prefix generation), admin reimplements
 it directly against the same libraries (argon2-cffi, zxcvbn) and the same
@@ -81,13 +81,13 @@ def register(kernel: Any) -> None:
     )
 
     relay = kernel.get("relay")
-    psqldb = kernel.get("pgdb")
+    pgdb = kernel.get("pgdb")
     # Bulk import/export job-tracking tables (_data_import_job/_row,
     # _data_export_job) — the one place admin owns its own schema rather
     # than only ever writing through tables other plugins declare. A
-    # direct psqldb requirement (not just transitive through relay) since
+    # direct pgdb requirement (not just transitive through relay) since
     # this is a real, direct dependency now, not an implementation detail.
-    psqldb.register_model(Path(__file__).parent.parent / "schemas")
+    pgdb.register_model(Path(__file__).parent.parent / "schemas")
     # admin/api/*.py used to cross-import a shared _pagination.py helper
     # via `from admin.api._pagination import ...` — a real absolute
     # import, not just relay's own by-path directory scan — which only

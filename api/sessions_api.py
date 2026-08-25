@@ -86,7 +86,7 @@ async def revoke_session(session_id: str, identity=None) -> dict:
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def clear_sessions(email: str | None = None, all_users: bool = False, identity=None) -> dict:
-    """Never runs unscoped — same rule `arc psqldb clear` and the CLI's own
+    """Never runs unscoped — same rule `arc pgdb clear` and the CLI's own
     clear-sessions already enforce."""
     if not email and not all_users:
         arc.relay.throw("must specify either email or all_users=true", code="scope_required")
