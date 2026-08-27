@@ -65,6 +65,88 @@ export interface Profile {
 
 export type CallMethod = "GET" | "QUERY" | "POST";
 
+/* Conditional-request cache — one ETag + the body it was issued for, per
+ * (method, url, params) key. Entirely this client's own doing: the
+ * server sets no cache policy via ETag (gateway/__init__.py's own
+ * send_json_with_etag docstring is explicit about that), so nothing
+ * happens here unless THIS code deliberately tracks a tag and resends
+ * it. Layered on top of the existing `cache: "no-store"` below, not a
+ * replacement for it — that still stops the BROWSER's own HTTP cache
+ * from serving something stale; this is a separate, explicit
+ * If-None-Match round-trip this module manages itself, purely to avoid
+ * re-downloading a body that's still identical (server confirms via a
+ * bodyless 304 — the request itself, and the handler's own work behind
+ * it, still happen every time, same as if this cache didn't exist).
+ *
+ * Backed by sessionStorage, not just an in-memory Map — a PLAIN module-
+ * level Map is wiped on every full page reload (a fresh page load re-
+ * executes this whole module from scratch), which is exactly how a real
+ * user actually exercises this: hit refresh, and every request looked
+ * like the cache never existed at all — confirmed live, every request
+ * came back 200 with no If-None-Match sent, right after a reload, even
+ * though the SPA-internal-navigation case (no reload) already worked.
+ * sessionStorage survives a reload but clears when the tab closes —
+ * deliberately not localStorage (this app's own existing use of it, see
+ * theme/ThemeContext.tsx, is for a real cross-session PREFERENCE; this is
+ * a transient response cache that can carry admin data, which shouldn't
+ * linger indefinitely on disk once the tab's gone). */
+const ETAG_STORAGE_KEY = "arc_admin_etag_cache";
+
+function loadEtagCache(): Map<string, { etag: string; body: unknown }> {
+  try {
+    const raw = sessionStorage.getItem(ETAG_STORAGE_KEY);
+    if (!raw) return new Map();
+    return new Map(Object.entries(JSON.parse(raw)));
+  } catch {
+    // Corrupted JSON, storage disabled, or anything else — degrade to
+    // "no cache yet", never let a bad stored value break the app.
+    return new Map();
+  }
+}
+
+const etagCache = loadEtagCache();
+
+function persistEtagCache(): void {
+  try {
+    sessionStorage.setItem(ETAG_STORAGE_KEY, JSON.stringify(Object.fromEntries(etagCache)));
+  } catch {
+    // Quota exceeded or storage disabled — the in-memory Map (this tab's
+    // own lifetime) still works fine; only cross-reload persistence is
+    // lost, never a hard failure.
+  }
+}
+
+function etagCacheKey(method: string, base: string, paramsKey: string): string {
+  return `${method}:${base}:${paramsKey}`;
+}
+
+/** Attaches If-None-Match when this key has a cached ETag; on a 304,
+ *  returns the cached body without ever calling res.json() (a 304 has no
+ *  body to parse). On a fresh 200, records the new ETag (or drops any
+ *  stale entry if this response didn't carry one — e.g. the endpoint
+ *  opted out of etag= server-side). `res` must not have had its body
+ *  consumed yet. */
+async function withEtagCache<T>(
+  key: string,
+  fetchFn: (ifNoneMatch: string | null) => Promise<Response>,
+): Promise<T> {
+  const cached = etagCache.get(key);
+  const res = await fetchFn(cached?.etag ?? null);
+  if (res.status === 304 && cached) {
+    return cached.body as T;
+  }
+  if (!res.ok) throw await parseError(res);
+  const body = await res.json();
+  const etag = res.headers.get("etag");
+  if (etag) {
+    etagCache.set(key, { etag, body });
+  } else {
+    etagCache.delete(key);
+  }
+  persistEtagCache();
+  return body;
+}
+
 let queryMethodSupportedCache: boolean | null = null;
 function queryMethodSupported(): boolean {
   if (queryMethodSupportedCache !== null) return queryMethodSupportedCache;
@@ -105,24 +187,32 @@ export async function call<T = unknown>(
     // retroactively invalidate whatever a browser already cached from
     // before that existed — this forces a real network request every
     // time regardless of what's sitting in the cache already.
-    const res = await fetch(base + buildQueryString(params), {
-      credentials: "same-origin",
-      cache: "no-store",
-    });
-    if (!res.ok) throw await parseError(res);
-    return res.json();
+    //
+    // withEtagCache layers a SEPARATE, explicit If-None-Match round-trip
+    // on top of that — this module's own decision, not the browser's;
+    // the request above still always reaches the server, this only ever
+    // saves re-downloading a body the server confirms is unchanged.
+    const qs = buildQueryString(params);
+    return withEtagCache<T>(etagCacheKey("GET", base, qs), (ifNoneMatch) =>
+      fetch(base + qs, {
+        credentials: "same-origin",
+        cache: "no-store",
+        headers: ifNoneMatch ? { "If-None-Match": ifNoneMatch } : undefined,
+      }),
+    );
   }
 
   if (method === "QUERY" && queryMethodSupported()) {
     try {
-      const res = await fetch(base, {
-        method: "QUERY",
-        credentials: "same-origin",
-        headers: headers(),
-        body: JSON.stringify(params),
-      });
-      if (!res.ok) throw await parseError(res);
-      return res.json();
+      const paramsKey = JSON.stringify(params);
+      return await withEtagCache<T>(etagCacheKey("QUERY", base, paramsKey), (ifNoneMatch) =>
+        fetch(base, {
+          method: "QUERY",
+          credentials: "same-origin",
+          headers: { ...headers(), ...(ifNoneMatch ? { "If-None-Match": ifNoneMatch } : {}) },
+          body: JSON.stringify(params),
+        }),
+      );
     } catch (err) {
       if (err instanceof ApiError) throw err;
       // fall through to POST — every QUERY endpoint is also POST-registered
