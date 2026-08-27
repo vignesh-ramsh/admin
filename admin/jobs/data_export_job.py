@@ -26,6 +26,8 @@ from admin._pagination import cursor_page
 
 logger = logging.getLogger("admin.jobs.data_export")
 
+JOB_TABLE = "_data_import_export_job"
+
 _PAGE_SIZE = 500
 _PROGRESS_EVERY_ROWS = 500
 _PROGRESS_EVERY_SECONDS = 2.0
@@ -103,31 +105,34 @@ def _search_where(schema, search: list[str] | None) -> tuple[str, list]:
 
 
 async def _run_export_job(job_id: str) -> None:
-    job = await arc.relay.get("_data_export_job", job_id, arc.relay.all_columns("_data_export_job"))
+    job = await arc.relay.get(JOB_TABLE, job_id, arc.relay.all_columns(JOB_TABLE))
     if job is None:
         logger.error(f"export job {job_id} vanished before it could run")
         return
 
-    await arc.relay.save("_data_export_job", {"id": job_id, "status": "Running", "started_at": arc.tz.utcnow()})
+    await arc.relay.save(JOB_TABLE, {"id": job_id, "status": "Running", "started_at": arc.tz.utcnow()})
 
     try:
+        settings = job["settings"]
+        fields: list[str] = settings["fields"]
+        format_: str = settings["format"]
         schema = arc.pgdb.schema(job["table"])
-        search_where, search_params = _search_where(schema, job["search"])
+        search_where, search_params = _search_where(schema, settings.get("search"))
 
         rows_written = 0
         rows_total: int | None = None
         buf = io.StringIO()
         writer: "csv.writer | None" = None
         wb = ws = None
-        if job["format"] == "xlsx":
+        if format_ == "xlsx":
             import openpyxl
 
             wb = openpyxl.Workbook(write_only=True)
             ws = wb.create_sheet(title=job["table"][:31] or "export")
-            ws.append(job["fields"])
+            ws.append(fields)
         else:
             writer = csv.writer(buf)
-            writer.writerow(job["fields"])
+            writer.writerow(fields)
 
         last_progress_at = arc.tz.utcnow().timestamp()
         cursor: str | None = None
@@ -141,8 +146,8 @@ async def _run_export_job(job_id: str) -> None:
             page_rows, cursor, total = await cursor_page(
                 job["table"],
                 schema,
-                fields=job["fields"],
-                filters=job["filters"],
+                fields=fields,
+                filters=settings.get("filters"),
                 order_by=("id", False),
                 after=cursor,
                 limit=_PAGE_SIZE,
@@ -152,9 +157,9 @@ async def _run_export_job(job_id: str) -> None:
             )
             if rows_total is None:
                 rows_total = total
-                await arc.relay.save("_data_export_job", {"id": job_id, "rows_total": rows_total})
+                await arc.relay.save(JOB_TABLE, {"id": job_id, "stats": {"total": rows_total, "processed": 0}})
             for row in page_rows:
-                values = [row.get(f) for f in job["fields"]]
+                values = [row.get(f) for f in fields]
                 if writer is not None:
                     writer.writerow(["" if v is None else _safe_cell(v) for v in values])
                 else:
@@ -163,13 +168,13 @@ async def _run_export_job(job_id: str) -> None:
 
             now_ts = arc.tz.utcnow().timestamp()
             if rows_written % _PROGRESS_EVERY_ROWS == 0 or now_ts - last_progress_at >= _PROGRESS_EVERY_SECONDS:
-                await arc.relay.save("_data_export_job", {"id": job_id, "rows_exported": rows_written})
+                await arc.relay.save(JOB_TABLE, {"id": job_id, "stats": {"total": rows_total, "processed": rows_written}})
                 last_progress_at = now_ts
 
             if cursor is None:
                 break
 
-        await arc.relay.save("_data_export_job", {"id": job_id, "rows_exported": rows_written})
+        await arc.relay.save(JOB_TABLE, {"id": job_id, "stats": {"total": rows_total, "processed": rows_written}})
 
         if writer is not None:
             content = buf.getvalue().encode("utf-8")
@@ -180,17 +185,17 @@ async def _run_export_job(job_id: str) -> None:
 
         file_row = await arc.filer.upload(
             content,
-            filename=f"{job['table']}_export.{job['format']}",
-            content_type=_CONTENT_TYPE[job["format"]],
+            filename=f"{job['table']}_export.{format_}",
+            content_type=_CONTENT_TYPE[format_],
             private=True,
             by=job.get("created_by"),
         )
         await arc.relay.save(
-            "_data_export_job",
+            JOB_TABLE,
             {"id": job_id, "status": "Completed", "file": file_row["id"], "finished_at": arc.tz.utcnow()},
         )
     except Exception as exc:  # noqa: BLE001 - a background job must record its own failure, never crash silently
         logger.error(f"export job {job_id} failed: {exc}")
         await arc.relay.save(
-            "_data_export_job", {"id": job_id, "status": "Failed", "error": str(exc), "finished_at": arc.tz.utcnow()}
+            JOB_TABLE, {"id": job_id, "status": "Failed", "error": str(exc), "finished_at": arc.tz.utcnow()}
         )

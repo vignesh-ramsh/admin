@@ -1,0 +1,20 @@
+{
+  "system": true,
+  "fields": [
+    {"id": "AA00", "name": "id", "type": "UUID", "primary_key": true},
+    {"id": "AA01", "name": "table", "type": "STRING", "length": 255, "required": true},
+    {"id": "AA02", "name": "direction", "type": "SELECT", "required": true, "options": ["Import", "Export"]},
+    {"id": "AA03", "name": "status", "type": "SELECT", "required": true, "options": ["Queued", "PendingReview", "Running", "Completed", "CompletedWithErrors", "Failed"]},
+    {"id": "AA04", "name": "file", "type": "REFERENCE", "target": "FilerFile"},
+    {"id": "AA05", "name": "settings", "type": "JSON", "required": true},
+    {"id": "AA06", "name": "stats", "type": "JSON"},
+    {"id": "AA07", "name": "created_by", "type": "STRING", "length": 255},
+    {"id": "AA08", "name": "started_at", "type": "DATETIME"},
+    {"id": "AA09", "name": "finished_at", "type": "DATETIME"},
+    {"id": "AA10", "name": "error", "type": "TEXT"}
+  ],
+  "index": [
+    {"key": "idx_data_import_export_job_status", "fields": ["status"]},
+    {"key": "idx_data_import_export_job_table_direction", "fields": ["table", "direction"]}
+  ]
+}

@@ -10,6 +10,7 @@ import {
   ListChecks,
   Settings2,
   Trash2,
+  ArrowLeftRight,
   type LucideIcon,
 } from "lucide-react";
 
@@ -30,6 +31,7 @@ export const NAV: NavGroup[] = [
     label: "Data",
     items: [
       { to: "/data", label: "Data Browser", icon: Database },
+      { to: "/data-jobs", label: "Import / Export", icon: ArrowLeftRight },
       { to: "/schema", label: "Schema Builder", icon: FileCode2 },
       { to: "/trash", label: "Trash", icon: Trash2 },
     ],

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Download } from "lucide-react";
-import type { ExportJob, FieldMeta, TableSchema } from "../../api/types";
+import type { DataJob, FieldMeta, TableSchema } from "../../api/types";
 import { call, ApiError } from "../../api/client";
 import { Button } from "../../components/Button";
 import { Checkbox } from "../../components/Field";
@@ -26,13 +26,16 @@ function allExportableFields(schema: TableSchema): FieldMeta[] {
    despite this file's own comment already claiming the opposite. Only a
    genuinely separate component, mounted from inside the `jobId` guard
    below, makes "gated by the job existing" true. */
-function ExportProgress({ table, jobId, onClose }: { table: string; jobId: string; onClose: () => void }) {
-  const { job, error: pollError } = useJobPolling<ExportJob>(
-    () => call<ExportJob>("get_export_status", { job_id: jobId }, { method: "GET" }),
+export function ExportProgress({ table, jobId, onClose }: { table: string; jobId: string; onClose: () => void }) {
+  const { job, error: pollError } = useJobPolling<DataJob>(
+    () => call<DataJob>("get_data_job", { job_id: jobId }, { method: "GET" }),
     (j) => TERMINAL_STATUSES.has(j.status),
     1500,
   );
-  const pct = job?.rows_total ? Math.min(100, Math.round(((job.rows_exported ?? 0) / job.rows_total) * 100)) : null;
+  const total = job?.stats?.total ?? null;
+  const exported = job?.stats?.processed ?? 0;
+  const format = job && "format" in job.settings ? job.settings.format : "csv";
+  const pct = total ? Math.min(100, Math.round((exported / total) * 100)) : null;
   return (
     <Modal title={`Export ${table}`} onClose={onClose} size="md">
       <div className="flex flex-col gap-4">
@@ -50,8 +53,8 @@ function ExportProgress({ table, jobId, onClose }: { table: string; jobId: strin
             </div>
             <p className="text-[13px] text-text-muted">
               {job.status === "Completed"
-                ? `Exported ${job.rows_exported} row${job.rows_exported === 1 ? "" : "s"}.`
-                : `${job.rows_exported}${job.rows_total !== null ? ` of ${job.rows_total}` : ""} rows…`}
+                ? `Exported ${exported} row${exported === 1 ? "" : "s"}.`
+                : `${exported}${total !== null ? ` of ${total}` : ""} rows…`}
             </p>
             {job.status === "Completed" && job.scan_pending && (
               <p className="text-[13px] text-text-faint">Finalizing — waiting on the file's security scan…</p>
@@ -62,7 +65,7 @@ function ExportProgress({ table, jobId, onClose }: { table: string; jobId: strin
                 download
                 className="inline-flex w-fit items-center gap-2 rounded-md bg-accent-action px-3.5 py-2 text-sm font-medium text-accent-fg hover:brightness-95"
               >
-                <Download size={14} /> Download {table}_export.{job.format}
+                <Download size={14} /> Download {table}_export.{format}
               </a>
             )}
           </>
@@ -112,7 +115,7 @@ export function ExportModal({
     if (selected.size === 0) return;
     setStarting(true);
     try {
-      const created = await call<ExportJob>("start_export", {
+      const created = await call<DataJob>("start_export", {
         table,
         fields: [...selected],
         format,

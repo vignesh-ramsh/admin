@@ -8,6 +8,15 @@ list_rows/data_api.py already uses — so an export can never see a
 different set of rows than the Data Browser itself would show for the
 same filter. The file is delivered through arc.filer (upload + sign_url),
 not a new download mechanism.
+
+Export runs straight through in the background (Queued -> Running ->
+Completed/Failed) — no PendingReview checkpoint, unlike import: there's
+no source file to precheck, and the "settings" are already fully
+validated up front, right here, before the job is ever enqueued. Status
+polling (get_data_job, including the download_url/scan_pending fields
+computed fresh on every poll) lives in admin/api/data_jobs_api.py now —
+shared with import, since both directions read from the same
+_data_import_export_job table.
 """
 
 from __future__ import annotations
@@ -17,6 +26,8 @@ import arc
 from admin._coerce import CoercionError, coerce_filters, throw_coercion
 from admin._dataops import schema_or_throw as _schema_or_throw
 from admin._security import by_of
+
+JOB_TABLE = "_data_import_export_job"
 
 _FORMATS = frozenset({"csv", "xlsx"})
 
@@ -56,13 +67,11 @@ async def start_export(
         throw_coercion(exc)
 
     job = await arc.relay.save(
-        "_data_export_job",
+        JOB_TABLE,
         {
             "table": table,
-            "filters": filters,
-            "search": search,
-            "fields": fields,
-            "format": format,
+            "direction": "Export",
+            "settings": {"filters": filters, "search": search, "fields": fields, "format": format},
             "status": "Queued",
             "created_by": by_of(identity),
         },
@@ -72,31 +81,3 @@ async def start_export(
 
     arc.relay.enqueue(_run_export_job, str(job["id"]))
     return job
-
-
-@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
-async def get_export_status(job_id: str) -> dict:
-    job = await arc.relay.get("_data_export_job", job_id, arc.relay.all_columns("_data_export_job"))
-    if job is None:
-        arc.relay.throw("no such export job", status=404, code="not_found")
-
-    job["download_url"] = None
-    job["scan_pending"] = False
-    if job["status"] == "Completed" and job.get("file"):
-        file_row = await load_filerfile_row_by_id(job["file"])
-        if file_row is None:
-            job["error"] = job["error"] or "exported file is missing"
-        elif file_row["status"] not in ("clean", "skipped"):
-            job["scan_pending"] = True
-        else:
-            job["download_url"] = await arc.filer.sign_url(file_row["file_id"])
-    return job
-
-
-async def load_filerfile_row_by_id(file_id) -> dict | None:
-    """The `file` column on _data_export_job/_data_import_job is a
-    REFERENCE (the row's own UUID) — the inverse of
-    admin._dataops.load_filerfile_row, which resolves the other
-    direction (upload TOKEN -> row). Kept here rather than in _dataops
-    since only the status-polling read path needs it."""
-    return await arc.relay.get("filerfile", file_id, arc.relay.all_columns("filerfile"))

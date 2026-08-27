@@ -30,6 +30,12 @@ function initialValue(entry: FilerSettingEntry): FormValue {
     // does send "true"/"false" as text instead.
     return typeof entry.value === "boolean" ? entry.value : entry.value === "true";
   }
+  // An "int"-kind entry (filer_max_upload_bytes, filer_purge_after_days,
+  // ...) comes back as a real JSON number too, same coercion as bool
+  // above — stringified here since every non-bool form control on this
+  // page is a text/number input bound to a string value, same as it
+  // always was for the untyped string-kind entries.
+  if (typeof entry.value === "number") return String(entry.value);
   return entry.value ?? "";
 }
 

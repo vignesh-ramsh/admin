@@ -1,6 +1,30 @@
-"""admin.jobs.data_import_job — the background job `start_import`/
-`resume_import` (admin/api/data_import_api.py) enqueue. Deliberately NOT
-in api/ — same reasoning as data_export_job.py's own module docstring.
+"""admin.jobs.data_import_job — the background work `start_import`/
+`commit_import`/`resume_import` (admin/api/data_import_api.py) enqueue.
+Deliberately NOT in api/ — same reasoning as data_export_job.py's own
+module docstring.
+
+Two separate phases, two separate entry points, because the job now
+stops for a mandatory human checkpoint between them (2026-08-25 design):
+
+  `_run_import_stage`  Queued -> PendingReview. Streams the uploaded file
+                        once into _data_import_row (unchanged from the
+                        original single-phase design), then a full
+                        column-level precheck (coercion + REFERENCE
+                        existence) over every staged row — WITHOUT writing
+                        anything to the target table. Bad rows are marked
+                        failed with their error; the job then stops and
+                        waits for a human to either commit or replace the
+                        file (admin/api/data_import_api.py's
+                        replace_import_file, only valid in Queued/
+                        PendingReview).
+
+  `_run_import_commit`  PendingReview -> Running -> a terminal status.
+                        The actual write pass, unchanged in spirit from
+                        the original all-in-one job: batched writes via
+                        arc.relay.save_many, abort/skip semantics per
+                        job["settings"]["on_error"]. Also what a resumed
+                        run re-enters directly (resume is retry-only, see
+                        below — it never re-stages).
 
 Resume is retry-only, by design (confirmed with the user, not an
 oversight): re-processing only ever reads back already-stored
@@ -8,7 +32,8 @@ _data_import_row.raw_data, never the original file again. That's what
 makes a resumed run cheap and correct without needing the upload to still
 exist, but it also means a row that failed because of a genuinely bad
 cell in the source file will fail again on resume — fixing that requires
-a fresh import with a corrected file, not a resume of this one.
+replacing the file (while still Queued/PendingReview) or starting a fresh
+import, not resuming this one.
 """
 
 from __future__ import annotations
@@ -25,6 +50,8 @@ from admin.jobs._file_reading import read_all_rows
 
 logger = logging.getLogger("admin.jobs.data_import")
 
+JOB_TABLE = "_data_import_export_job"
+
 _BOOKKEEPING_BATCH = 100
 _ABORT_CHUNK = 2000
 _SKIP_OPTIMISTIC_BATCH = 20
@@ -38,6 +65,17 @@ _PROGRESS_EVERY_SECONDS = 2.0
 #: many get written in one statement (abort mode still writes in its own
 #: _ABORT_CHUNK-sized groups within one page when a page is larger).
 _WORK_ROW_SCAN_BATCH = 2000
+
+#: import_type -> (allow_insert, allow_update) passed straight through to
+#: arc.relay.save/save_many — "update" and "upsert" both require job["settings"]
+#: ["match_on"] to be non-empty (enforced at start_import time; without a
+#: match_on every row falls into save_many's own "insert" bucket, which
+#: would immediately violate allow_insert=False for the whole batch).
+_WRITE_MODE = {
+    "insert": (True, False),
+    "update": (False, True),
+    "upsert": (True, True),
+}
 
 
 async def _resolve_references(
@@ -151,15 +189,47 @@ def _build_row(
     column_mapping: dict[str, str],
     columns_by_name: dict[str, Any],
     valid_by_field: dict[str, set[str]],
+    null_on_empty: bool,
+    import_type: str,
 ) -> tuple[dict | None, str | None]:
     """One mapped-and-coerced row ready for arc.relay.save/save_many, or
-    (None, error) if a cell couldn't be turned into something writable."""
+    (None, error) if a cell couldn't be turned into something writable.
+
+    Column-level only (coercion + REFERENCE existence) — deliberately
+    does NOT check whether an "update"/"upsert" row's match_on actually
+    matches an existing target row. Same posture pgdb.validation already
+    takes with unique/FK constraints: cheap to check up front is checked
+    up front (that's what this function IS), the rest is caught at write
+    time (allow_insert/allow_update's own batch-level rejection, surfaced
+    exactly like any other write-time failure).
+
+    null_on_empty=False (the default, 2026-08-26 design) means an empty
+    file cell is OMITTED from the payload entirely rather than coerced to
+    None — the target column keeps whatever it already had (or its own
+    DEFAULT on insert) instead of every column-not-in-this-row-of-the-
+    file getting silently wiped, which is what unconditionally coercing
+    ""->None here used to do on every partial-column update file.
+    null_on_empty=True restores that old behavior verbatim: an empty cell
+    explicitly writes None. Either way, an empty cell on a REQUIRED field
+    is only ever silently tolerated for "update" (existing row keeps its
+    value, nothing required about NOT touching a column) — "insert"/
+    "upsert" can both still insert a brand new row for this line, where a
+    required column with no value would just fail as a confusing NOT NULL
+    violation later; caught here instead, with a clear message, while
+    it's cheap to check."""
     out: dict[str, Any] = {}
     for file_col, field_name in column_mapping.items():
         raw_value = raw_data.get(file_col)
         field = columns_by_name[field_name]
+        is_empty = raw_value in (None, "")
+
+        if is_empty and not null_on_empty:
+            if field.required and import_type != "update":
+                return None, f"'{field_name}': required and empty in the source file"
+            continue
+
         if field.type == "REFERENCE":
-            if raw_value in (None, ""):
+            if is_empty:
                 out[field_name] = None
                 continue
             if str(raw_value) not in valid_by_field.get(field_name, set()):
@@ -175,9 +245,14 @@ def _build_row(
 
 async def _ensure_row_bookkeeping(job: dict) -> None:
     """First run only: streams the file once, inserts one _data_import_row
-    per data row. A resumed run finds these already present and skips
-    this step entirely — the exact thing that makes Resume not need the
-    file again."""
+    per data row. The `existing` check is what makes this safe against
+    _run_import_stage being redelivered/retried for the same job_id (a
+    background task queue's normal at-least-once semantics, not a
+    hypothetical) — without it, a redelivery would double-insert every
+    row rather than being a no-op. replace_import_file explicitly wipes
+    _data_import_row before re-enqueuing a fresh stage pass, so a
+    genuine re-stage (as opposed to a redelivery of the same attempt)
+    still runs this for real."""
     existing = await arc.relay.list("_data_import_row", fields=["id"], filters={"job": job["id"]}, limit=1)
     if existing:
         return
@@ -197,24 +272,81 @@ async def _ensure_row_bookkeeping(job: dict) -> None:
     if batch:
         await arc.relay.save_many("_data_import_row", batch)
 
-    await arc.relay.save("_data_import_job", {"id": job["id"], "rows_total": row_number})
+    await arc.relay.save(JOB_TABLE, {"id": job["id"], "stats": {"total": row_number, "succeeded": 0, "failed": 0}})
 
 
-async def _run_import_job(job_id: str) -> None:
-    job = await arc.relay.get("_data_import_job", job_id, arc.relay.all_columns("_data_import_job"))
+async def _run_import_stage(job_id: str) -> None:
+    """Queued -> PendingReview (or Failed, if staging itself blows up —
+    e.g. the target table was dropped after start_import validated it).
+    Writes nothing to the target table; see module docstring."""
+    job = await arc.relay.get(JOB_TABLE, job_id, arc.relay.all_columns(JOB_TABLE))
     if job is None:
-        logger.error(f"import job {job_id} vanished before it could run")
+        logger.error(f"import job {job_id} vanished before staging could run")
         return
 
-    await arc.relay.save("_data_import_job", {"id": job_id, "status": "Running", "started_at": arc.tz.utcnow()})
+    await arc.relay.save(JOB_TABLE, {"id": job_id, "status": "Running", "started_at": arc.tz.utcnow()})
 
     try:
         await _ensure_row_bookkeeping(job)
-        job = await arc.relay.get("_data_import_job", job_id, arc.relay.all_columns("_data_import_job"))
+        # _ensure_row_bookkeeping just wrote the real stats.total onto this
+        # job row (or, on a redelivered/retried call, already had it from
+        # the earlier attempt) — the `job` dict above predates that write,
+        # so the total has to be re-read fresh here rather than trusted
+        # from the stale copy still in hand.
+        staged = await arc.relay.get(JOB_TABLE, job_id, ["stats"])
+        total = staged["stats"]["total"] if staged and staged.get("stats") else None
+
         schema = arc.pgdb.schema(job["table"])
         columns_by_name = schema.columns_by_name
-        column_mapping: dict[str, str] = job["column_mapping"]
-        match_on = job["match_on"] or None
+        settings = job["settings"]
+        column_mapping: dict[str, str] = settings["column_mapping"]
+        null_on_empty = bool(settings.get("null_on_empty", False))
+        import_type = settings.get("import_type", "upsert")
+
+        valid_by_field = await _resolve_references(
+            schema, column_mapping, _iter_raw_data(job_id, _WORK_ROW_SCAN_BATCH)
+        )
+
+        failed = 0
+        async for batch in _iter_work_row_batches(job_id, _WORK_ROW_SCAN_BATCH):
+            for w in batch:
+                _payload, err = _build_row(w["raw_data"], column_mapping, columns_by_name, valid_by_field, null_on_empty, import_type)
+                if err is not None:
+                    await arc.relay.save("_data_import_row", {"id": w["id"], "status": "failed", "error": err})
+                    failed += 1
+
+        await arc.relay.save(
+            JOB_TABLE,
+            {
+                "id": job_id,
+                "status": "PendingReview",
+                "stats": {"total": total, "succeeded": 0, "failed": failed},
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 - a background job must record its own failure, never crash silently
+        logger.error(f"import job {job_id} staging failed: {exc}")
+        await arc.relay.save(
+            JOB_TABLE, {"id": job_id, "status": "Failed", "error": str(exc), "finished_at": arc.tz.utcnow()}
+        )
+
+
+async def _run_import_commit(job_id: str) -> None:
+    """PendingReview -> Running -> a terminal status. Also what a resumed
+    run (admin.api.data_import_api.resume_import) re-enters directly."""
+    job = await arc.relay.get(JOB_TABLE, job_id, arc.relay.all_columns(JOB_TABLE))
+    if job is None:
+        logger.error(f"import job {job_id} vanished before commit could run")
+        return
+
+    try:
+        schema = arc.pgdb.schema(job["table"])
+        columns_by_name = schema.columns_by_name
+        settings = job["settings"]
+        column_mapping: dict[str, str] = settings["column_mapping"]
+        match_on = settings.get("match_on") or None
+        import_type = settings.get("import_type", "upsert")
+        null_on_empty = bool(settings.get("null_on_empty", False))
+        allow_insert, allow_update = _WRITE_MODE[import_type]
 
         valid_by_field = await _resolve_references(
             schema, column_mapping, _iter_raw_data(job_id, _WORK_ROW_SCAN_BATCH)
@@ -222,13 +354,22 @@ async def _run_import_job(job_id: str) -> None:
 
         # A resumed run's work queue only holds pending/failed rows — a
         # row that already succeeded on an earlier run isn't reprocessed,
-        # so it isn't recounted by the loop below either. Seed from the
-        # row table itself (the source of truth) rather than the job's
-        # own stale rows_succeeded, so the final write doesn't regress a
-        # prior run's already-committed successes back down to just this
-        # run's own delta.
-        succeeded = await arc.relay.count("_data_import_row", filters={"job": job_id, "status": "success"})
+        # so it isn't recounted by the loop below either. Seeded from the
+        # job's own last-flushed stats rather than counting real "success"
+        # rows in _data_import_row (the row table's own succeeded count
+        # would undercount, per this design's whole point: a row is
+        # deleted the moment it's marked success, so no evidence survives
+        # to count later — see each success site below). flush_progress's
+        # existing cadence (every _PROGRESS_EVERY_ROWS rows or
+        # _PROGRESS_EVERY_SECONDS) bounds how stale this can be on a
+        # resume after a crash: at most one partial flush interval's
+        # worth of successes undercounted in the job's own stats — the
+        # actual target-table writes and dedup are unaffected either way,
+        # since a deleted-and-succeeded row is never re-picked-up by
+        # _iter_work_row_batches regardless of what the stats say.
+        succeeded = job["stats"]["succeeded"] if job.get("stats") else 0
         failed = 0
+        total = job["stats"]["total"] if job.get("stats") else None
         last_progress_at = time.monotonic()
 
         async def flush_progress(force: bool = False) -> None:
@@ -236,12 +377,12 @@ async def _run_import_job(job_id: str) -> None:
             now = time.monotonic()
             if force or (succeeded + failed) % _PROGRESS_EVERY_ROWS == 0 or now - last_progress_at >= _PROGRESS_EVERY_SECONDS:
                 await arc.relay.save(
-                    "_data_import_job",
-                    {"id": job_id, "rows_processed": succeeded + failed, "rows_succeeded": succeeded, "rows_failed": failed},
+                    JOB_TABLE,
+                    {"id": job_id, "stats": {"total": total, "succeeded": succeeded, "failed": failed}},
                 )
                 last_progress_at = now
 
-        if job["on_error"] == "abort":
+        if settings["on_error"] == "abort":
             # Pre-flight: every unresolved REFERENCE must be known BEFORE
             # touching save_many at all — a downstream FK-constraint DB
             # error would be a much worse message, and the whole point of
@@ -255,7 +396,7 @@ async def _run_import_job(job_id: str) -> None:
             preflight_errors: list[tuple[dict, str]] = []
             async for batch in _iter_work_row_batches(job_id, _WORK_ROW_SCAN_BATCH):
                 for w in batch:
-                    _payload, err = _build_row(w["raw_data"], column_mapping, columns_by_name, valid_by_field)
+                    _payload, err = _build_row(w["raw_data"], column_mapping, columns_by_name, valid_by_field, null_on_empty, import_type)
                     if err is not None:
                         preflight_errors.append((w, err))
 
@@ -265,7 +406,7 @@ async def _run_import_job(job_id: str) -> None:
                 failed = len(preflight_errors)
                 await flush_progress(force=True)
                 await arc.relay.save(
-                    "_data_import_job",
+                    JOB_TABLE,
                     {
                         "id": job_id,
                         "status": "Failed",
@@ -284,11 +425,13 @@ async def _run_import_job(job_id: str) -> None:
             # the whole job's queue.
             async for chunk in _iter_work_row_batches(job_id, _ABORT_CHUNK):
                 payloads = [
-                    _build_row(w["raw_data"], column_mapping, columns_by_name, valid_by_field)[0]
+                    _build_row(w["raw_data"], column_mapping, columns_by_name, valid_by_field, null_on_empty, import_type)[0]
                     for w in chunk
                 ]
                 try:
-                    await arc.relay.save_many(job["table"], payloads, match_on=match_on)
+                    await arc.relay.save_many(
+                        job["table"], payloads, match_on=match_on, allow_insert=allow_insert, allow_update=allow_update
+                    )
                 except Exception as exc:  # noqa: BLE001 - recorded on every row in this chunk, then re-raised path below
                     for w in chunk:
                         await arc.relay.save(
@@ -297,7 +440,7 @@ async def _run_import_job(job_id: str) -> None:
                     failed += len(chunk)
                     await flush_progress(force=True)
                     await arc.relay.save(
-                        "_data_import_job",
+                        JOB_TABLE,
                         {
                             "id": job_id,
                             "status": "Failed",
@@ -315,6 +458,15 @@ async def _run_import_job(job_id: str) -> None:
                 await arc.relay.save_many(
                     "_data_import_row", [{"id": w["id"], "status": "success", "error": None} for w in chunk]
                 )
+                # A successful row's own staging record has no further
+                # purpose — only failed rows need to stick around for the
+                # error review UI and Resume (2026-08-26 design: preserve
+                # just the failures out of a large import, not every row
+                # that already wrote cleanly). The "mark success" write
+                # above still happens first and stays durable regardless
+                # of whether this delete lands, so a crash between the two
+                # only ever leaves a harmless orphaned success row behind.
+                await arc.relay.delete_many("_data_import_row", [w["id"] for w in chunk])
                 succeeded += len(chunk)
                 await flush_progress()
 
@@ -323,7 +475,7 @@ async def _run_import_job(job_id: str) -> None:
                 built = []
                 batch_errors: list[tuple[dict, str]] = []
                 for w in batch:
-                    payload, err = _build_row(w["raw_data"], column_mapping, columns_by_name, valid_by_field)
+                    payload, err = _build_row(w["raw_data"], column_mapping, columns_by_name, valid_by_field, null_on_empty, import_type)
                     if err is not None:
                         batch_errors.append((w, err))
                     else:
@@ -335,7 +487,13 @@ async def _run_import_job(job_id: str) -> None:
 
                 if built:
                     try:
-                        await arc.relay.save_many(job["table"], [p for p, _w in built], match_on=match_on)
+                        await arc.relay.save_many(
+                            job["table"],
+                            [p for p, _w in built],
+                            match_on=match_on,
+                            allow_insert=allow_insert,
+                            allow_update=allow_update,
+                        )
                     except Exception:
                         # Optimistic batch had a bad row somewhere in it —
                         # fall back to one-at-a-time for just this batch,
@@ -344,33 +502,45 @@ async def _run_import_job(job_id: str) -> None:
                         # arc.relay.save() (unlike save_many()) returns
                         # exactly one row for exactly one call, so
                         # resolved_row_id is safe to record here.
+                        #
+                        # Only the target-table write itself is inside the
+                        # try — marking "success" and deleting the staging
+                        # row happen unconditionally once that write is
+                        # confirmed, so neither can be mistaken for a row
+                        # failure the way nesting them inside the same
+                        # try/except used to risk.
                         for payload, w in built:
                             try:
-                                result_row = await arc.relay.save(job["table"], payload)
-                                await arc.relay.save(
-                                    "_data_import_row",
-                                    {"id": w["id"], "status": "success", "resolved_row_id": result_row["id"], "error": None},
+                                result_row = await arc.relay.save(
+                                    job["table"], payload, match_on=match_on, allow_insert=allow_insert, allow_update=allow_update
                                 )
-                                succeeded += 1
                             except Exception as row_exc:  # noqa: BLE001 - this row's own failure, recorded and skipped
                                 await arc.relay.save(
                                     "_data_import_row", {"id": w["id"], "status": "failed", "error": str(row_exc)}
                                 )
                                 failed += 1
+                                continue
+                            await arc.relay.save(
+                                "_data_import_row",
+                                {"id": w["id"], "status": "success", "resolved_row_id": result_row["id"], "error": None},
+                            )
+                            await arc.relay.delete("_data_import_row", w["id"])
+                            succeeded += 1
                     else:
                         # Same non-positional-return caveat as abort-mode
                         # above — mark success without resolved_row_id.
                         await arc.relay.save_many(
                             "_data_import_row", [{"id": w["id"], "status": "success", "error": None} for _p, w in built]
                         )
+                        await arc.relay.delete_many("_data_import_row", [w["id"] for _p, w in built])
                         succeeded += len(built)
                 await flush_progress()
 
         await flush_progress(force=True)
         final_status = "Completed" if failed == 0 else "CompletedWithErrors"
-        await arc.relay.save("_data_import_job", {"id": job_id, "status": final_status, "finished_at": arc.tz.utcnow()})
+        await arc.relay.save(JOB_TABLE, {"id": job_id, "status": final_status, "finished_at": arc.tz.utcnow()})
     except Exception as exc:  # noqa: BLE001 - a background job must record its own failure, never crash silently
-        logger.error(f"import job {job_id} failed: {exc}")
+        logger.error(f"import job {job_id} commit failed: {exc}")
         await arc.relay.save(
-            "_data_import_job", {"id": job_id, "status": "Failed", "error": str(exc), "finished_at": arc.tz.utcnow()}
+            JOB_TABLE, {"id": job_id, "status": "Failed", "error": str(exc), "finished_at": arc.tz.utcnow()}
         )

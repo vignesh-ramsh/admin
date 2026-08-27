@@ -13,6 +13,11 @@ import { RowEditorRoute } from "./pages/data/RowEditorRoute";
 import { SchemaBuilderPage } from "./pages/schema/SchemaBuilderPage";
 import { SchemaFileEditorRoute } from "./pages/schema/SchemaFileEditorRoute";
 
+import { DataJobsPage } from "./pages/data-jobs/DataJobsPage";
+import { NewDataJobRoute } from "./pages/data-jobs/NewDataJobRoute";
+import { DataJobDetailRoute } from "./pages/data-jobs/DataJobDetailRoute";
+import { PruneDataJobsRoute } from "./pages/data-jobs/PruneDataJobsRoute";
+
 import { TrashPage } from "./pages/trash/TrashPage";
 
 import { UsersPage } from "./pages/users/UsersPage";
@@ -77,6 +82,12 @@ export default function App() {
 
         <Route path="/schema" element={<SchemaBuilderPage />}>
           <Route path=":kind/:name" element={<SchemaFileEditorRoute />} />
+        </Route>
+
+        <Route path="/data-jobs" element={<DataJobsPage />}>
+          <Route path="new" element={<NewDataJobRoute />} />
+          <Route path="prune" element={<PruneDataJobsRoute />} />
+          <Route path=":jobId" element={<DataJobDetailRoute />} />
         </Route>
 
         <Route path="/trash" element={<TrashPage />} />

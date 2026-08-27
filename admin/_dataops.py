@@ -68,6 +68,16 @@ def require_not_protected(table: str) -> None:
         )
 
 
+async def load_filerfile_row_by_id(file_id) -> dict | None:
+    """The `file` column on _data_import_export_job is a REFERENCE (the
+    row's own UUID) — the inverse of load_filerfile_row below, which
+    resolves the other direction (upload TOKEN -> row). Shared by the
+    export status poll (data_jobs_api.get_data_job) and the import
+    replace-file flow (data_import_api.replace_import_file), which both
+    need to go from a stored REFERENCE id to the real filerfile row."""
+    return await arc.relay.get("filerfile", file_id, arc.relay.all_columns("filerfile"))
+
+
 async def load_filerfile_row(token: str) -> dict:
     """Resolve an upload TOKEN (what filerClient.ts's uploadFilerFile
     actually returns, e.g. "pri_xxx") to its full filerfile row — every

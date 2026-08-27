@@ -248,13 +248,18 @@ export interface FilerSettingEntry {
   kind: string;
   secret: boolean;
   // A "bool"-kind entry (filer_scan_public/filer_scan_private, both
-  // declared type=bool) comes back as a real JSON boolean — arc.settings
-  // .get() coerces a typed setting before it's ever serialized. Every
-  // other kind ("text"/"int"/"select") is untyped and stays a plain
-  // string. This was previously (wrongly) declared string-only, which is
-  // exactly what let FilerSettingsTab.tsx's initialValue() compare a real
-  // boolean against the string "true" with nothing catching it.
-  value: string | boolean | null;
+  // declared type=bool) comes back as a real JSON boolean, and an "int"-
+  // kind entry (filer_max_upload_bytes, filer_purge_after_days, ...)
+  // comes back as a real JSON number — arc.settings.get() coerces any
+  // TYPED setting (declare(type=...)) before it's ever serialized, not
+  // just bool ones (confirmed live: filer_max_upload_bytes's own
+  // "kind":"int" response is a bare 26214400, not "26214400"). Only an
+  // UNtyped key (no settings.declare(type=...) at all) stays a plain
+  // string. This was previously (wrongly) declared string-only for
+  // everything but bool, which is exactly what let FilerSettingsTab.tsx's
+  // initialValue() compare a real boolean against the string "true" with
+  // nothing catching it — same class of bug, now closed for int too.
+  value: string | boolean | number | null;
   is_set: boolean;
 }
 
@@ -293,47 +298,45 @@ export interface FilerAntivirusStatus {
   available_engines: string[];
 }
 
-/** admin.start_export()/get_export_status() — a background export job's
- *  own row, plus the two fields get_export_status computes fresh on every
- *  poll rather than storing (download_url expires, so it's never cached). */
-export interface ExportJob {
-  id: string;
-  table: string;
+/** The settings blob stored on a DataJob — shape depends on `direction`.
+ *  Narrow with `job.direction === "Import"` before reading either. */
+export interface ImportJobSettings {
+  column_mapping: Record<string, string>;
+  match_on: string[] | null;
+  import_type: "insert" | "update" | "upsert";
+  on_error: "abort" | "skip";
+}
+
+export interface ExportJobSettings {
   filters: Record<string, unknown> | null;
   search: string[] | null;
   fields: string[];
   format: "csv" | "xlsx";
-  status: "Queued" | "Running" | "Completed" | "Failed";
-  rows_total: number | null;
-  rows_exported: number;
+}
+
+/** admin.start_import()/start_export()/get_data_job() — one unified row
+ *  for both directions (admin/schemas/_data_import_export_job.json,
+ *  2026-08-25 design). `stats` is direction-shaped too: import writes
+ *  {total, succeeded, failed}, export writes {total, processed} — read
+ *  defensively, keys outside a direction's own shape are simply absent,
+ *  never present-but-zero. `download_url`/`scan_pending` are computed
+ *  fresh on every get_data_job poll rather than stored (a signed URL
+ *  expires, so it's never cached) and only ever populated for a
+ *  Completed Export. */
+export interface DataJob {
+  id: string;
+  table: string;
+  direction: "Import" | "Export";
+  status: "Queued" | "PendingReview" | "Running" | "Completed" | "CompletedWithErrors" | "Failed";
   file: string | null;
+  settings: ImportJobSettings | ExportJobSettings;
+  stats: { total: number | null; processed?: number; succeeded?: number; failed?: number } | null;
   started_at: string | null;
   finished_at: string | null;
   created_by: string | null;
   error: string | null;
   download_url: string | null;
   scan_pending: boolean;
-}
-
-/** admin.start_import()/get_import_status() — same shape family as
- *  ExportJob, plus the per-row bookkeeping counters that make progress
- *  and Resume possible (see admin/schemas/_data_import_row.json). */
-export interface ImportJob {
-  id: string;
-  table: string;
-  file: string;
-  column_mapping: Record<string, string>;
-  match_on: string[] | null;
-  on_error: "abort" | "skip";
-  status: "Queued" | "Running" | "Completed" | "CompletedWithErrors" | "Failed";
-  rows_total: number | null;
-  rows_processed: number;
-  rows_succeeded: number;
-  rows_failed: number;
-  started_at: string | null;
-  finished_at: string | null;
-  created_by: string | null;
-  error: string | null;
 }
 
 export interface ImportRowError {
