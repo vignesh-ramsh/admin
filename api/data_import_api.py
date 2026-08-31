@@ -20,6 +20,8 @@ Queued -> PendingReview -> Running -> terminal state machine.
 
 from __future__ import annotations
 
+from typing import Final
+
 import arc
 
 from admin._dataops import friendly as _friendly
@@ -31,7 +33,11 @@ from admin._pagination import cursor_page
 from admin._security import by_of
 from admin.jobs._file_reading import iter_rows_preview
 
-JOB_TABLE = "_data_import_export_job"
+# Final: lets arc.relay's generated per-table overloads (arc stubs) narrow
+# every arc.relay.*(JOB_TABLE, ...) call below to this literal table and
+# validate its field names — a plain `str` assignment doesn't get that
+# narrowing outside this module's own local flow.
+JOB_TABLE: Final = "_data_import_export_job"
 
 _ON_ERROR_VALUES = frozenset({"abort", "skip"})
 _IMPORT_TYPES = frozenset({"insert", "update", "upsert"})

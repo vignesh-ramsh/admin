@@ -18,7 +18,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
-from typing import Any
+from typing import Any, Final
 
 import arc
 
@@ -26,7 +26,11 @@ from admin._pagination import cursor_page
 
 logger = logging.getLogger("admin.jobs.data_export")
 
-JOB_TABLE = "_data_import_export_job"
+# Final: lets arc.relay's generated per-table overloads (arc stubs) narrow
+# every arc.relay.*(JOB_TABLE, ...) call below to this literal table and
+# validate its field names — a plain `str` assignment doesn't get that
+# narrowing outside this module's own local flow.
+JOB_TABLE: Final = "_data_import_export_job"
 
 _PAGE_SIZE = 500
 _PROGRESS_EVERY_ROWS = 500

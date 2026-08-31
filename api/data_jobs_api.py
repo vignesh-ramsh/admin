@@ -8,12 +8,18 @@ this file is only what genuinely doesn't care which direction a job is.
 
 from __future__ import annotations
 
+from typing import Final
+
 import arc
 
 from admin._dataops import load_filerfile_row_by_id
 from admin._pagination import cursor_page
 
-JOB_TABLE = "_data_import_export_job"
+# Final: lets arc.relay's generated per-table overloads (arc stubs) narrow
+# every arc.relay.*(JOB_TABLE, ...) call below to this literal table and
+# validate its field names — a plain `str` assignment doesn't get that
+# narrowing outside this module's own local flow.
+JOB_TABLE: Final = "_data_import_export_job"
 
 _DIRECTIONS = frozenset({"Import", "Export"})
 _TERMINAL_STATUSES = frozenset({"Completed", "CompletedWithErrors", "Failed"})
@@ -40,7 +46,7 @@ async def list_data_jobs(
     rows, next_cursor, total = await cursor_page(
         JOB_TABLE,
         schema,
-        fields=arc.relay.all_columns(JOB_TABLE),
+        fields=arc.relay.all_columns(JOB_TABLE),  # type: ignore  # cursor_page wants list[str]; all_columns() is intentionally narrower (see arc/stubs.py)
         filters=filters or None,
         order_by=("id", False),
         after=after,

@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Final
 
 import arc
 
@@ -50,7 +50,11 @@ from admin.jobs._file_reading import read_all_rows
 
 logger = logging.getLogger("admin.jobs.data_import")
 
-JOB_TABLE = "_data_import_export_job"
+# Final: lets arc.relay's generated per-table overloads (arc stubs) narrow
+# every arc.relay.*(JOB_TABLE, ...) call below to this literal table and
+# validate its field names — a plain `str` assignment doesn't get that
+# narrowing outside this module's own local flow.
+JOB_TABLE: Final = "_data_import_export_job"
 
 _BOOKKEEPING_BATCH = 100
 _ABORT_CHUNK = 2000
@@ -134,7 +138,7 @@ async def _resolve_references(
             for i in range(0, len(values), _REFERENCE_CHUNK):
                 chunk = values[i : i + _REFERENCE_CHUNK]
                 matches = await arc.relay.list(
-                    target_schema.table, fields=[lookup_column], filters={lookup_column: {"in": chunk}}, limit=None
+                    target_schema.table, fields=[lookup_column], filters={lookup_column: {"in": chunk}}, limit=None  # type: ignore  # target_schema.table is resolved at runtime, not a literal
                 )
                 valid.update(str(m[lookup_column]) for m in matches)
         valid_by_field[field_name] = valid
@@ -267,10 +271,10 @@ async def _ensure_row_bookkeeping(job: dict) -> None:
         raw_data = dict(zip(columns, raw_row))
         batch.append({"job": job["id"], "row_number": row_number, "raw_data": raw_data, "status": "pending"})
         if len(batch) >= _BOOKKEEPING_BATCH:
-            await arc.relay.save_many("_data_import_row", batch)
+            await arc.relay.save_many("_data_import_row", batch)  # type: ignore  # batch accumulates via .append(), not a literal — see arc/stubs.py's _relay_stub_source docstring
             batch = []
     if batch:
-        await arc.relay.save_many("_data_import_row", batch)
+        await arc.relay.save_many("_data_import_row", batch)  # type: ignore  # batch accumulates via .append(), not a literal — see arc/stubs.py's _relay_stub_source docstring
 
     await arc.relay.save(JOB_TABLE, {"id": job["id"], "stats": {"total": row_number, "succeeded": 0, "failed": 0}})
 
@@ -430,7 +434,7 @@ async def _run_import_commit(job_id: str) -> None:
                 ]
                 try:
                     await arc.relay.save_many(
-                        job["table"], payloads, match_on=match_on, allow_insert=allow_insert, allow_update=allow_update
+                        job["table"], payloads, match_on=match_on, allow_insert=allow_insert, allow_update=allow_update  # type: ignore  # job["table"] is resolved at runtime, not a literal
                     )
                 except Exception as exc:  # noqa: BLE001 - recorded on every row in this chunk, then re-raised path below
                     for w in chunk:

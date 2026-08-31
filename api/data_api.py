@@ -198,7 +198,7 @@ async def list_rows(
         rows, next_cursor, total = await cursor_page(
             table,
             schema,
-            fields=arc.relay.all_columns(table),
+            fields=arc.relay.all_columns(table),  # type: ignore  # dynamic table by design — module docstring
             filters=filters,
             order_by=(sort_col, desc),
             after=after,
@@ -217,7 +217,7 @@ async def list_rows(
 @arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def get_row(table: str, id: str) -> dict:
     try:
-        row = await arc.relay.get(table, id, arc.relay.all_columns(table))
+        row = await arc.relay.get(table, id, arc.relay.all_columns(table))  # type: ignore  # dynamic table by design — module docstring
     except _READ_ERRORS as exc:
         _friendly(exc)
     if row is None:
@@ -236,7 +236,7 @@ async def save_row(table: str, data: dict, identity=None) -> dict:
     except CoercionError as exc:
         throw_coercion(exc)
     try:
-        return await arc.relay.save(table, data, by=by_of(identity))
+        return await arc.relay.save(table, data, by=by_of(identity))  # type: ignore  # dynamic table by design — module docstring
     except _READ_ERRORS as exc:
         _friendly(exc)
 
@@ -273,7 +273,7 @@ async def save_rows_bulk(table: str, ids: list[str], patch: dict, identity=None)
         arc.relay.throw(f"'{table}': ids must be valid UUIDs", status=400, code="bad_id")
     try:
         rows = await arc.relay.save_many(
-            table, [{**patch, "id": i} for i in uuids], by=by_of(identity)
+            table, [{**patch, "id": i} for i in uuids], by=by_of(identity)  # type: ignore  # dynamic table by design — module docstring
         )
     except _READ_ERRORS as exc:
         _friendly(exc)
@@ -284,7 +284,7 @@ async def save_rows_bulk(table: str, ids: list[str], patch: dict, identity=None)
 async def delete_row(table: str, id: str, identity=None) -> dict:
     _require_not_protected(table)
     try:
-        await arc.relay.delete(table, id, by=by_of(identity))
+        await arc.relay.delete(table, id, by=by_of(identity))  # type: ignore  # dynamic table by design — module docstring
     except _READ_ERRORS as exc:
         _friendly(exc)
     return {"ok": True}
@@ -294,7 +294,7 @@ async def delete_row(table: str, id: str, identity=None) -> dict:
 async def delete_rows(table: str, ids: list[str], identity=None) -> dict:
     _require_not_protected(table)
     try:
-        await arc.relay.delete_many(table, ids, by=by_of(identity))
+        await arc.relay.delete_many(table, ids, by=by_of(identity))  # type: ignore  # dynamic table by design — module docstring
     except _READ_ERRORS as exc:
         _friendly(exc)
     return {"ok": True, "count": len(ids)}
@@ -328,7 +328,7 @@ async def save_rows_bulk_by_filter(
     if not ids:
         return {"ok": True, "count": 0, "rows": []}
     try:
-        rows = await arc.relay.save_many(table, [{**patch, "id": i} for i in ids], by=by_of(identity))
+        rows = await arc.relay.save_many(table, [{**patch, "id": i} for i in ids], by=by_of(identity))  # type: ignore  # dynamic table by design — module docstring
     except _READ_ERRORS as exc:
         _friendly(exc)
     return {"ok": True, "count": len(rows), "rows": [redact_row(r) for r in rows]}
@@ -353,7 +353,7 @@ async def delete_rows_by_filter(table: str, filters: dict | None, search: list[s
     if not ids:
         return {"ok": True, "count": 0}
     try:
-        await arc.relay.delete_many(table, ids, by=by_of(identity))
+        await arc.relay.delete_many(table, ids, by=by_of(identity))  # type: ignore  # dynamic table by design — module docstring
     except _READ_ERRORS as exc:
         _friendly(exc)
     return {"ok": True, "count": len(ids)}

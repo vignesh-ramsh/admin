@@ -21,13 +21,19 @@ _data_import_export_job table.
 
 from __future__ import annotations
 
+from typing import Final
+
 import arc
 
 from admin._coerce import CoercionError, coerce_filters, throw_coercion
 from admin._dataops import schema_or_throw as _schema_or_throw
 from admin._security import by_of
 
-JOB_TABLE = "_data_import_export_job"
+# Final: lets arc.relay's generated per-table overloads (arc stubs) narrow
+# every arc.relay.*(JOB_TABLE, ...) call below to this literal table and
+# validate its field names — a plain `str` assignment doesn't get that
+# narrowing outside this module's own local flow.
+JOB_TABLE: Final = "_data_import_export_job"
 
 _FORMATS = frozenset({"csv", "xlsx"})
 
