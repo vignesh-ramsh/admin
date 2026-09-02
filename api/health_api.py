@@ -5,6 +5,6 @@ already aggregates every registered capability's own health() (docs/arc.MD
 import arc
 
 
-@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
+@arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"], trace=False)
 async def admin_health() -> dict:
     return await arc.health.check()
