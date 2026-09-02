@@ -177,8 +177,22 @@ async def create_user(
     # them anyway; filtering first gives a clearer response shape than a
     # generic "no role named X" thrown mid-save.
     # Correctness-critical: a real role missing from this set gets wrongly
-    # "skipped" below as if it didn't exist.
-    known = {r["name"] for r in await arc.relay.list("_roles", fields=["name"], limit=None)}
+    # "skipped" below as if it didn't exist. Which is why this asks only
+    # about the roles actually being requested (bounded by the caller's own
+    # input) rather than loading every role in the system and filtering in
+    # Python — narrower AND strictly safer, since there's no row count at
+    # which this starts silently missing one. limit=None stays: the cap
+    # that matters is the `in` list itself.
+    known = (
+        {
+            r["name"]
+            for r in await arc.relay.list(
+                "_roles", fields=["name"], filters={"name": {"in": roles}}, limit=None
+            )
+        }
+        if roles
+        else set()
+    )
     skipped = [r for r in roles if r not in known]
     roles = [r for r in roles if r in known]
 
