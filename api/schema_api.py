@@ -403,6 +403,18 @@ async def _apply_or_preview(
                 return result
 
             reference = psqldb_migrate.migration_reference()
+            # Same pgdb.premigration/postmigration events `arc pgdb migrate`
+            # emits (pgdb.migrate's own comment above PRE_MIGRATION_EVENT has
+            # the contract) — one shared payload builder so the two paths
+            # cannot drift. Real changes only; handlers' failures are
+            # logged by emit_migration_event and never fail this apply.
+            event_payload = psqldb_migrate.migration_event_payload(
+                plan, source="admin", reference=reference, plugin=plugin, table=table
+            )
+            if plan.has_real_changes():
+                await psqldb_migrate.emit_migration_event(
+                    psqldb_migrate.PRE_MIGRATION_EVENT, event_payload
+                )
             await psqldb_migrate.apply_plan(conn, plan, reference=reference)
 
         # Same audit-trail file `arc pgdb migrate` itself writes — plan.ops
@@ -420,6 +432,14 @@ async def _apply_or_preview(
         # reload_schema_file's own docstring for exactly what this does and
         # doesn't cover (in-process only, this phase).
         arc.pgdb.reload_schema_file(path, plugin=plugin, is_patch=is_patch)
+
+        # After the reload, so a handler already sees the new shape in this
+        # process's registry; after the lock released, so a slow handler
+        # never holds up another migrate.
+        if plan.has_real_changes():
+            await psqldb_migrate.emit_migration_event(
+                psqldb_migrate.POST_MIGRATION_EVENT, event_payload
+            )
 
         result["applied"] = True
         result["migration_file"] = str(migration_path)
