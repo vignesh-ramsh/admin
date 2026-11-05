@@ -9,12 +9,13 @@ same self-containment posture as everywhere else in this plugin.
 
 Secret VALUES are never included in list_settings() — only their names,
 mirroring arc.settings.get()'s own masking default. reveal_secret() is the
-one explicit, separate action that surfaces a real secret value, and now
-carries the caller's identity through to arc.settings.get(..., reveal=True,
-accessed_by=...) — arc.store.py's secret_access_log records one row per
-reveal, never per masked list_settings() read (that would spam the log
-every time this page is simply opened). list_secret_access_log() surfaces
-that trail here; there's still no step-up re-auth beyond the existing
+one explicit, separate action that surfaces a real secret value to a
+person, and it is what writes the audit trail: after reading the value it
+calls arc.settings.record_secret_access(key, who), so secret_access_log
+holds exactly one row per time an administrator was shown a secret —
+never one per list_settings() read, and never one per internal read of a
+secret (arc.settings.get(..., reveal=True) writes nothing).
+list_secret_access_log() surfaces that trail here; there's still no step-up re-auth beyond the existing
 roles=["Superuser"] gate on every function in this module — a known,
 flagged simplicity choice, not an oversight.
 
@@ -44,17 +45,20 @@ async def list_settings() -> list[dict]:
 async def reveal_secret(key: str) -> dict:
     if not arc.settings.is_secret(key):
         arc.relay.throw(f"'{key}' is not a declared secret", status=404, code="not_a_secret")
-    accessed_by = arc.relay.context().user
-    value = arc.settings.get(key, reveal=True, accessed_by=accessed_by)
+    value = arc.settings.get(key, reveal=True)
     if value is None:
         arc.relay.throw(f"'{key}' has no value set", status=404, code="no_value")
+    # The audit record: who was shown this secret, and when (accessed_at is
+    # stamped by the store). Written only after a real value was found.
+    arc.settings.record_secret_access(key, arc.relay.context().user)
     return {"key": key, "value": value}
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
 async def list_secret_access_log(key: str | None = None, limit: int = 100) -> list[dict]:
     """Every reveal_secret() call, most recent first — who, which key,
-    when. Never populated by list_settings() or a masked get()."""
+    when. Written only by reveal_secret() above; list_settings() and
+    internal secret reads never add to it."""
     return arc.settings.access_log(key=key, limit=limit)
 
 
