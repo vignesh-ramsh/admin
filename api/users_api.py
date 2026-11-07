@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 import arc
 from pgdb.validation import ValidationError
 
-from admin._security import by_of, check_password_strength, hash_password
+from admin._security import by_of, check_password_strength
 from admin._pagination import cursor_page
 
 # Matches authn's own SUPERUSER_ROLE_NAME constant exactly (authn/authn/__init__.py)
@@ -209,7 +209,7 @@ async def create_user(
     except ValueError as exc:
         arc.relay.throw(str(exc), status=400, code="weak_password")
 
-    password_hash = await asyncio.to_thread(hash_password, raw_password)
+    password_hash = await arc.authn.hash_password(raw_password)
     try:
         user = await arc.relay.save(
             "_users",
@@ -350,7 +350,7 @@ async def set_password(email: str, password: str, identity=None) -> dict:
         arc.relay.throw(str(exc), status=400, code="weak_password")
 
     by = by_of(identity)
-    password_hash = await asyncio.to_thread(hash_password, password)
+    password_hash = await arc.authn.hash_password(password)
     await arc.relay.save(
         "_users",
         {

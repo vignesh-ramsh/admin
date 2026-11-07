@@ -1,11 +1,13 @@
 """
 admin._security
 -----------------
-Password hashing/strength and token/prefix generation — reimplemented here
+Password strength and token/prefix generation — reimplemented here
 against the same libraries and documented formats authn's own CLI uses
-(argon2-cffi, zxcvbn, secrets.token_urlsafe, arc.hash), rather than importing
-authn's internal module, per this plugin's explicit self-containment. The
-token hashing itself isn't a reimplementation at all — new_access_key()
+(zxcvbn, secrets.token_urlsafe, arc.hash), rather than importing
+authn's internal module, per this plugin's explicit self-containment. Password
+HASHING is not reimplemented: it goes through `arc.authn.hash_password`, so an
+admin-created user is hashed with the parameters in authn's `authn_argon2`
+setting and shares its bound on concurrent hashes. The token hashing itself isn't a reimplementation at all — new_access_key()
 below calls the same arc.hash() authn's own _resolve_api_key uses, so a key
 minted here always verifies there.
 
@@ -45,12 +47,6 @@ def redact_row(row: dict | None) -> dict | None:
     if not row:
         return row
     return {k: ("(hidden)" if k in REDACTED_FIELDS else v) for k, v in row.items()}
-
-
-def hash_password(password: str) -> str:
-    from argon2 import PasswordHasher
-
-    return PasswordHasher().hash(password)
 
 
 def check_password_strength(
