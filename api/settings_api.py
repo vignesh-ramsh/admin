@@ -63,12 +63,72 @@ async def list_secret_access_log(key: str | None = None, limit: int = 100) -> li
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
-async def set_setting(key: str, value: str, secret: bool = False) -> dict:
+async def set_setting(
+    key: str,
+    value: str,
+    secret: bool = False,
+    value_type: str | None = None,
+    description: str | None = None,
+) -> dict:
+    """Set a key's value; with a key that does not exist yet, create it.
+
+    Creating takes `value_type` (str, int, float or bool; none means text with no checking) and a `description`
+    that is required: every setting and secret says what it is for. Both are fixed at creation, so a call that
+    names an existing key and also gives either is refused with 409: its type never changes, and its description
+    is changed with set_setting_description. Changing only the value of an existing key takes just key, value and
+    secret, as it always did. A value that is not of the key's type is refused with 400, and a refused call
+    writes nothing."""
     key = key.strip()
     if not key:
         arc.relay.throw("key is required", code="bad_key")
+    if key in arc.settings.list_all():
+        if value_type is not None or description is not None:
+            arc.relay.throw(
+                f"'{key}' already exists. Open it in the list to change its value or its description; its type "
+                f"cannot be changed.",
+                status=409,
+                code="key_exists",
+            )
+    elif description is None or not description.strip():
+        arc.relay.throw(f"Say in a sentence what '{key}' is for.", status=400, code="description_required")
     try:
-        arc.settings.set(key, value, secret=secret)
+        arc.settings.set(
+            key,
+            value,
+            secret=secret,
+            updated_by=arc.relay.context().user,
+            type=value_type,
+            description=description,
+        )
     except arc.settings.SettingsError as exc:
         arc.relay.throw(str(exc), status=400, code="bad_setting")
     return {"key": key, "kind": "secret" if secret else "setting"}
+
+
+@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+async def set_setting_description(key: str, description: str) -> dict:
+    """Replace the text shown for a setting or secret in the Settings page. It changes only the copy kept in the
+    settings store (with who and when), never the description in the code, the key's value, or who set the value.
+    An empty text is refused (use reset_setting_description to bring the original back) and so is one over 2000
+    characters. Returns the key's refreshed entry."""
+    if key not in arc.settings.list_all():
+        arc.relay.throw(f"there is no setting or secret '{key}'", status=404, code="no_such_key")
+    try:
+        arc.settings.set_description(key, description, by=arc.relay.context().user)
+    except arc.settings.SettingsError as exc:
+        arc.relay.throw(str(exc), status=400, code="bad_description")
+    return {"key": key, **arc.settings.list_all()[key]}
+
+
+@arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
+async def reset_setting_description(key: str) -> dict:
+    """Put back the description the code declares for a setting or secret, discarding an edit made here. Returns
+    the key's refreshed entry, or just the key when it was a hand-added one with nothing left to show."""
+    if key not in arc.settings.list_all():
+        arc.relay.throw(f"there is no setting or secret '{key}'", status=404, code="no_such_key")
+    try:
+        arc.settings.reset_description(key)
+    except arc.settings.SettingsError as exc:
+        arc.relay.throw(str(exc), status=400, code="bad_description")
+    entry = arc.settings.list_all().get(key)
+    return {"key": key, **entry} if entry else {"key": key, "removed": True}

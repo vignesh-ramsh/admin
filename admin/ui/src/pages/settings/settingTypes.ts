@@ -69,3 +69,20 @@ export function settingValueToBool(raw: string | null | undefined): boolean {
   if (raw == null) return false;
   return BOOL_TRUE.includes(raw.trim().toLowerCase());
 }
+
+/** A declared default as text for the list and the popup: a string as it is, an empty string spelled out
+ *  (so "empty" is not mistaken for "nothing to show"), a number or a boolean plain. `null` is "no default". */
+export function formatDefault(value: SettingEntry["default"]): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") return value === "" ? '"" (empty)' : value;
+  return String(value);
+}
+
+/** The types a setting added by hand can be given, in the order the Add form lists them. The same four the kernel
+ *  accepts for `declare(type=...)`; the label says it in plain words and the value is what the server stores. */
+export const SETTING_TYPE_CHOICES: { value: NonNullable<SettingEntry["type"]>; label: string }[] = [
+  { value: "str", label: "Text (str)" },
+  { value: "int", label: "Whole number (int)" },
+  { value: "float", label: "Decimal number (float)" },
+  { value: "bool", label: "Yes / No (bool)" },
+];

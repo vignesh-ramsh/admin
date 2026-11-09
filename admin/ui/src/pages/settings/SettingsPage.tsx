@@ -10,6 +10,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { Button, IconButton } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { ErrorBlock, EmptyState } from "../../components/States";
+import { formatDefault } from "./settingTypes";
 
 /** Group by the key's prefix before the first `_` (docs/admin-ui-ux-
  *  review.md §7.1 — the old app was a flat, ungrouped, unsearchable
@@ -156,16 +157,15 @@ export function SettingsPage() {
                   groupRows.map((row) => {
                     const isSecret = row.kind === "secret";
                     const shown = revealed[row.key];
+                    // A secret never shows a default: none declares one, and a placeholder credential must not leak.
+                    const defaultText = isSecret ? null : formatDefault(row.default);
                     return (
                       <tr
                         key={row.key}
                         onClick={() => navigate(`/settings/${encodeURIComponent(row.key)}/edit`)}
                         className="cursor-pointer border-b border-border last:border-0 hover:bg-neutral-50 dark:hover:bg-neutral-900/40"
                       >
-                        <td
-                          className="truncate px-3.5 py-2 font-mono text-[13px] text-text"
-                          title={row.doc ? `${row.key} — ${row.doc}` : row.key}
-                        >
+                        <td className="truncate px-3.5 py-2 font-mono text-[13px] text-text" title={row.key}>
                           {row.key}
                         </td>
                         <td className="px-3.5 py-2">
@@ -173,11 +173,7 @@ export function SettingsPage() {
                         </td>
                         <td className="px-3.5 py-2">
                           {row.type ? (
-                            <Badge
-                              tone="neutral"
-                              className="font-mono uppercase"
-                              title={row.default != null ? `default: ${row.default}` : undefined}
-                            >
+                            <Badge tone="neutral" className="font-mono uppercase">
                               {row.type}
                             </Badge>
                           ) : (
@@ -186,12 +182,19 @@ export function SettingsPage() {
                         </td>
                         <td className="px-3.5 py-2">
                           <div className="flex items-center gap-2">
-                            <span
-                              className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-text-muted"
-                              title={isSecret ? shown : row.value ?? undefined}
-                            >
-                              {isSecret ? shown ?? "••••••••" : row.value ?? "—"}
-                            </span>
+                            <div className="min-w-0 flex-1">
+                              <span
+                                className="block truncate font-mono text-[12.5px] text-text-muted"
+                                title={isSecret ? shown : row.value ?? undefined}
+                              >
+                                {isSecret ? shown ?? "••••••••" : row.value ?? "—"}
+                              </span>
+                              {defaultText !== null && (
+                                <span className="block truncate font-mono text-[11.5px] text-text-faint" title={defaultText}>
+                                  Default: {defaultText}
+                                </span>
+                              )}
+                            </div>
                             {isSecret && (
                               <IconButton
                                 label={shown !== undefined ? "Hide value" : "Reveal value"}

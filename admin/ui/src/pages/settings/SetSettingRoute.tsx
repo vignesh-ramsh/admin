@@ -4,13 +4,13 @@ import { call, ApiError } from "../../api/client";
 import type { SettingEntry } from "../../api/types";
 import { useAsync } from "../../hooks/useAsync";
 import { Modal } from "../../components/Modal";
-import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
-import { TextInput, Checkbox, Switch } from "../../components/Field";
+import { TextInput, TextArea, Select, Checkbox, Switch } from "../../components/Field";
 import { LoadingBlock } from "../../components/States";
 import { useToast } from "../../components/Toast";
 import { useSaveShortcut } from "../../hooks/useSaveShortcut";
-import { boolToSettingValue, settingValueToBool, validateSettingValue } from "./settingTypes";
+import { SETTING_TYPE_CHOICES, boolToSettingValue, settingValueToBool, validateSettingValue } from "./settingTypes";
+import { MAX_DESCRIPTION_CHARS, SettingAbout } from "./SettingAbout";
 
 const NEW_KEY_SENTINEL = "__new__";
 
@@ -53,20 +53,37 @@ function SetSettingForm({
   onSaved: () => void;
 }) {
   const toast = useToast();
+  const [about, setAbout] = useState<SettingEntry | null>(existing);
+  const [editingDescription, setEditingDescription] = useState(false);
   const isEditing = existing !== null;
   const [key, setKey] = useState(existing?.key ?? defaultKey);
   const [value, setValue] = useState(existing?.kind === "setting" ? existing.value ?? "" : "");
   const [secret, setSecret] = useState(existing?.kind === "secret");
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Only when adding: the type the new key is created with, and what it is for. Both are fixed at creation —
+  // the server refuses to change either through this form — so editing shows neither as a field (the type is
+  // shown, read-only, in the About panel above).
+  const [newType, setNewType] = useState<NonNullable<SettingEntry["type"]>>("str");
+  const [description, setDescription] = useState("");
+  const trimmedDescription = description.trim();
+  const descriptionTooLong = trimmedDescription.length > MAX_DESCRIPTION_CHARS;
 
-  // Only ever known for a key some plugin already declared a type for
-  // (existing?.type) — a brand-new key being created here has no type
-  // to validate against yet, same as any setting did before typed
-  // settings existed; it can only ever GAIN a type the next time a
-  // plugin's own register() runs with a real declare() call.
-  const settingType = existing?.type ?? null;
-  const valueError = !isEditing ? null : validateSettingValue(settingType, value);
+  // An existing key's type is the one it already has (declared in code, or given when it was added). A new
+  // key's is the one being chosen.
+  const settingType = isEditing ? (existing.type ?? null) : newType;
+  // Adding starts with an empty value, which is not an error yet, only not saveable yet.
+  const valueMissing = !isEditing && value.trim() === "";
+  const valueError = valueMissing ? null : validateSettingValue(settingType, value);
+  const descriptionMissing = !isEditing && trimmedDescription === "";
+  const cannotSave = (secret && !confirmed) || !!valueError || valueMissing || descriptionMissing || descriptionTooLong;
+
+  const chooseType = (next: NonNullable<SettingEntry["type"]>) => {
+    setNewType(next);
+    // a bool is a switch, so it starts at a real value; leaving bool clears that value rather than keeping "false"
+    if (next === "bool") setValue("false");
+    else if (newType === "bool") setValue("");
+  };
 
   const submit = async () => {
     const trimmedKey = key.trim();
@@ -82,9 +99,22 @@ function SetSettingForm({
       toast.error(valueError);
       return;
     }
+    if (valueMissing) {
+      toast.error("A value is required.");
+      return;
+    }
+    if (descriptionMissing) {
+      toast.error("Say in a sentence what this is for.");
+      return;
+    }
     setBusy(true);
     try {
-      await call("set_setting", { key: trimmedKey, value, secret });
+      await call(
+        "set_setting",
+        isEditing
+          ? { key: trimmedKey, value, secret }
+          : { key: trimmedKey, value, secret, value_type: newType, description: trimmedDescription },
+      );
       toast.success(`Saved "${trimmedKey}".`);
       onSaved();
     } catch (err) {
@@ -94,7 +124,8 @@ function SetSettingForm({
     }
   };
 
-  useSaveShortcut(submit, !busy && !(secret && !confirmed) && !valueError);
+  // Ctrl/Cmd+S saves the value; not while a description is being typed in the panel above it
+  useSaveShortcut(submit, !busy && !cannotSave && !editingDescription);
 
   return (
     <Modal
@@ -105,20 +136,25 @@ function SetSettingForm({
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={submit} loading={busy} disabled={(secret && !confirmed) || !!valueError}>
+          <Button variant="primary" onClick={submit} loading={busy} disabled={cannotSave}>
             Save
           </Button>
         </>
       }
     >
       <div className="flex flex-col gap-4">
-        {settingType && (
-          <div className="-mb-2 flex items-center gap-1.5 text-xs text-text-faint">
-            Declared type:
-            <Badge tone="neutral" className="font-mono uppercase">
-              {settingType}
-            </Badge>
-          </div>
+        {about && (
+          <SettingAbout
+            entry={about}
+            onEditingChange={setEditingDescription}
+            onChange={(next) => {
+              if (next === null) {
+                onSaved(); // a hand-added key that had nothing left but its description: it is gone
+                return;
+              }
+              setAbout(next);
+            }}
+          />
         )}
         <TextInput
           label="Key"
@@ -130,6 +166,33 @@ function SetSettingForm({
           autoFocus={!isEditing}
         />
 
+        {!isEditing && (
+          <>
+            <Select
+              label="Type"
+              hint="Decides what values are accepted. Set once — it can't be changed afterwards."
+              value={newType}
+              onChange={(e) => chooseType(e.target.value as NonNullable<SettingEntry["type"]>)}
+            >
+              {SETTING_TYPE_CHOICES.map((choice) => (
+                <option key={choice.value} value={choice.value}>
+                  {choice.label}
+                </option>
+              ))}
+            </Select>
+            <TextArea
+              label="Description"
+              required
+              rows={3}
+              placeholder="In a sentence or two: what is this for, and what happens when it changes?"
+              hint={`${trimmedDescription.length} of ${MAX_DESCRIPTION_CHARS} characters. Shown to everyone who opens this; you can edit it later.`}
+              error={descriptionTooLong ? `Too long: ${trimmedDescription.length} of ${MAX_DESCRIPTION_CHARS} characters.` : undefined}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </>
+        )}
+
         {settingType === "bool" ? (
           <div className="flex flex-col gap-1.5">
             <span className="text-[13px] font-medium text-text-muted">Value</span>
@@ -138,7 +201,6 @@ function SetSettingForm({
               onChange={(v) => setValue(boolToSettingValue(v))}
               label={settingValueToBool(value) ? "True" : "False"}
             />
-            {existing?.doc && <p className="text-xs text-text-faint">{existing.doc}</p>}
           </div>
         ) : (
           <TextInput
@@ -146,15 +208,7 @@ function SetSettingForm({
             type={settingType === "int" || settingType === "float" ? "number" : "text"}
             step={settingType === "float" ? "any" : undefined}
             error={valueError ?? undefined}
-            hint={
-              isEditing && existing.kind === "secret"
-                ? "Enter a new value to overwrite — the current value is never shown here."
-                : existing?.doc
-                  ? existing.default != null
-                    ? `${existing.doc} Default: ${existing.default}.`
-                    : existing.doc
-                  : undefined
-            }
+            hint={isEditing && existing.kind === "secret" ? "Enter a new value to overwrite — the current value is never shown here." : undefined}
             placeholder={isEditing && existing.kind === "secret" ? "New value…" : "value"}
             value={value}
             onChange={(e) => setValue(e.target.value)}

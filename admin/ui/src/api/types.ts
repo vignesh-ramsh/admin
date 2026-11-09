@@ -209,7 +209,14 @@ export interface SettingEntry {
   value: string | null;
   type: "int" | "float" | "bool" | "str" | null;
   default: number | boolean | string | null;
+  /** What the page shows: the copy of the description kept in the settings store, which is the code's text
+   *  until an administrator rewrites it. */
   doc: string;
+  /** The description the code declares: what "Reset to original" brings back. Empty for a key nobody declares. */
+  code_doc: string;
+  doc_edited: boolean;
+  doc_by: string | null;
+  doc_at: string | null;
 }
 
 /** admin.list_scheduled_jobs() — live config (arc.lineup.scheduled_tasks())
