@@ -76,7 +76,10 @@ function SetSettingForm({
   const valueMissing = !isEditing && value.trim() === "";
   const valueError = valueMissing ? null : validateSettingValue(settingType, value);
   const descriptionMissing = !isEditing && trimmedDescription === "";
-  const cannotSave = (secret && !confirmed) || !!valueError || valueMissing || descriptionMissing || descriptionTooLong;
+  // A key that decides what ARC runs or which files it can reach is changed on the server, not here — the
+  // server refuses it from this console, so the form does not offer it.
+  const operatorOnly = existing?.operator_only === true;
+  const cannotSave = operatorOnly || (secret && !confirmed) || !!valueError || valueMissing || descriptionMissing || descriptionTooLong;
 
   const chooseType = (next: NonNullable<SettingEntry["type"]>) => {
     setNewType(next);
@@ -200,6 +203,7 @@ function SetSettingForm({
               checked={settingValueToBool(value)}
               onChange={(v) => setValue(boolToSettingValue(v))}
               label={settingValueToBool(value) ? "True" : "False"}
+              disabled={operatorOnly}
             />
           </div>
         ) : (
@@ -208,11 +212,18 @@ function SetSettingForm({
             type={settingType === "int" || settingType === "float" ? "number" : "text"}
             step={settingType === "float" ? "any" : undefined}
             error={valueError ?? undefined}
-            hint={isEditing && existing.kind === "secret" ? "Enter a new value to overwrite — the current value is never shown here." : undefined}
+            hint={
+              operatorOnly
+                ? `Can only be changed on the server: arc settings set ${existing?.key} <value>`
+                : isEditing && existing.kind === "secret"
+                  ? "Enter a new value to overwrite — the current value is never shown here."
+                  : undefined
+            }
+            disabled={operatorOnly}
             placeholder={isEditing && existing.kind === "secret" ? "New value…" : "value"}
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            autoFocus={isEditing}
+            autoFocus={isEditing && !operatorOnly}
           />
         )}
 

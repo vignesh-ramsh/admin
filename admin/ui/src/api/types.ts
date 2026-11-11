@@ -217,6 +217,8 @@ export interface SettingEntry {
   doc_edited: boolean;
   doc_by: string | null;
   doc_at: string | null;
+  /** The value can only be changed on the server (`arc settings set`), never from this console. */
+  operator_only: boolean;
 }
 
 /** admin.list_scheduled_jobs() — live config (arc.lineup.scheduled_tasks())
@@ -268,6 +270,8 @@ export interface FilerSettingEntry {
   // nothing catching it — same class of bug, now closed for int too.
   value: string | boolean | number | null;
   is_set: boolean;
+  /** Can only be changed on the server (`arc settings set`), never from this console. */
+  read_only?: boolean;
 }
 
 /** admin.list_filer_files() — a FilerFile row enriched with a ready-to-use

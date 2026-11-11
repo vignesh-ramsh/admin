@@ -61,6 +61,8 @@ async def list_filer_settings() -> list[dict]:
                 "secret": secret,
                 "value": None if secret else value,
                 "is_set": value is not None,
+                # operator-only keys (filer_local_root) show here but can only be changed on the server
+                "read_only": arc.settings.is_operator_only(key),
             }
         )
     return rows
@@ -76,11 +78,25 @@ async def set_filer_settings(values: dict) -> dict:
     real credential with an empty string just because the field was left
     blank in a re-save) — a blank value for a plain key clears it, same
     as arc.settings.set()'s own normal behavior."""
+    # Checked for the whole request before anything is written, so a refused key cannot leave the
+    # others half-applied. Sending an operator-only key back with the value it already has is fine
+    # (a form that submits every field); changing it is not.
+    for key, raw in (values or {}).items():
+        if key in _FILER_SETTINGS and raw is not None and arc.settings.is_operator_only(key):
+            if str(raw).strip() != str(arc.settings.get(key) or ""):
+                arc.relay.throw(
+                    f"'{key}' can only be changed on the server, with `arc settings set {key} <value>`",
+                    status=403,
+                    code="operator_only",
+                )
+
     updated = []
     for key, raw in (values or {}).items():
         entry = _FILER_SETTINGS.get(key)
         if entry is None or raw is None:
             continue
+        if arc.settings.is_operator_only(key):
+            continue  # unchanged (checked above)
         kind, secret = entry
         if kind == "bool":
             value = (
@@ -92,7 +108,8 @@ async def set_filer_settings(values: dict) -> dict:
             value = str(raw).strip()
             if secret and not value:
                 continue
-        arc.settings.set(key, value, secret=secret)
+        # the signed-in user's e-mail, so the store says who changed it (and `updated_at` says when)
+        arc.settings.set(key, value, secret=secret, updated_by=arc.relay.context().user)
         updated.append(key)
     return {"updated": updated}
 

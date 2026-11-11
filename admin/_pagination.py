@@ -25,13 +25,15 @@ Known, documented trade-offs, not oversights:
     cross-sort-column keyset. Matches how most real infinite-scroll UIs
     already behave (Gmail, Notion) and avoids a much larger multi-column-
     index cursor design for a case this app doesn't need.
-  * The sort column is assumed NOT NULL. A plain `>`/`<` keyset comparison
-    against a NULLable column can skip or repeat rows straddling a NULL
-    (SQL's three-valued logic: `NULL > x` is neither true nor false), the
-    same way naive OFFSET pagination already gets subtly wrong on a
-    NULLable sort column in most systems. Every current caller defaults to
-    a NOT NULL column (id, email, name, ...); a caller sorting by a
-    genuinely nullable business column should know this isn't handled.
+
+A NULLable sort column is handled: SQL's three-valued logic makes a plain
+`>`/`<` comparison against NULL neither true nor false, so a keyset built
+only from comparisons lost every row after the first NULL (an Execution Log
+sorted by `finished_at` showed its first page and then nothing). The order is
+therefore stated explicitly - NULLs last when ascending, first when
+descending, which is Postgres's own default and so what the pages always
+showed - and `keyset_predicate` below spells out what follows a row for each
+of the four cases (ascending/descending x cursor value NULL/not NULL).
 """
 
 from __future__ import annotations
@@ -95,6 +97,45 @@ def _renumber(extra_where: str, offset: int) -> str:
     if offset == 0:
         return extra_where
     return _EXTRA_PARAM_RE.sub(lambda m: f"${int(m.group(1)) + offset}", extra_where)
+
+
+def keyset_predicate(
+    sort_col: str,
+    pk: str,
+    *,
+    desc: bool,
+    cursor_value: Any,
+    cursor_id: Any,
+    first_param: int,
+) -> tuple[str, list[Any]]:
+    """The WHERE condition that selects the rows AFTER a cursor, for a list
+    ordered by `sort_col` then `pk` in one direction, with NULLs last when
+    ascending and first when descending (what `ORDER BY` below states).
+    `first_param` is the number of the first `$n` placeholder this may use;
+    the returned list holds the parameters in that order.
+
+    `cursor_value` is None when the cursor's own row had a NULL sort value.
+
+        direction   cursor row's value   rows that follow
+        DESC        not NULL             smaller value, or same value and smaller id
+                                         (the NULL rows came first, already shown)
+        DESC        NULL                 the rest of the NULL rows (smaller id),
+                                         then every non-NULL row
+        ASC         not NULL             larger value, or same value and larger id,
+                                         then every NULL row
+        ASC         NULL                 the rest of the NULL rows (larger id)
+    """
+    col, key = f'"{sort_col}"', f'"{pk}"'
+    n = first_param
+    if cursor_value is None:
+        if desc:
+            return f"(({col} IS NULL AND {key} < ${n}) OR {col} IS NOT NULL)", [cursor_id]
+        return f"({col} IS NULL AND {key} > ${n})", [cursor_id]
+    op = "<" if desc else ">"
+    clause = f"(({col} {op} ${n}) OR ({col} = ${n} AND {key} {op} ${n + 1})"
+    if not desc:
+        clause += f" OR {col} IS NULL"
+    return clause + ")", [cursor_value, cursor_id]
 
 
 async def cursor_page(
@@ -165,16 +206,24 @@ async def cursor_page(
     page_params = list(params)
     if after is not None:
         cursor_value, cursor_id = decode_cursor(after)
-        cursor_value = coerce_value(columns[sort_col], cursor_value)
-        op = "<" if desc else ">"
-        n = len(page_params)
-        # Tuple comparison, ties on sort_col broken by pk — no row is ever
-        # skipped or repeated across a page boundary even when many rows
-        # share the same sort value.
-        page_clauses.append(
-            f'(("{sort_col}" {op} ${n + 1}) OR ("{sort_col}" = ${n + 1} AND "{pk}" {op} ${n + 2}))'
+        if cursor_value is not None:
+            # coerce_value reads "" as "cleared" (None); a real empty string
+            # sort value is not a NULL, so it is kept as it is.
+            coerced = coerce_value(columns[sort_col], cursor_value)
+            cursor_value = cursor_value if coerced is None else coerced
+        # Ties on sort_col are broken by pk, and NULLs have a defined place
+        # in the order — no row is skipped or repeated across a page
+        # boundary, whether or not the page ends on, or before, a NULL.
+        keyset_sql, keyset_params = keyset_predicate(
+            sort_col,
+            pk,
+            desc=desc,
+            cursor_value=cursor_value,
+            cursor_id=cursor_id,
+            first_param=len(page_params) + 1,
         )
-        page_params.extend([cursor_value, cursor_id])
+        page_clauses.append(keyset_sql)
+        page_params.extend(keyset_params)
 
     page_where = f"WHERE {' AND '.join(page_clauses)}" if page_clauses else ""
     # sort_col/pk are always fetched (the cursor needs both off the last
@@ -184,10 +233,14 @@ async def cursor_page(
     # contract relay.list()'s own `fields` already guarantees.
     query_fields = list(dict.fromkeys([*fields, sort_col, pk]))
     select_cols = ", ".join(f'"{c}"' for c in query_fields)
-    direction = "DESC" if desc else "ASC"
+    # NULLS placement is spelled out (it is Postgres's default for each
+    # direction, so a b-tree index on the column still serves the sort and the
+    # visible order is unchanged) because keyset_predicate depends on it.
+    direction = "DESC NULLS FIRST" if desc else "ASC NULLS LAST"
+    pk_direction = "DESC" if desc else "ASC"
     sql = (
         f'SELECT {select_cols} FROM "{table}" {page_where} '
-        f'ORDER BY "{sort_col}" {direction}, "{pk}" {direction} '
+        f'ORDER BY "{sort_col}" {direction}, "{pk}" {pk_direction} '
         f"LIMIT {limit + 1}"
     )
     fetched = await arc.relay.sql(sql, *page_params)

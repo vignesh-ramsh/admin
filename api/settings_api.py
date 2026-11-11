@@ -100,6 +100,10 @@ async def set_setting(
             type=value_type,
             description=description,
         )
+    except arc.settings.OperatorOnlyError as exc:
+        # Not 400: the request is well-formed, this login is simply not allowed to make it. Such a
+        # key decides what ARC runs, so it is changed with `arc settings set` on the server.
+        arc.relay.throw(str(exc), status=403, code="operator_only")
     except arc.settings.SettingsError as exc:
         arc.relay.throw(str(exc), status=400, code="bad_setting")
     return {"key": key, "kind": "secret" if secret else "setting"}

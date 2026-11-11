@@ -234,9 +234,14 @@ export function FilerSettingsTab() {
             </Select>
             <TextInput
               label="Local storage root"
-              hint="Blank = <project root>/files."
+              hint={
+                entries["filer_local_root"]?.read_only
+                  ? "Blank = <project root>/files. Set on the server only: arc settings set filer_local_root <path>."
+                  : "Blank = <project root>/files."
+              }
               value={(values["filer_local_root"] as string) ?? ""}
               placeholder="/path/to/files"
+              disabled={entries["filer_local_root"]?.read_only ?? false}
               onChange={(e) => set("filer_local_root", e.target.value)}
             />
             <TextInput

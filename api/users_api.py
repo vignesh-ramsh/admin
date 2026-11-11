@@ -365,12 +365,5 @@ async def set_password(email: str, password: str, identity=None) -> dict:
     # An admin-assisted reset is exactly the moment an old, possibly-
     # compromised session shouldn't keep working — same reasoning authn's
     # own CLI set-password already documents.
-    sessions = await arc.relay.list(
-        "_sessions",
-        fields=["id", "token_hash"],
-        filters={"user": user["id"], "revoked_at": {"is_null": True}},
-    )
-    for s in sessions:
-        await arc.relay.save("_sessions", {"id": s["id"], "revoked_at": arc.tz.utcnow()}, by=by)
-        await arc.authn.invalidate_session_cache(s["token_hash"])
-    return {"ok": True, "sessions_revoked": len(sessions)}
+    revoked = await arc.authn.revoke_user_sessions(user["id"], by=by)
+    return {"ok": True, "sessions_revoked": revoked}
