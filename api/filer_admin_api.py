@@ -46,6 +46,29 @@ _FILER_SETTINGS: dict[str, tuple[str, bool]] = {
     "filer_s3_access_key_id": ("secret", True),
     "filer_s3_secret_access_key": ("secret", True),
     "filer_max_request_body_bytes": ("int", False),
+    "filer_max_upload_request_bytes": ("int", False),
+    # uploads: how a file is received, and what the scanner may be sent
+    "filer_streaming_uploads": ("bool", False),
+    "filer_max_concurrent_uploads": ("int", False),
+    "filer_upload_max_seconds": ("int", False),
+    "filer_spool_dir": ("text", False),  # operator-only: shown, changed on the server
+    "filer_spool_min_free_mb": ("int", False),
+    "filer_upload_stale_minutes": ("int", False),
+    "filer_scan_max_bytes": ("int", False),
+    "filer_scan_timeout_seconds": ("int", False),
+    # S3 and S3-compatible services
+    "filer_s3_addressing_style": ("select:auto,path,virtual", False),
+    "filer_s3_checksum_mode": ("select:auto,when_supported,when_required", False),
+    "filer_s3_send_acl": ("bool", False),
+    "filer_s3_server_side_encryption": ("text", False),
+    "filer_s3_sse_kms_key_id": ("text", False),
+    "filer_s3_part_size_mb": ("int", False),
+    "filer_s3_upload_concurrency": ("int", False),
+    "filer_s3_connect_timeout_seconds": ("int", False),
+    "filer_s3_read_timeout_seconds": ("int", False),
+    "filer_s3_max_attempts": ("int", False),
+    "filer_s3_redirect_over_mb": ("int", False),
+    "filer_s3_public_endpoint_url": ("text", False),
 }
 
 
