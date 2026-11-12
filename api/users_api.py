@@ -21,7 +21,6 @@ UndefinedColumnError until `arc pgdb migrate -p authn` has been run."""
 import asyncio
 import ipaddress
 import secrets
-from collections import Counter
 from datetime import datetime, timezone
 
 import arc
@@ -136,14 +135,15 @@ async def count_users_by_role() -> dict:
     specifically so THAT endpoint's own pagination can stay real
     pagination, not a special "give me everything" escape hatch. JSONB
     array membership has no Query Engine filter/group operator (docs/
-    arc.MD §3.4), so this counts in Python, the same established pattern
-    authn's own `list-users --role` and this module's old client-side
-    role filter already used."""
-    users = await arc.relay.list("_users", fields=["has_roles"], limit=None)
-    counts: Counter = Counter()
-    for u in users:
-        counts.update(u.get("has_roles") or [])
-    return dict(counts)
+    arc.MD §3.4), so it is one grouped query that unnests each user's
+    role array (a value that is not an array counts as no roles), rather
+    than loading every user to count in Python."""
+    rows = await arc.relay.sql(
+        'SELECT role, count(*) AS members FROM "_users", '
+        "jsonb_array_elements_text(CASE WHEN jsonb_typeof(has_roles) = 'array' THEN has_roles ELSE '[]'::jsonb END) AS role "
+        "GROUP BY role"
+    )
+    return {row["role"]: row["members"] for row in rows}
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])

@@ -22,7 +22,7 @@ from admin._dataops import friendly as _friendly
 from admin._dataops import require_not_protected as _require_not_protected
 from admin._dataops import schema_or_throw as _schema_or_throw
 from admin._security import by_of, redact_row
-from admin._pagination import _renumber, cursor_page
+from admin._pagination import COUNT_CAP, _renumber, clamp_total, cursor_page
 
 #: Data Browser's own list-view column cap (format.ts's listColumns(schema, max=6))
 #: — kept in sync by hand since the two are independent implementations of the
@@ -205,13 +205,22 @@ async def list_rows(
             limit=limit,
             extra_where=search_where,
             extra_params=search_params,
+            # a broad search over a big table would otherwise scan it all, on every page
+            count_cap=COUNT_CAP,
         )
     except _READ_ERRORS as exc:
         _friendly(exc)
+    total, total_capped = clamp_total(total, COUNT_CAP)
     # Reads on protected tables are open by design, but hash material never
     # leaves the server — same posture (and same field set) audit_api
     # already enforces; the browse path used to leak these raw.
-    return {"rows": [redact_row(r) for r in rows], "next_cursor": next_cursor, "total": total}
+    return {
+        "rows": [redact_row(r) for r in rows],
+        "next_cursor": next_cursor,
+        # at most COUNT_CAP; `total_capped` says there are more matching rows than that
+        "total": total,
+        "total_capped": total_capped,
+    }
 
 
 @arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])

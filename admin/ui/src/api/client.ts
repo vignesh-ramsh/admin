@@ -92,11 +92,29 @@ export type CallMethod = "GET" | "QUERY" | "POST";
  * linger indefinitely on disk once the tab's gone). */
 const ETAG_STORAGE_KEY = "arc_admin_etag_cache";
 
-function loadEtagCache(): Map<string, { etag: string; body: unknown }> {
+/* The cache is only a convenience, so it is kept small and short-lived: the newest MAX_ETAG_ENTRIES responses, at
+ * most MAX_ETAG_BYTES of JSON between them (the oldest are dropped first), written to sessionStorage at most once
+ * per PERSIST_DELAY_MS (it used to be rewritten, bodies and all, after EVERY response), and emptied on logout, on
+ * login and on any 401/403, so one user's lists and settings are not left in the tab's storage for the next. */
+const MAX_ETAG_ENTRIES = 50;
+const MAX_ETAG_BYTES = 1_000_000;
+const PERSIST_DELAY_MS = 500;
+
+interface EtagEntry {
+  etag: string;
+  body: unknown;
+  /** length of the JSON the body arrived as, to bound the cache by size */
+  size: number;
+}
+
+function loadEtagCache(): Map<string, EtagEntry> {
   try {
     const raw = sessionStorage.getItem(ETAG_STORAGE_KEY);
     if (!raw) return new Map();
-    return new Map(Object.entries(JSON.parse(raw)));
+    const stored = JSON.parse(raw) as Record<string, { etag: string; body: unknown; size?: number }>;
+    return new Map(
+      Object.entries(stored).map(([key, v]) => [key, { etag: v.etag, body: v.body, size: v.size ?? JSON.stringify(v.body).length }]),
+    );
   } catch {
     // Corrupted JSON, storage disabled, or anything else — degrade to
     // "no cache yet", never let a bad stored value break the app.
@@ -105,15 +123,78 @@ function loadEtagCache(): Map<string, { etag: string; body: unknown }> {
 }
 
 const etagCache = loadEtagCache();
+let etagCacheBytes = [...etagCache.values()].reduce((sum, e) => sum + e.size, 0);
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Drops the oldest entries (a Map iterates in insertion order) until both bounds hold. */
+function trimEtagCache(): void {
+  for (const key of etagCache.keys()) {
+    if (etagCache.size <= MAX_ETAG_ENTRIES && etagCacheBytes <= MAX_ETAG_BYTES) return;
+    etagCacheBytes -= etagCache.get(key)?.size ?? 0;
+    etagCache.delete(key);
+  }
+}
+trimEtagCache();
+
+function forgetEtag(key: string): void {
+  const old = etagCache.get(key);
+  if (old) {
+    etagCacheBytes -= old.size;
+    etagCache.delete(key);
+  }
+}
+
+/** Records the entry as the NEWEST one, so the oldest are the first to go. */
+function rememberEtag(key: string, entry: EtagEntry): void {
+  forgetEtag(key);
+  etagCache.set(key, entry);
+  etagCacheBytes += entry.size;
+  trimEtagCache();
+}
 
 function persistEtagCache(): void {
+  if (persistTimer !== null) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
   try {
-    sessionStorage.setItem(ETAG_STORAGE_KEY, JSON.stringify(Object.fromEntries(etagCache)));
+    if (etagCache.size === 0) sessionStorage.removeItem(ETAG_STORAGE_KEY);
+    else sessionStorage.setItem(ETAG_STORAGE_KEY, JSON.stringify(Object.fromEntries(etagCache)));
   } catch {
     // Quota exceeded or storage disabled — the in-memory Map (this tab's
     // own lifetime) still works fine; only cross-reload persistence is
     // lost, never a hard failure.
   }
+}
+
+/** At most one write per PERSIST_DELAY_MS, however many responses arrive in between. */
+function schedulePersist(): void {
+  if (persistTimer === null) persistTimer = setTimeout(persistEtagCache, PERSIST_DELAY_MS);
+}
+
+// A reload or a closed tab must not lose what a pending write was about to save.
+if (typeof window !== "undefined") window.addEventListener("pagehide", persistEtagCache);
+
+/** Forgets every cached response, in memory and in sessionStorage. Called on logout, on login and on any 401/403. */
+export function clearEtagCache(): void {
+  etagCache.clear();
+  etagCacheBytes = 0;
+  if (persistTimer !== null) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+  try {
+    sessionStorage.removeItem(ETAG_STORAGE_KEY);
+  } catch {
+    // storage disabled — nothing to remove
+  }
+}
+
+/** The error to throw for a failed response; a 401/403 also empties the cache (the user is no longer who it was
+ *  filled for, or no longer allowed to see it). */
+async function failure(res: Response): Promise<Error> {
+  if (res.status === 401 || res.status === 403) clearEtagCache();
+  return parseError(res);
 }
 
 function etagCacheKey(method: string, base: string, paramsKey: string): string {
@@ -135,15 +216,16 @@ async function withEtagCache<T>(
   if (res.status === 304 && cached) {
     return cached.body as T;
   }
-  if (!res.ok) throw await parseError(res);
-  const body = await res.json();
+  if (!res.ok) throw await failure(res);
+  const text = await res.text();
+  const body = JSON.parse(text);
   const etag = res.headers.get("etag");
   if (etag) {
-    etagCache.set(key, { etag, body });
+    rememberEtag(key, { etag, body, size: text.length });
   } else {
-    etagCache.delete(key);
+    forgetEtag(key);
   }
-  persistEtagCache();
+  schedulePersist();
   return body;
 }
 
@@ -225,7 +307,7 @@ export async function call<T = unknown>(
     headers: headers(),
     body: JSON.stringify(params),
   });
-  if (!res.ok) throw await parseError(res);
+  if (!res.ok) throw await failure(res);
   return res.json();
 }
 
@@ -235,7 +317,7 @@ async function authFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
     ...init,
     headers: { ...headers(), ...(init.headers ?? {}) },
   });
-  if (!res.ok) throw await parseError(res);
+  if (!res.ok) throw await failure(res);
   return res.json();
 }
 
@@ -252,13 +334,15 @@ export interface ActiveSessionSummary {
   expires_at: string | null;
 }
 
-export function login(params: {
+export async function login(params: {
   email?: string;
   username?: string;
   password: string;
   session_type: "Fixed" | "Extended";
 }): Promise<Profile> {
-  return authFetch<Profile>("/login", { method: "POST", body: JSON.stringify(params) });
+  const profile = await authFetch<Profile>("/login", { method: "POST", body: JSON.stringify(params) });
+  clearEtagCache(); // whatever an earlier user left in this tab is not for this one
+  return profile;
 }
 
 /** The "you're already signed in elsewhere" flow's second step — re-sends
@@ -289,6 +373,8 @@ export async function logout(): Promise<void> {
     await authFetch("/logout", { method: "POST" });
   } catch {
     /* best-effort */
+  } finally {
+    clearEtagCache();
   }
 }
 

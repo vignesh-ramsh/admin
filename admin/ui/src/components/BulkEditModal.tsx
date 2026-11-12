@@ -6,6 +6,7 @@ import { Checkbox, Select } from "./Field";
 import { Modal } from "./Modal";
 import { FieldInput } from "../pages/data/FieldInput";
 import { editableFields } from "../pages/data/format";
+import { formatCount } from "../lib/count";
 
 let seq = 0;
 interface EditRow {
@@ -36,7 +37,7 @@ export function BulkEditModal({
 }: {
   schema: TableSchema;
   selectedCount: number;
-  filterScope?: { total: number; loadedCount: number };
+  filterScope?: { total: number; loadedCount: number; capped?: boolean };
   applying: boolean;
   onApply: (patch: Record<string, unknown>, scope: "all" | "loaded") => void;
   onClose: () => void;
@@ -59,6 +60,8 @@ export function BulkEditModal({
   const valid = rows.length > 0 && rows.every((r) => r.field);
   const scope: "all" | "loaded" = filterScope && scopeAll ? "all" : "loaded";
   const targetCount = filterScope ? (scope === "all" ? filterScope.total : filterScope.loadedCount) : selectedCount;
+  // "10,000+" when the matching rows were only counted up to the server's cap
+  const targetLabel = filterScope && scope === "all" ? formatCount(filterScope.total, filterScope.capped) : String(targetCount);
 
   const apply = () => {
     if (!valid) return;
@@ -69,7 +72,7 @@ export function BulkEditModal({
 
   return (
     <Modal
-      title={`Edit ${targetCount} row${targetCount === 1 ? "" : "s"}`}
+      title={`Edit ${targetLabel} row${targetCount === 1 ? "" : "s"}`}
       subtitle="Every field below is applied to every targeted row — leave a field out to keep its current value."
       onClose={onClose}
       size="lg"
@@ -79,7 +82,7 @@ export function BulkEditModal({
             Cancel
           </Button>
           <Button variant="primary" onClick={apply} loading={applying} disabled={!valid || targetCount === 0}>
-            Apply to {targetCount} row{targetCount === 1 ? "" : "s"}
+            Apply to {targetLabel} row{targetCount === 1 ? "" : "s"}
           </Button>
         </>
       }
@@ -88,7 +91,7 @@ export function BulkEditModal({
         {filterScope && (
           <div className="rounded-md border border-warning/25 bg-warning-bg/50 px-3 py-2.5">
             <Checkbox
-              label={`Apply to all ${filterScope.total} matching record${filterScope.total === 1 ? "" : "s"}`}
+              label={`Apply to all ${formatCount(filterScope.total, filterScope.capped)} matching record${filterScope.total === 1 ? "" : "s"}`}
               checked={scopeAll}
               onChange={(e) => setScopeAll(e.target.checked)}
             />

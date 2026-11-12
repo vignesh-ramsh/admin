@@ -32,10 +32,6 @@ import tempfile
 from pathlib import Path
 from typing import Any, AsyncIterator
 
-#: Matches filer.providers' own StorageProvider.read_stream default —
-#: not imported (that's a Protocol, no constant to share), just the same
-#: number for the same "reasonable I/O chunk" reasoning.
-_STREAM_CHUNK_SIZE = 65536
 _PREVIEW_SAMPLE_ROWS = 10
 
 
@@ -62,9 +58,7 @@ async def _stream_to_tempfile(file_row: dict) -> Path:
     fd, raw_path = tempfile.mkstemp(prefix="arc-import-", suffix=".xlsx")
     path = Path(raw_path)
     with os.fdopen(fd, "wb") as f:
-        async for chunk in _provider(file_row).read_stream(
-            file_row["storage_key"], chunk_size=_STREAM_CHUNK_SIZE
-        ):
+        async for chunk in _provider(file_row).read_stream(file_row["storage_key"]):  # chunk size: filer_stream_chunk_kb
             f.write(chunk)
     return path
 

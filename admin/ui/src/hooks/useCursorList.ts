@@ -6,6 +6,8 @@ export interface CursorPage<T> {
   rows: T[];
   next_cursor: string | null;
   total: number;
+  /** `total` stopped at the server's count cap: more rows match than it says. */
+  total_capped?: boolean;
 }
 
 /** Generic cursor/keyset-paginated list — backs every infinite-scroll table
@@ -31,6 +33,7 @@ export function useCursorList<T>({
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState<number | null>(null);
+  const [totalCapped, setTotalCapped] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +64,7 @@ export function useCursorList<T>({
         setCursor(page.next_cursor);
         setHasMore(page.next_cursor !== null);
         setTotal(page.total);
+        setTotalCapped(page.total_capped === true);
       })
       .catch((err) => {
         if (seq !== requestSeq.current) return;
@@ -87,6 +91,7 @@ export function useCursorList<T>({
         setCursor(page.next_cursor);
         setHasMore(page.next_cursor !== null);
         setTotal(page.total);
+        setTotalCapped(page.total_capped === true);
       })
       .catch((err) => {
         if (seq !== requestSeq.current) return;
@@ -104,9 +109,10 @@ export function useCursorList<T>({
     (ids: string[]) => {
       const idSet = new Set(ids);
       setRows((cur) => cur.filter((r) => !idSet.has(rowKey(r))));
-      setTotal((t) => (t !== null ? Math.max(0, t - ids.length) : t));
+      // a capped total ("10,000+") does not shrink by the rows removed from the loaded part
+      setTotal((t) => (t !== null && !totalCapped ? Math.max(0, t - ids.length) : t));
     },
-    [rowKey],
+    [rowKey, totalCapped],
   );
 
   const patchByIds = useCallback(
@@ -117,5 +123,5 @@ export function useCursorList<T>({
     [rowKey],
   );
 
-  return { rows, loading, loadingMore, hasMore, total, error, reload: load, loadMore, removeByIds, patchByIds };
+  return { rows, loading, loadingMore, hasMore, total, totalCapped, error, reload: load, loadMore, removeByIds, patchByIds };
 }

@@ -19,6 +19,7 @@ import { useCursorList } from "../../hooks/useCursorList";
 import { ExportModal } from "./ExportModal";
 import { ImportModal } from "./ImportModal";
 import { formatCell, listColumns, PROTECTED_TABLES, shortId } from "./format";
+import { formatCount } from "../../lib/count";
 import { SearchTermPills } from "./SearchBar";
 
 export interface DataTableOutletContext {
@@ -107,6 +108,7 @@ export function DataTableView() {
     loadingMore,
     hasMore,
     total,
+    totalCapped,
     error: rowsError,
     reload: loadRows,
     loadMore,
@@ -147,7 +149,7 @@ export function DataTableView() {
   // operation; no scope choice to offer there.
   const filterScope =
     selectedIds.size > 0 && rows.length > 0 && selectedIds.size === rows.length && total !== null && total > rows.length
-      ? { total, loadedCount: rows.length }
+      ? { total, loadedCount: rows.length, capped: totalCapped }
       : undefined;
 
   const hasActiveFilters = filters !== null;
@@ -223,6 +225,8 @@ export function DataTableView() {
   ];
 
   const deleteTargetCount = filterScope && deleteScopeAll ? filterScope.total : selectedIds.size;
+  // "10,000+" when the matching rows were only counted up to the server's cap
+  const deleteTargetLabel = filterScope && deleteScopeAll ? formatCount(filterScope.total, filterScope.capped) : String(selectedIds.size);
 
   return (
     <div className="flex h-full flex-col">
@@ -284,6 +288,7 @@ export function DataTableView() {
           setSortDesc(desc);
         }}
         total={total}
+        totalCapped={totalCapped}
         loadedCount={rows.length}
         selectedCount={readOnly ? 0 : selectedIds.size}
         onClearSelection={clearSelection}
@@ -327,17 +332,17 @@ export function DataTableView() {
 
       {confirmingBulkDelete && (
         <ConfirmModal
-          title={`Delete ${deleteTargetCount} row${deleteTargetCount === 1 ? "" : "s"}`}
+          title={`Delete ${deleteTargetLabel} row${deleteTargetCount === 1 ? "" : "s"}`}
           message={
             filterScope ? (
               <div className="flex flex-col gap-2.5">
                 <p>
-                  Are you sure you want to delete {deleteTargetCount} record{deleteTargetCount === 1 ? "" : "s"}? Each is
+                  Are you sure you want to delete {deleteTargetLabel} record{deleteTargetCount === 1 ? "" : "s"}? Each is
                   soft-deleted and recoverable from _trash.
                 </p>
                 <div className="rounded-md border border-warning/25 bg-warning-bg/50 px-3 py-2.5">
                   <Checkbox
-                    label={`Apply to all ${filterScope.total} matching record${filterScope.total === 1 ? "" : "s"}`}
+                    label={`Apply to all ${formatCount(filterScope.total, filterScope.capped)} matching record${filterScope.total === 1 ? "" : "s"}`}
                     checked={deleteScopeAll}
                     onChange={(e) => setDeleteScopeAll(e.target.checked)}
                   />

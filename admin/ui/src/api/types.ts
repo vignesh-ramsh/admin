@@ -47,6 +47,8 @@ export interface RowPage {
   rows: Row[];
   next_cursor: string | null;
   total: number;
+  /** list_rows only: `total` stopped at the server's count cap, so more rows match than it says (show "10,000+"). */
+  total_capped?: boolean;
 }
 
 export interface Role {

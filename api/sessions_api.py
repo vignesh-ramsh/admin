@@ -10,6 +10,9 @@ import arc
 from admin._security import by_of
 from admin._pagination import cursor_page
 
+#: rows deleted per statement by prune_sessions
+_PRUNE_BATCH = 5_000
+
 
 def _escape_like(value: str) -> str:
     """Same escaping the Query Engine's own `contains` operator does
@@ -90,22 +93,17 @@ async def clear_sessions(email: str | None = None, all_users: bool = False, iden
     clear-sessions already enforce."""
     if not email and not all_users:
         arc.relay.throw("must specify either email or all_users=true", code="scope_required")
-    filters = {"revoked_at": {"is_null": True}}
+    by = by_of(identity)
+    # One UPDATE either way (not one save per session): "all_users=True" means EVERY active session,
+    # and `revoked` is how many of them were still live.
     if email:
         user = await arc.relay.get("_users", {"email": email.strip().lower()}, ["id"])
         if user is None:
             arc.relay.throw("no such user", status=404, code="not_found")
-        filters["user"] = user["id"]
-    by = by_of(identity)
-    # Correctness-critical: "all_users=True" means revoke EVERY active
-    # session — under-fetching here would silently leave some logged in.
-    rows = await arc.relay.list(
-        "_sessions", filters=filters, fields=["id", "token_hash"], limit=None
-    )
-    for r in rows:
-        await arc.relay.save("_sessions", {"id": r["id"], "revoked_at": arc.tz.utcnow()}, by=by)
-        await arc.authn.invalidate_session_cache(r["token_hash"])
-    return {"ok": True, "revoked": len(rows)}
+        revoked = await arc.authn.revoke_user_sessions(user["id"], by=by)
+    else:
+        revoked = await arc.authn.revoke_all_sessions(by=by)
+    return {"ok": True, "revoked": revoked}
 
 
 @arc.relay.whitelist(methods=["POST"], roles=["Superuser"])
@@ -115,22 +113,19 @@ async def prune_sessions(older_than_days: int = 30) -> dict:
     count too) and older than the cutoff. _sessions has no created_at
     (a "system": true table declares only what it needs), so "older than"
     is judged off whichever of revoked_at/expires_at applies — same
-    semantics as the CLI's prune-sessions. The Query Engine has no OR
-    grouping (docs/arc.MD §3.4), so this filters client-side, the same
-    established pattern already used for has_roles membership checks."""
+    semantics as the CLI's prune-sessions. Done in the database, in batches
+    of _PRUNE_BATCH rows (one short statement each, so no long lock and no
+    table's worth of ids in memory); `_sessions` has no relay hooks, and the
+    audit trigger fires for these deletes like for any other."""
     cutoff = arc.tz.ago(days=older_than_days)
-    # Correctness-critical: every session past the cutoff must be found,
-    # or pruning silently stops working once there are more than
-    # DEFAULT_LIST_LIMIT sessions in the table.
-    all_sessions = await arc.relay.list(
-        "_sessions", fields=["id", "revoked_at", "expires_at"], limit=None
-    )
-    to_delete = [
-        s["id"]
-        for s in all_sessions
-        if (s["revoked_at"] is not None and s["revoked_at"] < cutoff)
-        or (s["expires_at"] is not None and s["expires_at"] < cutoff)
-    ]
-    if to_delete:
-        await arc.relay.delete_many("_sessions", to_delete)
-    return {"ok": True, "deleted": len(to_delete)}
+    deleted = 0
+    while True:
+        rows = await arc.relay.sql(
+            'DELETE FROM "_sessions" WHERE id IN ('
+            'SELECT id FROM "_sessions" WHERE revoked_at < $1 OR expires_at < $1 LIMIT $2) RETURNING id',
+            cutoff,
+            _PRUNE_BATCH,
+        )
+        deleted += len(rows)
+        if len(rows) < _PRUNE_BATCH:
+            return {"ok": True, "deleted": deleted}

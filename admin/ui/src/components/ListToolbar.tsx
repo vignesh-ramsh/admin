@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowDownWideNarrow, ArrowUpNarrowWide, Check, ListFilter, Pencil, Trash2, X } from "lucide-react";
 import clsx from "clsx";
 import type { TableSchema } from "../api/types";
+import { formatCount } from "../lib/count";
 import { Button, IconButton } from "./Button";
 import { FilterBar, type FilterBarHandle } from "../pages/data/FilterBar";
 import { SearchBar } from "../pages/data/SearchBar";
@@ -24,6 +25,7 @@ export function ListToolbar({
   sortDesc,
   onSortChange,
   total,
+  totalCapped,
   loadedCount,
   selectedCount,
   onClearSelection,
@@ -42,13 +44,15 @@ export function ListToolbar({
   sortDesc: boolean;
   onSortChange: (field: string, desc: boolean) => void;
   total: number | null;
+  /** `total` is a capped count: show "N+". */
+  totalCapped?: boolean;
   loadedCount: number;
   selectedCount: number;
   onClearSelection: () => void;
   onBulkEdit: () => void;
   onBulkDelete: () => void;
 }) {
-  const countLabel = total !== null ? `${loadedCount} of ${total}` : `${loadedCount} rows`;
+  const countLabel = total !== null ? `${loadedCount} of ${formatCount(total, totalCapped)}` : `${loadedCount} rows`;
 
   if (selectedCount > 0) {
     return (

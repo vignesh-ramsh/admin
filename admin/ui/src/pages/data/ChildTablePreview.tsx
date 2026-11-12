@@ -9,6 +9,7 @@ import { InfiniteScroll } from "../../components/InfiniteScroll";
 import { LoadingBlock, ErrorBlock } from "../../components/States";
 import { loadTableMeta } from "./tableMeta";
 import { listColumns, formatCell, shortId } from "./format";
+import { formatCount } from "../../lib/count";
 
 /** A child (TABLE-typed field) row list, embedded directly in the parent
  *  row's own preview — only the child's own `list: true` columns (point 5:
@@ -70,7 +71,7 @@ export function ChildTablePreview({
     },
     [physicalTable, parentRowId],
   );
-  const { rows, loading, hasMore, loadingMore, total, error, loadMore } = useCursorList<Row>({
+  const { rows, loading, hasMore, loadingMore, total, totalCapped, error, loadMore } = useCursorList<Row>({
     fetchPage,
     limit: 20,
     rowKey: (r) => String(r.id),
@@ -101,7 +102,7 @@ export function ChildTablePreview({
     <div>
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <span className="text-[11px] text-text-faint">
-          {total !== null ? `${rows.length} of ${total} row${total === 1 ? "" : "s"}` : ""}
+          {total !== null ? `${rows.length} of ${formatCount(total, totalCapped)} row${total === 1 ? "" : "s"}` : ""}
         </span>
         <IconButton
           label="Add row"
