@@ -190,7 +190,7 @@ export function FilerSettingsTab() {
             />
             <TextArea
               label="Allowed content types"
-              hint="Comma-separated MIME types. Blank = every content type allowed."
+              hint="The only file types that can be uploaded: comma-separated MIME types, exact (no wildcards). Starts as the usual pictures, documents, spreadsheets, presentations, text and CSV, and zip; no scripts, HTML, SVG or programs. Blank = NO file can be uploaded."
               rows={3}
               value={(values["filer_allowed_content_types"] as string) ?? ""}
               placeholder="image/png, image/jpeg, application/pdf"

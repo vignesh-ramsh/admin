@@ -19,6 +19,10 @@ export function UploadFileRoute() {
   // filer_allow_public_uploads (on by default). Off means the server refuses any public upload, so the switch is
   // locked to Private here instead of letting the user find out after sending the file.
   const [publicAllowed, setPublicAllowed] = useState(true);
+  // filer_allowed_content_types, the only list of what may be uploaded. The server enforces it; this narrows the file
+  // picker (accept takes MIME types) and says what is accepted, so the user is not told no after sending the file.
+  // null = not loaded yet; [] = the list was emptied, which means no file is allowed at all.
+  const [allowedTypes, setAllowedTypes] = useState<string[] | null>(null);
   const [path, setPath] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -38,6 +42,15 @@ export function UploadFileRoute() {
         // explicit narrow rather than relying on the type alone.
         if (typeof configured === "string" && configured && !storageTouched.current) {
           setStorage(configured);
+        }
+        const types = rows.find((r) => r.key === "filer_allowed_content_types")?.value;
+        if (typeof types === "string") {
+          setAllowedTypes(
+            types
+              .split(/[,;\s]+/)
+              .map((t) => t.toLowerCase())
+              .filter(Boolean),
+          );
         }
         const publicOk = rows.find((r) => r.key === "filer_allow_public_uploads")?.value;
         if (publicOk === false) {
@@ -79,7 +92,7 @@ export function UploadFileRoute() {
           <Button variant="secondary" onClick={close} disabled={busy}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={submit} loading={busy} disabled={!file}>
+          <Button variant="primary" onClick={submit} loading={busy} disabled={!file || allowedTypes?.length === 0}>
             Upload
           </Button>
         </>
@@ -90,9 +103,15 @@ export function UploadFileRoute() {
           <label className="text-[13px] font-medium text-text-muted">File</label>
           <input
             type="file"
+            accept={allowedTypes && allowedTypes.length ? allowedTypes.join(",") : undefined}
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             className="cursor-pointer text-sm text-text file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-accent-action file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-accent-fg hover:file:brightness-95"
           />
+          {allowedTypes && allowedTypes.length === 0 && (
+            <span className="text-[12px] text-danger">
+              No file types are allowed on this server: the list of allowed content types is empty.
+            </span>
+          )}
         </div>
         <Select
           label="Storage provider"
