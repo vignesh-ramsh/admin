@@ -33,9 +33,11 @@ from admin._pagination import cursor_page
 _FILER_SETTINGS: dict[str, tuple[str, bool]] = {
     "filer_scan_public": ("bool", False),
     "filer_scan_private": ("bool", False),
+    "filer_allow_public_uploads": ("bool", False),  # off = every upload must be private, nobody may upload a public file
     "filer_clamav_socket": ("text", False),
     "filer_max_upload_bytes": ("int", False),
     "filer_allowed_content_types": ("text", False),
+    "filer_verify_content_type": ("bool", False),  # on = an upload's first bytes must match the type it declares
     "filer_purge_after_days": ("int", False),
     "filer_default_link_ttl_seconds": ("int", False),
     "filer_default_storage": ("select:local,s3", False),

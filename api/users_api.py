@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 import arc
 from pgdb.validation import ValidationError
 
-from admin._security import by_of, check_password_strength
+from admin._security import PasswordTooLongError, by_of, check_password_strength
 from admin._pagination import cursor_page
 
 # Matches authn's own SUPERUSER_ROLE_NAME constant exactly (authn/authn/__init__.py)
@@ -206,6 +206,8 @@ async def create_user(
             min_score=arc.authn.min_password_score(),
             user_inputs=[email],
         )
+    except PasswordTooLongError as exc:
+        arc.relay.throw(str(exc), status=400, code="password_too_long")
     except ValueError as exc:
         arc.relay.throw(str(exc), status=400, code="weak_password")
 
@@ -346,6 +348,8 @@ async def set_password(email: str, password: str, identity=None) -> dict:
             min_score=arc.authn.min_password_score(),
             user_inputs=[email],
         )
+    except PasswordTooLongError as exc:
+        arc.relay.throw(str(exc), status=400, code="password_too_long")
     except ValueError as exc:
         arc.relay.throw(str(exc), status=400, code="weak_password")
 

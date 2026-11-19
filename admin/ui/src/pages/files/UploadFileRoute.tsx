@@ -16,6 +16,9 @@ export function UploadFileRoute() {
   const [file, setFile] = useState<File | null>(null);
   const [storage, setStorage] = useState("local");
   const [isPrivate, setIsPrivate] = useState(true);
+  // filer_allow_public_uploads (on by default). Off means the server refuses any public upload, so the switch is
+  // locked to Private here instead of letting the user find out after sending the file.
+  const [publicAllowed, setPublicAllowed] = useState(true);
   const [path, setPath] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -36,6 +39,11 @@ export function UploadFileRoute() {
         if (typeof configured === "string" && configured && !storageTouched.current) {
           setStorage(configured);
         }
+        const publicOk = rows.find((r) => r.key === "filer_allow_public_uploads")?.value;
+        if (publicOk === false) {
+          setPublicAllowed(false);
+          setIsPrivate(true);
+        }
       })
       .catch(() => {
         /* best-effort — "local" stays the fallback if this fails */
@@ -51,7 +59,7 @@ export function UploadFileRoute() {
     }
     setBusy(true);
     try {
-      await uploadFilerFile(file, { storage, private: isPrivate, path: path.trim() || undefined });
+      await uploadFilerFile(file, { storage, private: isPrivate || !publicAllowed, path: path.trim() || undefined });
       toast.success(`Uploaded "${file.name}".`);
       reload();
       close();
@@ -104,7 +112,16 @@ export function UploadFileRoute() {
           onChange={(e) => setPath(e.target.value)}
           placeholder="ungrouped"
         />
-        <Switch checked={isPrivate} onChange={setIsPrivate} label="Private — only reachable via a short-lived signed link" />
+        <Switch
+          checked={isPrivate || !publicAllowed}
+          onChange={setIsPrivate}
+          disabled={!publicAllowed}
+          label={
+            publicAllowed
+              ? "Private — only reachable via a short-lived signed link"
+              : "Private — public uploads are turned off on this server"
+          }
+        />
       </div>
     </Modal>
   );

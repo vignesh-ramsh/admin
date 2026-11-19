@@ -203,6 +203,26 @@ export function FilerSettingsTab() {
               placeholder="image/png, image/jpeg, application/pdf"
               onChange={(e) => set("filer_allowed_content_types", e.target.value)}
             />
+            <div className="flex flex-col gap-1">
+              <Switch
+                checked={Boolean(values["filer_verify_content_type"])}
+                onChange={(v) => set("filer_verify_content_type", v)}
+                label="Check file contents against the declared type"
+              />
+              <span className="text-[12px] text-text-faint">
+                Refuses a file whose first bytes do not match what it says it is (a PNG, PDF, ZIP or Office file), and a program sent as anything else.
+              </span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <Switch
+                checked={Boolean(values["filer_allow_public_uploads"])}
+                onChange={(v) => set("filer_allow_public_uploads", v)}
+                label="Allow public uploads"
+              />
+              <span className="text-[12px] text-text-faint">
+                Off: every upload is private and nobody can upload a public file. Files that are already public keep working.
+              </span>
+            </div>
             <TextInput
               label="Purge deleted files after (days)"
               hint="Grace window before a deleted file's bytes are actually removed."

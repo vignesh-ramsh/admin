@@ -49,13 +49,23 @@ def redact_row(row: dict | None) -> dict | None:
     return {k: ("(hidden)" if k in REDACTED_FIELDS else v) for k, v in row.items()}
 
 
+class PasswordTooLongError(ValueError):
+    """The password is longer than authn allows (arc.authn.max_password_length()). A ValueError like every
+    other refusal from check_password_strength, but its own type so a caller can answer it with its own code."""
+
+
 def check_password_strength(
     password: str, *, min_score: int, user_inputs: list[str] | None = None
 ) -> None:
     """Raises ValueError with a clear message if too weak — same zxcvbn
-    scoring authn.validate_password_strength does."""
+    scoring authn.validate_password_strength does — or PasswordTooLongError (a ValueError) if it is longer than
+    authn allows. The length is checked first: zxcvbn refuses the same input with a bare ValueError, which would
+    otherwise be reported as a weak password."""
     from zxcvbn import zxcvbn
 
+    limit = arc.authn.max_password_length()  # authn's number, not a copy of it here
+    if len(password) > limit:
+        raise PasswordTooLongError(f"password is too long: at most {limit} characters")
     result = zxcvbn(password, user_inputs=user_inputs or [])
     if result["score"] < min_score:
         feedback = result.get("feedback") or {}
