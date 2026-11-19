@@ -50,7 +50,7 @@ export const NAV: NavGroup[] = [
     items: [
       { to: "/files", label: "File Manager", icon: FolderOpen },
       { to: "/jobs", label: "Jobs", icon: ListChecks },
-      { to: "/settings", label: "Settings & Secrets", icon: Settings2 },
+      { to: "/settings", label: "Settings", icon: Settings2 },
     ],
   },
 ];

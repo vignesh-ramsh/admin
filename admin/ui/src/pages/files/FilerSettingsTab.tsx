@@ -122,13 +122,6 @@ export function FilerSettingsTab() {
   if (error) return <ErrorBlock message={error} onRetry={reload} />;
   if (!values) return null;
 
-  const text = (key: string, placeholder?: string) => (
-    <TextInput
-      value={(values[key] as string) ?? ""}
-      placeholder={entries[key]?.secret && entries[key]?.is_set ? "•••••••• (configured — leave blank to keep)" : placeholder}
-      onChange={(e) => set(key, e.target.value)}
-    />
-  );
 
   return (
     <div className="scrollbar-thin flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-1">
@@ -137,7 +130,7 @@ export function FilerSettingsTab() {
         <span>
           Advanced: these keys are also editable under{" "}
           <Link to="/settings" className="cursor-pointer font-medium underline underline-offset-2">
-            Settings &amp; Secrets → filer
+            Settings → filer
           </Link>{" "}
           — that view shows raw byte values with no grouping.
         </span>
@@ -289,19 +282,14 @@ export function FilerSettingsTab() {
               value={(values["filer_s3_endpoint_url"] as string) ?? ""}
               onChange={(e) => set("filer_s3_endpoint_url", e.target.value)}
             />
-            <div>
-              <div className="mb-1.5 flex items-center gap-2">
-                <label className="text-[13px] font-medium text-text-muted">Access key ID</label>
-                {entries["filer_s3_access_key_id"]?.is_set && <Badge tone="success">configured</Badge>}
-              </div>
-              {text("filer_s3_access_key_id")}
-            </div>
-            <div>
-              <div className="mb-1.5 flex items-center gap-2">
-                <label className="text-[13px] font-medium text-text-muted">Secret access key</label>
-                {entries["filer_s3_secret_access_key"]?.is_set && <Badge tone="success">configured</Badge>}
-              </div>
-              {text("filer_s3_secret_access_key")}
+            <div className="flex items-start gap-2 rounded-md border border-border bg-neutral-50 px-3 py-2.5 text-[12.5px] text-text-muted dark:bg-neutral-900/50">
+              <Info size={14} className="mt-0.5 shrink-0" />
+              <span>
+                The access key ID and secret access key are secrets, so they are not shown or edited in this console. Set them on the
+                server with <code className="font-mono">arc settings set filer_s3_access_key_id &lt;value&gt; --secret</code> and{" "}
+                <code className="font-mono">arc settings set filer_s3_secret_access_key &lt;value&gt; --secret</code>; check them with{" "}
+                <code className="font-mono">arc settings list --secrets</code>.
+              </span>
             </div>
           </div>
         </div>

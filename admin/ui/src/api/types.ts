@@ -196,8 +196,8 @@ export interface ApplySchemaResult {
   process_warning: string | null;
 }
 
-/** admin.list_settings() — value is always null for a "secret" row; a
- *  real value is only ever fetched on demand via admin.reveal_secret(). */
+/** admin.list_settings() — one row per setting. Secrets are never in it (they are listed and revealed with the
+ *  `arc settings` command on the server only). */
 /** `type`/`default`/`doc` come from whatever plugin called
  *  `kernel.settings.declare(key, type=..., default=..., doc=...)` at
  *  boot — `type` is `null` for a key nobody ever declared a type for
@@ -207,7 +207,7 @@ export interface ApplySchemaResult {
  *  declared (a real number/bool for int/float/bool, a string for str). */
 export interface SettingEntry {
   key: string;
-  kind: "setting" | "secret";
+  kind: "setting";
   value: string | null;
   type: "int" | "float" | "bool" | "str" | null;
   default: number | boolean | string | null;
@@ -252,12 +252,11 @@ export interface JobLogEntry {
 /** admin.list_filer_settings() — one entry per known filer_* setting,
  *  whether or not it has a value yet. `kind` drives the form control:
  *  "bool" -> checkbox, "int" -> number input, "select:a,b" -> dropdown,
- *  "text"/"secret" -> text input. `value` is always null when
- *  `secret` is true — same masking-by-default as SettingEntry. */
+ *  "text" -> text input. No secret is ever in it (the S3 credentials are set
+ *  with `arc settings set <key> <value> --secret`). */
 export interface FilerSettingEntry {
   key: string;
   kind: string;
-  secret: boolean;
   // A "bool"-kind entry (filer_scan_public/filer_scan_private, both
   // declared type=bool) comes back as a real JSON boolean, and an "int"-
   // kind entry (filer_max_upload_bytes, filer_purge_after_days, ...)

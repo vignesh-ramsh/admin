@@ -30,8 +30,7 @@ export function DescriptionText({ text }: { text: string }) {
   );
 }
 
-/** What a setting or secret is for, shown at the top of its popup: the description, then its type and its
- *  default. A secret never shows a default (none declares one, and a placeholder credential must not leak).
+/** What a setting is for, shown at the top of its popup: the description, then its type and its default.
  *
  *  The description can be rewritten here. That changes only the copy kept in the settings store: the text in the
  *  code stays as it is, and "Reset to original" brings it back. `onChange(null)` says the key is gone (a key
@@ -51,9 +50,8 @@ export function SettingAbout({
   const [busy, setBusy] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
 
-  const isSecret = entry.kind === "secret";
-  const kindWord = isSecret ? "secret" : "setting";
-  const defaultText = isSecret ? null : formatDefault(entry.default);
+  const kindWord = "setting";
+  const defaultText = formatDefault(entry.default);
   const trimmed = draft.trim();
   const tooLong = trimmed.length > MAX_DESCRIPTION_CHARS;
   const unchanged = trimmed === entry.doc.trim();

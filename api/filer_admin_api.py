@@ -1,7 +1,7 @@
 """Admin's File Manager surface — a curated view onto `arc.filer`'s own
 FilerFile rows and the `filer_*` keys in arc.settings.
 
-Deliberately NOT built on top of the generic Settings & Secrets page
+Deliberately NOT built on top of the generic Settings page
 (settings_api.py's list_settings()/set_setting()): those show every
 `filer_*` key as a flat, untyped string, and — a real gap, not just a UX
 one — a plain (non-secret) key that's been `declare()`d but never
@@ -14,77 +14,86 @@ already takes, just scoped to filer's own keys and shaped for a real
 form (bool -> checkbox, int -> number input, ...) rather than generic
 key/value/secret CRUD.
 
-Secret values (S3 credentials) are never returned — only whether one is
-currently set — mirroring list_settings()'s own masking; reveal, if
-ever needed, is the existing generic admin.reveal_secret(key), not
-reimplemented here.
+The S3 credentials (`filer_s3_access_key_id`, `filer_s3_secret_access_key`) are
+secrets, and secrets are not handled by the admin console at all (see
+settings_api.py): they are neither listed here, not even as "configured", nor
+written here. They are set with `arc settings set <key> <value> --secret` and
+read with `arc settings list --secrets` / `arc settings get <key> --reveal`.
+A write that names one is refused with 403, not ignored, so a client that
+believes it saved a credential is told it did not.
 """
 
 import arc
 
 from admin._pagination import cursor_page
 
-# key -> (kind, secret). Single source of truth for both what
-# list_filer_settings() reads and what set_filer_settings() is allowed to
-# write — a key absent from this dict is never touched in either
-# direction, so this is NOT a passthrough to arbitrary arc.settings keys.
-# kind drives the frontend's form control: "bool" -> checkbox, "int" ->
-# number input, "select:a,b" -> dropdown, "text"/"secret" -> text input.
-_FILER_SETTINGS: dict[str, tuple[str, bool]] = {
-    "filer_scan_public": ("bool", False),
-    "filer_scan_private": ("bool", False),
-    "filer_allow_public_uploads": ("bool", False),  # off = every upload must be private, nobody may upload a public file
-    "filer_clamav_socket": ("text", False),
-    "filer_max_upload_bytes": ("int", False),
-    "filer_allowed_content_types": ("text", False),
-    "filer_verify_content_type": ("bool", False),  # on = an upload's first bytes must match the type it declares
-    "filer_purge_after_days": ("int", False),
-    "filer_default_link_ttl_seconds": ("int", False),
-    "filer_default_storage": ("select:local,s3", False),
-    "filer_local_root": ("text", False),
-    "filer_s3_bucket": ("text", False),
-    "filer_s3_region": ("text", False),
-    "filer_s3_endpoint_url": ("text", False),
-    "filer_s3_access_key_id": ("secret", True),
-    "filer_s3_secret_access_key": ("secret", True),
-    "filer_max_request_body_bytes": ("int", False),
-    "filer_max_upload_request_bytes": ("int", False),
+# key -> kind. Single source of truth for both what list_filer_settings()
+# reads and what set_filer_settings() is allowed to write — a key absent
+# from this dict is never touched in either direction, so this is NOT a
+# passthrough to arbitrary arc.settings keys. No secret is in it (see the
+# module docstring). kind drives the frontend's form control: "bool" ->
+# checkbox, "int" -> number input, "select:a,b" -> dropdown, "text" ->
+# text input.
+_FILER_SETTINGS: dict[str, str] = {
+    "filer_scan_public": "bool",
+    "filer_scan_private": "bool",
+    "filer_allow_public_uploads": "bool",  # off = every upload must be private, nobody may upload a public file
+    "filer_clamav_socket": "text",
+    "filer_max_upload_bytes": "int",
+    "filer_allowed_content_types": "text",
+    "filer_verify_content_type": "bool",  # on = an upload's first bytes must match the type it declares
+    "filer_purge_after_days": "int",
+    "filer_default_link_ttl_seconds": "int",
+    "filer_default_storage": "select:local,s3",
+    "filer_local_root": "text",
+    "filer_s3_bucket": "text",
+    "filer_s3_region": "text",
+    "filer_s3_endpoint_url": "text",
+    "filer_max_request_body_bytes": "int",
+    "filer_max_upload_request_bytes": "int",
     # uploads: how a file is received, and what the scanner may be sent
-    "filer_streaming_uploads": ("bool", False),
-    "filer_max_concurrent_uploads": ("int", False),
-    "filer_upload_max_seconds": ("int", False),
-    "filer_spool_dir": ("text", False),  # operator-only: shown, changed on the server
-    "filer_spool_min_free_mb": ("int", False),
-    "filer_upload_stale_minutes": ("int", False),
-    "filer_scan_max_bytes": ("int", False),
-    "filer_scan_timeout_seconds": ("int", False),
+    "filer_streaming_uploads": "bool",
+    "filer_max_concurrent_uploads": "int",
+    "filer_upload_max_seconds": "int",
+    "filer_spool_dir": "text",  # operator-only: shown, changed on the server
+    "filer_spool_min_free_mb": "int",
+    "filer_upload_stale_minutes": "int",
+    "filer_scan_max_bytes": "int",
+    "filer_scan_timeout_seconds": "int",
     # S3 and S3-compatible services
-    "filer_s3_addressing_style": ("select:auto,path,virtual", False),
-    "filer_s3_checksum_mode": ("select:auto,when_supported,when_required", False),
-    "filer_s3_send_acl": ("bool", False),
-    "filer_s3_server_side_encryption": ("text", False),
-    "filer_s3_sse_kms_key_id": ("text", False),
-    "filer_s3_part_size_mb": ("int", False),
-    "filer_s3_upload_concurrency": ("int", False),
-    "filer_s3_connect_timeout_seconds": ("int", False),
-    "filer_s3_read_timeout_seconds": ("int", False),
-    "filer_s3_max_attempts": ("int", False),
-    "filer_s3_redirect_over_mb": ("int", False),
-    "filer_s3_public_endpoint_url": ("text", False),
+    "filer_s3_addressing_style": "select:auto,path,virtual",
+    "filer_s3_checksum_mode": "select:auto,when_supported,when_required",
+    "filer_s3_send_acl": "bool",
+    "filer_s3_server_side_encryption": "text",
+    "filer_s3_sse_kms_key_id": "text",
+    "filer_s3_part_size_mb": "int",
+    "filer_s3_upload_concurrency": "int",
+    "filer_s3_connect_timeout_seconds": "int",
+    "filer_s3_read_timeout_seconds": "int",
+    "filer_s3_max_attempts": "int",
+    "filer_s3_redirect_over_mb": "int",
+    "filer_s3_public_endpoint_url": "text",
 }
+
+
+# The S3 credentials. Not in _FILER_SETTINGS and never handled here: a write that names one is refused (see
+# set_filer_settings). Named explicitly, besides the kernel's own is_secret() check, so the refusal holds even
+# when the filer plugin is not loaded and has not declared them.
+_FILER_SECRET_KEYS = ("filer_s3_access_key_id", "filer_s3_secret_access_key")
 
 
 @arc.relay.whitelist(methods=["GET", "QUERY", "POST"], roles=["Superuser"])
 async def list_filer_settings() -> list[dict]:
+    """One row per known filer_* setting, whether or not it has a value yet. Never a secret (the S3 credentials
+    are not listed, not even as "configured")."""
     rows = []
-    for key, (kind, secret) in _FILER_SETTINGS.items():
-        value = arc.settings.get(key, reveal=not secret)
+    for key, kind in _FILER_SETTINGS.items():
+        value = arc.settings.get(key)
         rows.append(
             {
                 "key": key,
                 "kind": kind,
-                "secret": secret,
-                "value": None if secret else value,
+                "value": value,
                 "is_set": value is not None,
                 # operator-only keys (filer_local_root) show here but can only be changed on the server
                 "read_only": arc.settings.is_operator_only(key),
@@ -99,13 +108,28 @@ async def set_filer_settings(values: dict) -> dict:
     unrecognized key in `values` is silently ignored, not an error (the
     form only ever sends known keys; a stray extra key here is far more
     likely a stale client than something to fail loudly over). A blank
-    value for a SECRET key means "leave it unchanged" (never overwrite a
-    real credential with an empty string just because the field was left
-    blank in a re-save) — a blank value for a plain key clears it, same
-    as arc.settings.set()'s own normal behavior."""
+    value clears a plain key, same as arc.settings.set()'s own normal
+    behavior.
+
+    The one exception to "unknown is ignored" is a secret (the S3
+    credentials, or any key the kernel knows as a secret): a request that
+    tries to give one a value is refused with 403 `secret_cli_only` and
+    nothing in it is written, because the admin console does not handle
+    secrets at all (`arc settings set <key> <value> --secret` does). A
+    blank value for one is a no-op, as it always was."""
     # Checked for the whole request before anything is written, so a refused key cannot leave the
     # others half-applied. Sending an operator-only key back with the value it already has is fine
     # (a form that submits every field); changing it is not.
+    for key, raw in (values or {}).items():
+        if raw is None or not str(raw).strip():
+            continue
+        if key in _FILER_SECRET_KEYS or arc.settings.is_secret(key):
+            arc.relay.throw(
+                f"'{key}' is a secret. Secrets are managed from the command line only: "
+                f"`arc settings set {key} <value> --secret`.",
+                status=403,
+                code="secret_cli_only",
+            )
     for key, raw in (values or {}).items():
         if key in _FILER_SETTINGS and raw is not None and arc.settings.is_operator_only(key):
             if str(raw).strip() != str(arc.settings.get(key) or ""):
@@ -117,12 +141,11 @@ async def set_filer_settings(values: dict) -> dict:
 
     updated = []
     for key, raw in (values or {}).items():
-        entry = _FILER_SETTINGS.get(key)
-        if entry is None or raw is None:
+        kind = _FILER_SETTINGS.get(key)
+        if kind is None or raw is None:
             continue
         if arc.settings.is_operator_only(key):
             continue  # unchanged (checked above)
-        kind, secret = entry
         if kind == "bool":
             value = (
                 "true"
@@ -131,10 +154,8 @@ async def set_filer_settings(values: dict) -> dict:
             )
         else:
             value = str(raw).strip()
-            if secret and not value:
-                continue
         # the signed-in user's e-mail, so the store says who changed it (and `updated_at` says when)
-        arc.settings.set(key, value, secret=secret, updated_by=arc.relay.context().user)
+        arc.settings.set(key, value, updated_by=arc.relay.context().user)
         updated.append(key)
     return {"updated": updated}
 

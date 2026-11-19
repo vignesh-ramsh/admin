@@ -1,13 +1,13 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link, Outlet, useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight, Eye, EyeOff, Info, Plus, RefreshCw, Search } from "lucide-react";
+import { ChevronDown, ChevronRight, Info, Plus, RefreshCw, Search } from "lucide-react";
 import { call } from "../../api/client";
 import type { SettingEntry } from "../../api/types";
 import { useAsync } from "../../hooks/useAsync";
 import { useDebounce } from "../../hooks/useDebounce";
 import { usePageSearchFocus } from "../../hooks/usePageSearchFocus";
 import { PageHeader } from "../../components/PageHeader";
-import { Button, IconButton } from "../../components/Button";
+import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { ErrorBlock, EmptyState } from "../../components/States";
 import { formatDefault } from "./settingTypes";
@@ -26,8 +26,6 @@ export function SettingsPage() {
   const q = useDebounce(qInput, 300);
   const searchRef = usePageSearchFocus();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [revealed, setRevealed] = useState<Record<string, string>>({});
-  const [revealing, setRevealing] = useState<string | null>(null);
 
   const loader = useCallback(() => call<SettingEntry[]>("list_settings"), []);
   const { data, loading, error, reload } = useAsync(loader, []);
@@ -49,52 +47,32 @@ export function SettingsPage() {
 
   const toggleGroup = (g: string) => setCollapsed((c) => ({ ...c, [g]: !c[g] }));
 
-  const toggleReveal = async (key: string) => {
-    if (revealed[key] !== undefined) {
-      setRevealed((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-      return;
-    }
-    setRevealing(key);
-    try {
-      const res = await call<{ key: string; value: string }>("reveal_secret", { key });
-      setRevealed((prev) => ({ ...prev, [key]: res.value }));
-    } catch {
-      /* row simply stays masked on failure */
-    } finally {
-      setRevealing(null);
-    }
-  };
-
   return (
     <div className="flex h-full flex-col">
       <PageHeader
-        title="Settings & Secrets"
-        description="Every key any plugin has declared via arc.settings — the one place that answers what exists across the whole system."
+        title="Settings"
+        description="Every setting any plugin declares. Secrets are CLI-only (arc settings)."
         actions={
-          <>
-            <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />} onClick={reload}>
-              Refresh
-            </Button>
-            <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate("/settings/__new__/edit")}>
-              Add setting
-            </Button>
-          </>
+          <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={() => navigate("/settings/__new__/edit")}>
+            New setting
+          </Button>
         }
       />
 
-      <div className="relative mb-4 max-w-sm">
-        <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint" />
-        <input
-          ref={searchRef}
-          className="h-9 w-full rounded-md border border-border-strong bg-surface pl-8 pr-3 text-sm text-text placeholder:text-text-faint focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/25"
-          placeholder="Search by key…"
-          value={qInput}
-          onChange={(e) => setQInput(e.target.value)}
-        />
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative w-full max-w-xs">
+          <Search size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-faint" />
+          <input
+            ref={searchRef}
+            className="h-9 w-full rounded-md border border-border-strong bg-surface pl-8 pr-3 text-sm text-text placeholder:text-text-faint focus:border-accent-500 focus:outline-none focus:ring-2 focus:ring-accent-500/25"
+            placeholder="Search by key…"
+            value={qInput}
+            onChange={(e) => setQInput(e.target.value)}
+          />
+        </div>
+        <Button variant="secondary" size="sm" icon={<RefreshCw size={14} />} onClick={reload}>
+          Refresh
+        </Button>
       </div>
 
       {error ? (
@@ -102,22 +80,20 @@ export function SettingsPage() {
       ) : loading ? (
         <div className="flex flex-1 items-center justify-center py-14 text-center text-sm text-text-faint">Loading settings…</div>
       ) : rows.length === 0 ? (
-        <EmptyState title="Nothing declared yet" description="No plugin has set a setting or secret." />
+        <EmptyState title="Nothing declared yet" description="No plugin has declared or set a setting." />
       ) : filtered.length === 0 ? (
         <EmptyState title="No matches" description={`Nothing matches "${q}".`} />
       ) : (
         <div className="scrollbar-thin min-h-0 flex-1 overflow-auto rounded-lg border border-border bg-surface">
           <table className="w-full table-fixed border-collapse text-sm">
             <colgroup>
-              <col style={{ width: "34%" }} />
-              <col style={{ width: "12%" }} />
+              <col style={{ width: "36%" }} />
               <col style={{ width: "10%" }} />
-              <col style={{ width: "44%" }} />
+              <col style={{ width: "54%" }} />
             </colgroup>
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-border bg-neutral-50 dark:bg-neutral-900/60">
                 <th className="px-3.5 py-2 text-left text-[12px] font-semibold uppercase tracking-wide text-text-faint">Key</th>
-                <th className="px-3.5 py-2 text-left text-[12px] font-semibold uppercase tracking-wide text-text-faint">Category</th>
                 <th className="px-3.5 py-2 text-left text-[12px] font-semibold uppercase tracking-wide text-text-faint">Type</th>
                 <th className="px-3.5 py-2 text-left text-[12px] font-semibold uppercase tracking-wide text-text-faint">Value</th>
               </tr>
@@ -125,7 +101,7 @@ export function SettingsPage() {
             {groups.map(([group, groupRows]) => (
               <tbody key={group}>
                 <tr className="border-b border-border bg-neutral-50 dark:bg-neutral-900/60">
-                  <td colSpan={4} className="p-0">
+                  <td colSpan={3} className="p-0">
                     <button
                       type="button"
                       onClick={() => toggleGroup(group)}
@@ -139,7 +115,7 @@ export function SettingsPage() {
                 </tr>
                 {!collapsed[group] && group === "filer" && (
                   <tr className="border-b border-border bg-info-bg">
-                    <td colSpan={4} className="px-3.5 py-2.5">
+                    <td colSpan={3} className="px-3.5 py-2.5">
                       <div className="flex items-start gap-2 text-[13px] text-info">
                         <Info size={14} className="mt-0.5 shrink-0" />
                         <span>
@@ -155,10 +131,7 @@ export function SettingsPage() {
                 )}
                 {!collapsed[group] &&
                   groupRows.map((row) => {
-                    const isSecret = row.kind === "secret";
-                    const shown = revealed[row.key];
-                    // A secret never shows a default: none declares one, and a placeholder credential must not leak.
-                    const defaultText = isSecret ? null : formatDefault(row.default);
+                    const defaultText = formatDefault(row.default);
                     return (
                       <tr
                         key={row.key}
@@ -167,9 +140,6 @@ export function SettingsPage() {
                       >
                         <td className="truncate px-3.5 py-2 font-mono text-[13px] text-text" title={row.key}>
                           {row.key}
-                        </td>
-                        <td className="px-3.5 py-2">
-                          <Badge tone={isSecret ? "danger" : "accent"}>{isSecret ? "Secret" : "Setting"}</Badge>
                         </td>
                         <td className="px-3.5 py-2">
                           {row.type ? (
@@ -181,32 +151,14 @@ export function SettingsPage() {
                           )}
                         </td>
                         <td className="px-3.5 py-2">
-                          <div className="flex items-center gap-2">
-                            <div className="min-w-0 flex-1">
-                              <span
-                                className="block truncate font-mono text-[12.5px] text-text-muted"
-                                title={isSecret ? shown : row.value ?? undefined}
-                              >
-                                {isSecret ? shown ?? "••••••••" : row.value ?? "—"}
-                              </span>
-                              {defaultText !== null && (
-                                <span className="block truncate font-mono text-[11.5px] text-text-faint" title={defaultText}>
-                                  Default: {defaultText}
-                                </span>
-                              )}
-                            </div>
-                            {isSecret && (
-                              <IconButton
-                                label={shown !== undefined ? "Hide value" : "Reveal value"}
-                                icon={shown !== undefined ? <EyeOff size={14} /> : <Eye size={14} />}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleReveal(row.key);
-                                }}
-                                disabled={revealing === row.key}
-                              />
-                            )}
-                          </div>
+                          <span className="block truncate font-mono text-[12.5px] text-text-muted" title={row.value ?? undefined}>
+                            {row.value ?? "—"}
+                          </span>
+                          {defaultText !== null && (
+                            <span className="block truncate font-mono text-[11.5px] text-text-faint" title={defaultText}>
+                              Default: {defaultText}
+                            </span>
+                          )}
                         </td>
                       </tr>
                     );
