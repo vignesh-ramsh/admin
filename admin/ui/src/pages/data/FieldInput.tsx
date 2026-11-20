@@ -105,7 +105,7 @@ export function FieldInput({ field, value, onChange, disabled, parentTable, erro
   }
 
   const typeAttr =
-    t === "INT" || t === "FLOAT" || t === "DECIMAL"
+    t === "INT" || t === "BIGINT" || t === "FLOAT" || t === "DECIMAL"
       ? "number"
       : t === "DATE"
         ? "date"

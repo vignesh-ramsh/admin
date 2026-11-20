@@ -25,6 +25,7 @@ export function validateField(field: FieldMeta, raw: string | boolean): string |
 
   switch (field.type) {
     case "INT":
+    case "BIGINT":
       if (!/^-?\d+$/.test(value)) return "Must be a whole number.";
       break;
     case "FLOAT":

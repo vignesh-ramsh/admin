@@ -54,7 +54,7 @@ def coerce_value(field: Any, value: Any) -> Any:
 
     t = field.type
     try:
-        if t == "INT":
+        if t in ("INT", "BIGINT"):
             return (
                 value if isinstance(value, int) and not isinstance(value, bool) else int(str(value))
             )

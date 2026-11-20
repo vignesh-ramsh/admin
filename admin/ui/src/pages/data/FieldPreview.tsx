@@ -70,7 +70,7 @@ export function FieldPreview({ field, value, parentTable, onOpenFile }: Props) {
     return <span className="text-text">{Number.isNaN(d.getTime()) ? String(value) : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "2-digit" })}</span>;
   }
 
-  if (t === "INT" || t === "FLOAT" || t === "DECIMAL") {
+  if (t === "INT" || t === "BIGINT" || t === "FLOAT" || t === "DECIMAL") {
     return <span className="font-mono text-[13px] tabular-nums text-text">{String(value)}</span>;
   }
 

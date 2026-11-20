@@ -6,6 +6,7 @@ export const BASE_TYPES = [
   "STRING",
   "TEXT",
   "INT",
+  "BIGINT",
   "FLOAT",
   "DECIMAL",
   "BOOLEAN",
