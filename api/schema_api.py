@@ -206,6 +206,13 @@ def _atomic_write_validated(
             arc.relay.throw(str(exc), status=400, code="invalid_schema")
         # Rules that need every schema at once — see the block above. These
         # throw (4xx) rather than returning, so nothing is written on failure.
+        if is_patch:
+            # The same rule `arc pgdb plan/migrate` enforces (pgdb.migrate.refuse_patches_on_own_tables), answered here
+            # before the file exists: a plugin changes the tables it owns in their schema files, never with a patch.
+            try:
+                psqldb_migrate.refuse_patches_on_own_tables(_schemas_on_disk(), [schema])
+            except psqldb_migrate.MigrationError as exc:
+                arc.relay.throw(str(exc), status=400, code="own_table_patch")
         _validate_targets(schema, path.stem)
         _validate_no_name_clash(schema, plugin, path.stem, is_patch=is_patch)
     path.write_text(json.dumps(content, indent=2))
